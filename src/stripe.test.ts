@@ -1,7 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { Effect, Layer } from "effect";
+import { describe, it, expect } from "vitest";
+import { Effect } from "effect";
 import { StripeService, makeStripeLayer } from "../src/stripe";
-import { StripeConfigError } from "../src/errors";
 
 describe("StripeService", () => {
   describe("makeStripeLayer", () => {
@@ -42,7 +41,7 @@ describe("StripeService", () => {
       );
 
       expect(result).toHaveProperty("error");
-      expect((result as any).error).toContain("API key is required");
+      expect(result.error).toContain("API key is required");
     });
 
     it("should expose customer service", async () => {

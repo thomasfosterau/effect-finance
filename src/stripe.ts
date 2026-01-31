@@ -74,11 +74,21 @@ const handleStripeError = (error: unknown) => {
 };
 
 /**
+ * All possible Stripe errors that can occur during API calls
+ */
+type StripeErrors =
+  | StripeApiError
+  | StripeNetworkError
+  | StripeAuthenticationError
+  | StripeRateLimitError
+  | StripeInvalidRequestError;
+
+/**
  * Wraps a Stripe API call in an Effect
  */
 const wrapStripeCall = <A>(
   fn: () => Promise<A>
-): Effect.Effect<A, StripeApiError | StripeNetworkError> =>
+): Effect.Effect<A, StripeErrors> =>
   Effect.tryPromise({
     try: fn,
     catch: handleStripeError,
@@ -93,10 +103,8 @@ const makeCustomersService = (stripe: Stripe) => ({
    */
   create: (
     params?: Stripe.CustomerCreateParams
-  ): Effect.Effect<
-    Stripe.Customer,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.customers.create(params)),
+  ): Effect.Effect<Stripe.Customer, StripeErrors> =>
+    wrapStripeCall(() => stripe.customers.create(params)),
 
   /**
    * Retrieve a customer
@@ -104,10 +112,8 @@ const makeCustomersService = (stripe: Stripe) => ({
   retrieve: (
     id: string,
     params?: Stripe.CustomerRetrieveParams
-  ): Effect.Effect<
-    Stripe.Customer | Stripe.DeletedCustomer,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.customers.retrieve(id, params)),
+  ): Effect.Effect<Stripe.Customer | Stripe.DeletedCustomer, StripeErrors> =>
+    wrapStripeCall(() => stripe.customers.retrieve(id, params)),
 
   /**
    * Update a customer
@@ -115,30 +121,22 @@ const makeCustomersService = (stripe: Stripe) => ({
   update: (
     id: string,
     params?: Stripe.CustomerUpdateParams
-  ): Effect.Effect<
-    Stripe.Customer,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.customers.update(id, params)),
+  ): Effect.Effect<Stripe.Customer, StripeErrors> =>
+    wrapStripeCall(() => stripe.customers.update(id, params)),
 
   /**
    * Delete a customer
    */
-  del: (
-    id: string
-  ): Effect.Effect<
-    Stripe.DeletedCustomer,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.customers.del(id)),
+  del: (id: string): Effect.Effect<Stripe.DeletedCustomer, StripeErrors> =>
+    wrapStripeCall(() => stripe.customers.del(id)),
 
   /**
    * List customers
    */
   list: (
     params?: Stripe.CustomerListParams
-  ): Effect.Effect<
-    Stripe.ApiList<Stripe.Customer>,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.customers.list(params)),
+  ): Effect.Effect<Stripe.ApiList<Stripe.Customer>, StripeErrors> =>
+    wrapStripeCall(() => stripe.customers.list(params)),
 });
 
 /**
@@ -150,10 +148,8 @@ const makePaymentIntentsService = (stripe: Stripe) => ({
    */
   create: (
     params: Stripe.PaymentIntentCreateParams
-  ): Effect.Effect<
-    Stripe.PaymentIntent,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.paymentIntents.create(params)),
+  ): Effect.Effect<Stripe.PaymentIntent, StripeErrors> =>
+    wrapStripeCall(() => stripe.paymentIntents.create(params)),
 
   /**
    * Retrieve a payment intent
@@ -161,10 +157,8 @@ const makePaymentIntentsService = (stripe: Stripe) => ({
   retrieve: (
     id: string,
     params?: Stripe.PaymentIntentRetrieveParams
-  ): Effect.Effect<
-    Stripe.PaymentIntent,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.paymentIntents.retrieve(id, params)),
+  ): Effect.Effect<Stripe.PaymentIntent, StripeErrors> =>
+    wrapStripeCall(() => stripe.paymentIntents.retrieve(id, params)),
 
   /**
    * Update a payment intent
@@ -172,10 +166,8 @@ const makePaymentIntentsService = (stripe: Stripe) => ({
   update: (
     id: string,
     params?: Stripe.PaymentIntentUpdateParams
-  ): Effect.Effect<
-    Stripe.PaymentIntent,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.paymentIntents.update(id, params)),
+  ): Effect.Effect<Stripe.PaymentIntent, StripeErrors> =>
+    wrapStripeCall(() => stripe.paymentIntents.update(id, params)),
 
   /**
    * Confirm a payment intent
@@ -183,10 +175,8 @@ const makePaymentIntentsService = (stripe: Stripe) => ({
   confirm: (
     id: string,
     params?: Stripe.PaymentIntentConfirmParams
-  ): Effect.Effect<
-    Stripe.PaymentIntent,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.paymentIntents.confirm(id, params)),
+  ): Effect.Effect<Stripe.PaymentIntent, StripeErrors> =>
+    wrapStripeCall(() => stripe.paymentIntents.confirm(id, params)),
 
   /**
    * Cancel a payment intent
@@ -194,20 +184,16 @@ const makePaymentIntentsService = (stripe: Stripe) => ({
   cancel: (
     id: string,
     params?: Stripe.PaymentIntentCancelParams
-  ): Effect.Effect<
-    Stripe.PaymentIntent,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.paymentIntents.cancel(id, params)),
+  ): Effect.Effect<Stripe.PaymentIntent, StripeErrors> =>
+    wrapStripeCall(() => stripe.paymentIntents.cancel(id, params)),
 
   /**
    * List payment intents
    */
   list: (
     params?: Stripe.PaymentIntentListParams
-  ): Effect.Effect<
-    Stripe.ApiList<Stripe.PaymentIntent>,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.paymentIntents.list(params)),
+  ): Effect.Effect<Stripe.ApiList<Stripe.PaymentIntent>, StripeErrors> =>
+    wrapStripeCall(() => stripe.paymentIntents.list(params)),
 });
 
 /**
@@ -219,10 +205,8 @@ const makeSubscriptionsService = (stripe: Stripe) => ({
    */
   create: (
     params: Stripe.SubscriptionCreateParams
-  ): Effect.Effect<
-    Stripe.Subscription,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.subscriptions.create(params)),
+  ): Effect.Effect<Stripe.Subscription, StripeErrors> =>
+    wrapStripeCall(() => stripe.subscriptions.create(params)),
 
   /**
    * Retrieve a subscription
@@ -230,10 +214,8 @@ const makeSubscriptionsService = (stripe: Stripe) => ({
   retrieve: (
     id: string,
     params?: Stripe.SubscriptionRetrieveParams
-  ): Effect.Effect<
-    Stripe.Subscription,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.subscriptions.retrieve(id, params)),
+  ): Effect.Effect<Stripe.Subscription, StripeErrors> =>
+    wrapStripeCall(() => stripe.subscriptions.retrieve(id, params)),
 
   /**
    * Update a subscription
@@ -241,10 +223,8 @@ const makeSubscriptionsService = (stripe: Stripe) => ({
   update: (
     id: string,
     params?: Stripe.SubscriptionUpdateParams
-  ): Effect.Effect<
-    Stripe.Subscription,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.subscriptions.update(id, params)),
+  ): Effect.Effect<Stripe.Subscription, StripeErrors> =>
+    wrapStripeCall(() => stripe.subscriptions.update(id, params)),
 
   /**
    * Cancel a subscription
@@ -252,20 +232,16 @@ const makeSubscriptionsService = (stripe: Stripe) => ({
   cancel: (
     id: string,
     params?: Stripe.SubscriptionCancelParams
-  ): Effect.Effect<
-    Stripe.Subscription,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.subscriptions.cancel(id, params)),
+  ): Effect.Effect<Stripe.Subscription, StripeErrors> =>
+    wrapStripeCall(() => stripe.subscriptions.cancel(id, params)),
 
   /**
    * List subscriptions
    */
   list: (
     params?: Stripe.SubscriptionListParams
-  ): Effect.Effect<
-    Stripe.ApiList<Stripe.Subscription>,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.subscriptions.list(params)),
+  ): Effect.Effect<Stripe.ApiList<Stripe.Subscription>, StripeErrors> =>
+    wrapStripeCall(() => stripe.subscriptions.list(params)),
 });
 
 /**
@@ -277,7 +253,7 @@ const makePricesService = (stripe: Stripe) => ({
    */
   create: (
     params: Stripe.PriceCreateParams
-  ): Effect.Effect<Stripe.Price, StripeApiError | StripeNetworkError> =>
+  ): Effect.Effect<Stripe.Price, StripeErrors> =>
     wrapStripeCall(() => stripe.prices.create(params)),
 
   /**
@@ -286,7 +262,7 @@ const makePricesService = (stripe: Stripe) => ({
   retrieve: (
     id: string,
     params?: Stripe.PriceRetrieveParams
-  ): Effect.Effect<Stripe.Price, StripeApiError | StripeNetworkError> =>
+  ): Effect.Effect<Stripe.Price, StripeErrors> =>
     wrapStripeCall(() => stripe.prices.retrieve(id, params)),
 
   /**
@@ -295,7 +271,7 @@ const makePricesService = (stripe: Stripe) => ({
   update: (
     id: string,
     params?: Stripe.PriceUpdateParams
-  ): Effect.Effect<Stripe.Price, StripeApiError | StripeNetworkError> =>
+  ): Effect.Effect<Stripe.Price, StripeErrors> =>
     wrapStripeCall(() => stripe.prices.update(id, params)),
 
   /**
@@ -303,10 +279,8 @@ const makePricesService = (stripe: Stripe) => ({
    */
   list: (
     params?: Stripe.PriceListParams
-  ): Effect.Effect<
-    Stripe.ApiList<Stripe.Price>,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.prices.list(params)),
+  ): Effect.Effect<Stripe.ApiList<Stripe.Price>, StripeErrors> =>
+    wrapStripeCall(() => stripe.prices.list(params)),
 });
 
 /**
@@ -318,7 +292,7 @@ const makeProductsService = (stripe: Stripe) => ({
    */
   create: (
     params: Stripe.ProductCreateParams
-  ): Effect.Effect<Stripe.Product, StripeApiError | StripeNetworkError> =>
+  ): Effect.Effect<Stripe.Product, StripeErrors> =>
     wrapStripeCall(() => stripe.products.create(params)),
 
   /**
@@ -327,7 +301,7 @@ const makeProductsService = (stripe: Stripe) => ({
   retrieve: (
     id: string,
     params?: Stripe.ProductRetrieveParams
-  ): Effect.Effect<Stripe.Product, StripeApiError | StripeNetworkError> =>
+  ): Effect.Effect<Stripe.Product, StripeErrors> =>
     wrapStripeCall(() => stripe.products.retrieve(id, params)),
 
   /**
@@ -336,28 +310,22 @@ const makeProductsService = (stripe: Stripe) => ({
   update: (
     id: string,
     params?: Stripe.ProductUpdateParams
-  ): Effect.Effect<Stripe.Product, StripeApiError | StripeNetworkError> =>
+  ): Effect.Effect<Stripe.Product, StripeErrors> =>
     wrapStripeCall(() => stripe.products.update(id, params)),
 
   /**
    * Delete a product
    */
-  del: (
-    id: string
-  ): Effect.Effect<
-    Stripe.DeletedProduct,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.products.del(id)),
+  del: (id: string): Effect.Effect<Stripe.DeletedProduct, StripeErrors> =>
+    wrapStripeCall(() => stripe.products.del(id)),
 
   /**
    * List products
    */
   list: (
     params?: Stripe.ProductListParams
-  ): Effect.Effect<
-    Stripe.ApiList<Stripe.Product>,
-    StripeApiError | StripeNetworkError
-  > => wrapStripeCall(() => stripe.products.list(params)),
+  ): Effect.Effect<Stripe.ApiList<Stripe.Product>, StripeErrors> =>
+    wrapStripeCall(() => stripe.products.list(params)),
 });
 
 /**
@@ -378,7 +346,8 @@ export const makeStripeLayer = (
       }
 
       const stripe = new Stripe(config.apiKey, {
-        apiVersion: (config.apiVersion as Stripe.LatestApiVersion) || "2024-12-18.acacia",
+        apiVersion:
+          (config.apiVersion as Stripe.LatestApiVersion) || "2025-02-24.acacia",
         maxNetworkRetries: config.maxNetworkRetries,
         timeout: config.timeout,
         appInfo: config.appInfo,
@@ -415,7 +384,7 @@ export const makeStripeLayerFromEnv = (
       }
 
       const stripe = new Stripe(apiKey!, {
-        apiVersion: "2024-12-18.acacia",
+        apiVersion: "2025-02-24.acacia",
       });
 
       return {
