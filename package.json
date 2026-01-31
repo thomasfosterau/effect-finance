@@ -1,0 +1,72 @@
+{
+  "name": "@thomasfosterau/effect-stripe",
+  "version": "0.0.0",
+  "description": "An Effect wrapper around the Stripe API",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish"
+  },
+  "keywords": [
+    "effect",
+    "stripe",
+    "payments",
+    "api",
+    "typescript"
+  ],
+  "author": "Thomas Foster",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thomasfosterau/effect-stripe.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thomasfosterau/effect-stripe/issues"
+  },
+  "homepage": "https://github.com/thomasfosterau/effect-stripe#readme",
+  "peerDependencies": {
+    "effect": "^3.0.0"
+  },
+  "dependencies": {
+    "stripe": "^17.6.0"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "@effect/platform": "^0.68.0",
+    "@effect/platform-node": "^0.63.0",
+    "@effect/schema": "^0.75.0",
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "effect": "^3.10.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
