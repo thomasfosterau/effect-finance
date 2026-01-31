@@ -10,29 +10,18 @@
  * @example
  * ```typescript
  * import { Effect } from "effect";
- * import { makeStripeLayer, StripeService } from "@thomasfosterau/effect-stripe";
+ * import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
+ * import * as Product from "@thomasfosterau/effect-stripe/Product";
+ *
+ * const createProduct = (name: string) => Product.create({ name });
  *
  * const program = Effect.gen(function* () {
- *   const stripe = yield* StripeService;
- *
- *   // Create a customer
- *   const customer = yield* stripe.customers.create({
- *     email: "customer@example.com",
- *     name: "John Doe",
- *   });
- *
- *   // Create a payment intent
- *   const paymentIntent = yield* stripe.paymentIntents.create({
- *     amount: 2000,
- *     currency: "usd",
- *     customer: customer.id,
- *   });
- *
- *   return { customer, paymentIntent };
+ *   const product = yield* createProduct("Premium Plan");
+ *   return product;
  * });
  *
  * // Run the program with the Stripe layer
- * const layer = makeStripeLayer({ apiKey: "sk_test_..." });
+ * const layer = Stripe.layer({ apiKey: "sk_test_..." });
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  *
@@ -40,5 +29,11 @@
  */
 
 export * from "./errors.js";
-export * from "./stripe.js";
-export type { StripeConfig } from "./stripe.js";
+export * as Stripe from "./Stripe.js";
+export * as Customer from "./Customer.js";
+export * as Product from "./Product.js";
+export * as Price from "./Price.js";
+export * as PaymentIntent from "./PaymentIntent.js";
+export * as Subscription from "./Subscription.js";
+export type { StripeError } from "./internal.js";
+export type { StripeConfig } from "./Stripe.js";

@@ -12,8 +12,9 @@ An Effect wrapper around the Stripe API that provides type-safe error handling, 
 - 🛡️ **Error Handling** - Comprehensive error types using Effect's error channel
 - 🔄 **Composable** - Use Effect's combinators to build complex workflows
 - 🚀 **Resource-safe** - Manage Stripe client lifecycle with Effect Layers
-- 📦 **Tree-shakeable** - ESM-only package with minimal bundle size
+- 📦 **Tree-shakeable** - ESM-only package with subpath exports
 - ✅ **Well-tested** - Comprehensive test coverage
+- 🎨 **Resource-centric** - Idiomatic Effect API design
 
 ## Installation
 
@@ -33,47 +34,49 @@ yarn add @thomasfosterau/effect-stripe effect stripe
 
 ```typescript
 import { Effect } from "effect";
-import { makeStripeLayer, StripeService } from "@thomasfosterau/effect-stripe";
+import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
+import * as Product from "@thomasfosterau/effect-stripe/Product";
 
-// Create a program that uses the Stripe service
+// Create a function that returns an Effect
+const createProduct = (name: string) => Product.create({ name });
+
+// Use it in a program
 const program = Effect.gen(function* () {
-  const stripe = yield* StripeService;
-
-  // Create a customer
-  const customer = yield* stripe.customers.create({
-    email: "customer@example.com",
-    name: "John Doe",
-  });
-
-  // Create a payment intent
-  const paymentIntent = yield* stripe.paymentIntents.create({
-    amount: 2000,
-    currency: "usd",
-    customer: customer.id,
-  });
-
-  return { customer, paymentIntent };
+  const product = yield* createProduct("Premium Plan");
+  return product;
 });
 
-// Create the Stripe layer
-const layer = makeStripeLayer({ apiKey: "sk_test_..." });
-
-// Run the program
+// Create the Stripe layer and run
+const layer = Stripe.layer({ apiKey: "sk_test_..." });
 const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+```
+
+## API Design
+
+This library follows Effect's conventions with a **resource-centric API**. Instead of accessing resources through a service object, you import and use resource modules directly:
+
+```typescript
+// ✅ Effect-like (resource-centric)
+import * as Product from "@thomasfosterau/effect-stripe/Product";
+const product = yield* Product.create({ name: "My Product" });
+
+// ❌ Not Effect-like (service-centric)
+const stripe = yield* StripeService;
+const product = yield* stripe.products.create({ name: "My Product" });
 ```
 
 ## Usage
 
 ### Creating the Stripe Layer
 
-You can create a Stripe layer in two ways:
+The `Stripe` module provides functions to create Effect Layers:
 
 #### From Configuration Object
 
 ```typescript
-import { makeStripeLayer } from "@thomasfosterau/effect-stripe";
+import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
 
-const layer = makeStripeLayer({
+const layer = Stripe.layer({
   apiKey: "sk_test_...",
   maxNetworkRetries: 3,
   timeout: 10000,
@@ -83,137 +86,146 @@ const layer = makeStripeLayer({
 #### From Environment Variable
 
 ```typescript
-import { makeStripeLayerFromEnv } from "@thomasfosterau/effect-stripe";
+import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
 
 // Uses STRIPE_API_KEY environment variable by default
-const layer = makeStripeLayerFromEnv();
+const layer = Stripe.layerFromEnv();
 
 // Or specify a custom environment variable
-const layer = makeStripeLayerFromEnv("MY_STRIPE_KEY");
+const layer = Stripe.layerFromEnv("MY_STRIPE_KEY");
 ```
 
-### Working with Customers
+### Working with Resources
+
+Each Stripe resource has its own module with standard CRUD operations:
+
+#### Products
 
 ```typescript
 import { Effect } from "effect";
-import { StripeService } from "@thomasfosterau/effect-stripe";
+import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
+import * as Product from "@thomasfosterau/effect-stripe/Product";
 
 const program = Effect.gen(function* () {
-  const stripe = yield* StripeService;
-
-  // Create a customer
-  const customer = yield* stripe.customers.create({
-    email: "customer@example.com",
-    name: "John Doe",
-    metadata: { userId: "123" },
+  // Create a product
+  const product = yield* Product.create({
+    name: "Premium Subscription",
+    description: "Monthly premium plan",
   });
 
-  // Retrieve a customer
-  const retrieved = yield* stripe.customers.retrieve(customer.id);
+  // Retrieve a product
+  const retrieved = yield* Product.retrieve(product.id);
 
-  // Update a customer
-  const updated = yield* stripe.customers.update(customer.id, {
+  // Update a product
+  const updated = yield* Product.update(product.id, {
+    description: "Updated description",
+  });
+
+  // List products
+  const products = yield* Product.list({ limit: 10 });
+
+  // Delete a product
+  const deleted = yield* Product.del(product.id);
+
+  return { product, retrieved, updated, products, deleted };
+});
+
+const layer = Stripe.layer({ apiKey: "sk_test_..." });
+await Effect.runPromise(program.pipe(Effect.provide(layer)));
+```
+
+#### Customers
+
+```typescript
+import * as Customer from "@thomasfosterau/effect-stripe/Customer";
+
+const program = Effect.gen(function* () {
+  const customer = yield* Customer.create({
+    email: "customer@example.com",
+    name: "John Doe",
+  });
+
+  const updated = yield* Customer.update(customer.id, {
     name: "Jane Doe",
   });
 
-  // List customers
-  const customers = yield* stripe.customers.list({ limit: 10 });
+  const customers = yield* Customer.list({ limit: 10 });
 
-  // Delete a customer
-  const deleted = yield* stripe.customers.del(customer.id);
-
-  return { customer, retrieved, updated, customers, deleted };
+  return { customer, updated, customers };
 });
 ```
 
-### Working with Payment Intents
+#### Payment Intents
 
 ```typescript
-import { Effect } from "effect";
-import { StripeService } from "@thomasfosterau/effect-stripe";
+import * as PaymentIntent from "@thomasfosterau/effect-stripe/PaymentIntent";
 
 const program = Effect.gen(function* () {
-  const stripe = yield* StripeService;
-
-  // Create a payment intent
-  const paymentIntent = yield* stripe.paymentIntents.create({
+  const intent = yield* PaymentIntent.create({
     amount: 2000,
     currency: "usd",
-    payment_method_types: ["card"],
   });
 
-  // Retrieve a payment intent
-  const retrieved = yield* stripe.paymentIntents.retrieve(paymentIntent.id);
+  const confirmed = yield* PaymentIntent.confirm(intent.id);
 
-  // Update a payment intent
-  const updated = yield* stripe.paymentIntents.update(paymentIntent.id, {
-    metadata: { orderId: "456" },
-  });
-
-  // Confirm a payment intent
-  const confirmed = yield* stripe.paymentIntents.confirm(paymentIntent.id);
-
-  // Cancel a payment intent
-  const canceled = yield* stripe.paymentIntents.cancel(paymentIntent.id);
-
-  return { paymentIntent, retrieved, updated, confirmed, canceled };
+  return { intent, confirmed };
 });
 ```
 
-### Working with Subscriptions
+#### Subscriptions
 
 ```typescript
-import { Effect } from "effect";
-import { StripeService } from "@thomasfosterau/effect-stripe";
+import * as Subscription from "@thomasfosterau/effect-stripe/Subscription";
 
 const program = Effect.gen(function* () {
-  const stripe = yield* StripeService;
-
-  // Create a subscription
-  const subscription = yield* stripe.subscriptions.create({
+  const subscription = yield* Subscription.create({
     customer: "cus_123",
     items: [{ price: "price_123" }],
   });
 
-  // Retrieve a subscription
-  const retrieved = yield* stripe.subscriptions.retrieve(subscription.id);
-
-  // Update a subscription
-  const updated = yield* stripe.subscriptions.update(subscription.id, {
+  const updated = yield* Subscription.update(subscription.id, {
     metadata: { plan: "premium" },
   });
 
-  // Cancel a subscription
-  const canceled = yield* stripe.subscriptions.cancel(subscription.id);
+  return { subscription, updated };
+});
+```
 
-  return { subscription, retrieved, updated, canceled };
+#### Prices
+
+```typescript
+import * as Price from "@thomasfosterau/effect-stripe/Price";
+
+const program = Effect.gen(function* () {
+  const price = yield* Price.create({
+    product: "prod_123",
+    unit_amount: 1999,
+    currency: "usd",
+  });
+
+  return price;
 });
 ```
 
 ### Error Handling
 
-The library provides specific error types for different Stripe error scenarios:
+The library provides specific error types for different Stripe scenarios:
 
 ```typescript
 import { Effect } from "effect";
+import * as Customer from "@thomasfosterau/effect-stripe/Customer";
 import {
-  StripeService,
   StripeApiError,
   StripeAuthenticationError,
   StripeRateLimitError,
-  StripeInvalidRequestError,
 } from "@thomasfosterau/effect-stripe";
 
 const program = Effect.gen(function* () {
-  const stripe = yield* StripeService;
-
-  const customer = yield* stripe.customers.create({
+  const customer = yield* Customer.create({
     email: "customer@example.com",
   });
-
   return customer;
 }).pipe(
-  // Handle specific error types
   Effect.catchTag("StripeAuthenticationError", (error) => {
     console.error("Authentication failed:", error.message);
     return Effect.fail(new Error("Invalid API key"));
@@ -222,12 +234,8 @@ const program = Effect.gen(function* () {
     console.error("Rate limit exceeded:", error.message);
     return Effect.fail(new Error("Too many requests"));
   }),
-  Effect.catchTag("StripeInvalidRequestError", (error) => {
-    console.error("Invalid request:", error.message, error.param);
-    return Effect.fail(new Error("Invalid parameters"));
-  }),
   Effect.catchTag("StripeApiError", (error) => {
-    console.error("API error:", error.message, error.type);
+    console.error("API error:", error.message);
     return Effect.fail(new Error("Stripe API error"));
   })
 );
@@ -239,22 +247,16 @@ Use Effect's combinators to build complex workflows:
 
 ```typescript
 import { Effect, pipe } from "effect";
-import { StripeService } from "@thomasfosterau/effect-stripe";
+import * as Customer from "@thomasfosterau/effect-stripe/Customer";
+import * as Subscription from "@thomasfosterau/effect-stripe/Subscription";
 
-const createCustomerWithSubscription = (
-  email: string,
-  priceId: string
-) =>
+const createCustomerWithSubscription = (email: string, priceId: string) =>
   Effect.gen(function* () {
-    const stripe = yield* StripeService;
-
-    // Create customer and subscription sequentially
-    const customer = yield* stripe.customers.create({ email });
-    const subscription = yield* stripe.subscriptions.create({
+    const customer = yield* Customer.create({ email });
+    const subscription = yield* Subscription.create({
       customer: customer.id,
       items: [{ price: priceId }],
     });
-
     return { customer, subscription };
   });
 
@@ -268,25 +270,28 @@ const program = pipe(
 
 ## API Reference
 
-### Services
+### Modules
 
-- **`StripeService`** - The main service tag for accessing Stripe functionality
-- **`makeStripeLayer(config)`** - Create a Stripe layer from configuration
-- **`makeStripeLayerFromEnv(envVar?)`** - Create a Stripe layer from environment variable
+- **`Stripe`** - Layer creation and configuration
+  - `make(config)` - Create a Stripe client
+  - `layer(config)` - Create a Stripe layer from configuration
+  - `layerFromEnv(envVar?)` - Create a Stripe layer from environment variable
 
 ### Resources
 
-The library currently supports the following Stripe resources:
+Each resource module provides standard CRUD operations:
 
-- **Customers** - `customers.{create, retrieve, update, del, list}`
-- **Payment Intents** - `paymentIntents.{create, retrieve, update, confirm, cancel, list}`
-- **Subscriptions** - `subscriptions.{create, retrieve, update, cancel, list}`
-- **Prices** - `prices.{create, retrieve, update, list}`
-- **Products** - `products.{create, retrieve, update, del, list}`
+- **`Customer`** - `create, retrieve, update, del, list`
+- **`Product`** - `create, retrieve, update, del, list`
+- **`Price`** - `create, retrieve, update, list`
+- **`PaymentIntent`** - `create, retrieve, update, confirm, cancel, list`
+- **`Subscription`** - `create, retrieve, update, cancel, list`
+
+All operations return `Effect<T, StripeError, Stripe.StripeService>`.
 
 ### Error Types
 
-- **`StripeError`** - Base error for all Stripe errors
+- **`StripeError`** - Union of all Stripe errors
 - **`StripeApiError`** - Stripe API returned an error
 - **`StripeConfigError`** - Configuration is invalid
 - **`StripeNetworkError`** - Network error occurred

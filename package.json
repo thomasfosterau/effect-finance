@@ -10,13 +10,37 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./Stripe": {
+      "import": "./dist/Stripe.js",
+      "types": "./dist/Stripe.d.ts"
+    },
+    "./Customer": {
+      "import": "./dist/Customer.js",
+      "types": "./dist/Customer.d.ts"
+    },
+    "./Product": {
+      "import": "./dist/Product.js",
+      "types": "./dist/Product.d.ts"
+    },
+    "./Price": {
+      "import": "./dist/Price.js",
+      "types": "./dist/Price.d.ts"
+    },
+    "./PaymentIntent": {
+      "import": "./dist/PaymentIntent.js",
+      "types": "./dist/PaymentIntent.d.ts"
+    },
+    "./Subscription": {
+      "import": "./dist/Subscription.js",
+      "types": "./dist/Subscription.d.ts"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsc --project tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src",
@@ -62,7 +86,6 @@
     "effect": "^3.10.0",
     "eslint": "^9.0.0",
     "prettier": "^3.3.0",
-    "tsup": "^8.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   },

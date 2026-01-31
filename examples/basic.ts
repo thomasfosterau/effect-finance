@@ -1,28 +1,23 @@
 import { Effect, Console } from "effect";
-import {
-  makeStripeLayer,
-  StripeService,
-  StripeApiError,
-} from "@thomasfosterau/effect-stripe";
+import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
+import * as Customer from "@thomasfosterau/effect-stripe/Customer";
+import * as PaymentIntent from "@thomasfosterau/effect-stripe/PaymentIntent";
 
 /**
  * Example: Create a customer and a payment intent
  *
  * This example demonstrates how to:
  * 1. Create a Stripe service layer
- * 2. Create a customer
- * 3. Create a payment intent for that customer
+ * 2. Create a customer using the Customer resource
+ * 3. Create a payment intent for that customer using the PaymentIntent resource
  * 4. Handle errors using Effect's error channel
  */
 
 const program = Effect.gen(function* () {
-  // Get the Stripe service from the context
-  const stripe = yield* StripeService;
-
   yield* Console.log("Creating customer...");
 
   // Create a customer
-  const customer = yield* stripe.customers.create({
+  const customer = yield* Customer.create({
     email: "customer@example.com",
     name: "John Doe",
     metadata: {
@@ -35,7 +30,7 @@ const program = Effect.gen(function* () {
   // Create a payment intent for the customer
   yield* Console.log("Creating payment intent...");
 
-  const paymentIntent = yield* stripe.paymentIntents.create({
+  const paymentIntent = yield* PaymentIntent.create({
     amount: 2000, // $20.00
     currency: "usd",
     customer: customer.id,
@@ -70,8 +65,8 @@ const program = Effect.gen(function* () {
 
 // Create the Stripe layer
 // In a real application, you would use an environment variable:
-// const layer = makeStripeLayerFromEnv();
-const layer = makeStripeLayer({
+// const layer = Stripe.layerFromEnv();
+const layer = Stripe.layer({
   apiKey: process.env.STRIPE_API_KEY || "sk_test_...",
 });
 

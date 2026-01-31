@@ -1,8 +1,9 @@
 import { Effect, Console } from "effect";
-import {
-  makeStripeLayer,
-  StripeService,
-} from "@thomasfosterau/effect-stripe";
+import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
+import * as Customer from "@thomasfosterau/effect-stripe/Customer";
+import * as Product from "@thomasfosterau/effect-stripe/Product";
+import * as Price from "@thomasfosterau/effect-stripe/Price";
+import * as Subscription from "@thomasfosterau/effect-stripe/Subscription";
 
 /**
  * Example: Create a subscription
@@ -15,11 +16,9 @@ import {
  */
 
 const program = Effect.gen(function* () {
-  const stripe = yield* StripeService;
-
   // Step 1: Create a customer
   yield* Console.log("Creating customer...");
-  const customer = yield* stripe.customers.create({
+  const customer = yield* Customer.create({
     email: "subscriber@example.com",
     name: "Jane Smith",
   });
@@ -27,7 +26,7 @@ const program = Effect.gen(function* () {
 
   // Step 2: Create a product
   yield* Console.log("Creating product...");
-  const product = yield* stripe.products.create({
+  const product = yield* Product.create({
     name: "Premium Subscription",
     description: "Monthly premium subscription",
   });
@@ -35,7 +34,7 @@ const program = Effect.gen(function* () {
 
   // Step 3: Create a price
   yield* Console.log("Creating price...");
-  const price = yield* stripe.prices.create({
+  const price = yield* Price.create({
     product: product.id,
     unit_amount: 1999, // $19.99
     currency: "usd",
@@ -47,7 +46,7 @@ const program = Effect.gen(function* () {
 
   // Step 4: Create a subscription
   yield* Console.log("Creating subscription...");
-  const subscription = yield* stripe.subscriptions.create({
+  const subscription = yield* Subscription.create({
     customer: customer.id,
     items: [{ price: price.id }],
     payment_behavior: "default_incomplete",
@@ -61,7 +60,7 @@ const program = Effect.gen(function* () {
 });
 
 // Create and run the program
-const layer = makeStripeLayer({
+const layer = Stripe.layer({
   apiKey: process.env.STRIPE_API_KEY || "sk_test_...",
 });
 
