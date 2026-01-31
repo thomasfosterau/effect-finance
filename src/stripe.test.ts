@@ -35,13 +35,16 @@ describe("StripeService", () => {
         program.pipe(
           Effect.provide(layer),
           Effect.catchTag("StripeConfigError", (error) =>
-            Effect.succeed({ error: error.message })
+            Effect.succeed({ error: error.message } as const)
           )
         )
       );
 
-      expect(result).toHaveProperty("error");
-      expect(result.error).toContain("API key is required");
+      if ("error" in result) {
+        expect(result.error).toContain("API key is required");
+      } else {
+        throw new Error("Expected error but got success");
+      }
     });
 
     it("should expose customer service", async () => {
