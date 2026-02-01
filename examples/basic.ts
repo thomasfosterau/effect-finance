@@ -51,14 +51,14 @@ const program = Effect.gen(function* () {
     Effect.gen(function* () {
       yield* Console.error("Authentication failed:", error.message);
       yield* Console.error("Please check your API key");
-      return Effect.fail(error);
+      yield* Effect.fail(error);
     })
   ),
   Effect.catchTag("StripeApiError", (error) =>
     Effect.gen(function* () {
       yield* Console.error("Stripe API error:", error.message);
       yield* Console.error("Error type:", error.type);
-      return Effect.fail(error);
+      yield* Effect.fail(error);
     })
   )
 );

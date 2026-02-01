@@ -3,6 +3,11 @@ import Stripe from "stripe";
 import { StripeConfigError } from "./errors.js";
 
 /**
+ * Default Stripe API version
+ */
+const DEFAULT_API_VERSION = "2025-02-24.acacia" as Stripe.LatestApiVersion;
+
+/**
  * Configuration for the Stripe service
  */
 export interface StripeConfig {
@@ -38,7 +43,7 @@ export const make = (
 
     return new Stripe(config.apiKey, {
       apiVersion:
-        (config.apiVersion as Stripe.LatestApiVersion) || "2025-02-24.acacia",
+        (config.apiVersion as Stripe.LatestApiVersion) || DEFAULT_API_VERSION,
       maxNetworkRetries: config.maxNetworkRetries,
       timeout: config.timeout,
       appInfo: config.appInfo,
@@ -65,15 +70,15 @@ export const layerFromEnv = (
       const apiKey = process.env[envVar];
 
       if (!apiKey) {
-        yield* Effect.fail(
+        return yield* Effect.fail(
           new StripeConfigError({
             message: `Environment variable ${envVar} is not set`,
           })
         );
       }
 
-      return new Stripe(apiKey!, {
-        apiVersion: "2025-02-24.acacia",
+      return new Stripe(apiKey, {
+        apiVersion: DEFAULT_API_VERSION,
       });
     })
   );

@@ -11,6 +11,8 @@ import {
 
 /**
  * All possible Stripe errors that can occur during API calls
+ * Note: StripeConfigError is not included as it only occurs during layer initialization,
+ * not during API calls wrapped with wrapStripeCall.
  */
 export type StripeError =
   | StripeApiError
@@ -29,8 +31,18 @@ export const handleStripeError = (error: unknown): StripeError => {
     switch (type) {
       case "StripeAuthenticationError":
         return new StripeAuthenticationError({ message, statusCode });
-      case "StripeRateLimitError":
-        return new StripeRateLimitError({ message });
+      case "StripeRateLimitError": {
+        // Extract retry-after information from headers
+        const rateLimitError = error as Stripe.errors.StripeRateLimitError;
+        const headers = rateLimitError.headers;
+        const retryAfterHeader =
+          headers?.["retry-after"] ?? headers?.["Retry-After"];
+        const retryAfter =
+          retryAfterHeader !== undefined
+            ? Number.parseInt(String(retryAfterHeader), 10)
+            : undefined;
+        return new StripeRateLimitError({ message, retryAfter });
+      }
       case "StripeInvalidRequestError":
         return new StripeInvalidRequestError({
           message,
@@ -39,7 +51,11 @@ export const handleStripeError = (error: unknown): StripeError => {
         });
       case "StripeConnectionError":
         return new StripeNetworkError({ message, cause: error });
+      case "StripePermissionError":
+      case "StripeIdempotencyError":
+      case "StripeAPIError":
       default:
+        // Handle all other error types as generic StripeApiError
         return new StripeApiError({
           message,
           type: type || "UnknownError",

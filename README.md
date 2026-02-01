@@ -13,7 +13,7 @@ An Effect wrapper around the Stripe API that provides type-safe error handling, 
 - 🔄 **Composable** - Use Effect's combinators to build complex workflows
 - 🚀 **Resource-safe** - Manage Stripe client lifecycle with Effect Layers
 - 📦 **Tree-shakeable** - ESM-only package with subpath exports
-- ✅ **Well-tested** - Comprehensive test coverage
+- ✅ **Well-tested** - Growing test suite for core functionality
 - 🎨 **Resource-centric** - Idiomatic Effect API design
 
 ## Installation
