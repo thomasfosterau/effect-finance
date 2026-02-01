@@ -60,7 +60,7 @@ export const retrieve = (
   Effect.request(
     RetrievePaymentIntentRequest({ id, params }),
     RetrievePaymentIntentResolver
-  );
+  ).pipe(Effect.withRequestCaching(true));
 
 /**
  * Update a payment intent
@@ -111,4 +111,4 @@ export const list = (
   Effect.request(
     ListPaymentIntentsRequest({ params }),
     ListPaymentIntentsResolver
-  );
+  ).pipe(Effect.withRequestCaching(true));

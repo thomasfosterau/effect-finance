@@ -57,7 +57,7 @@ export const retrieve = (
   Effect.request(
     RetrieveProductRequest({ id, params }),
     RetrieveProductResolver
-  );
+  ).pipe(Effect.withRequestCaching(true));
 
 /**
  * Update a product
@@ -91,4 +91,4 @@ export const list = (
   Effect.request(
     ListProductsRequest({ params }),
     ListProductsResolver
-  );
+  ).pipe(Effect.withRequestCaching(true));

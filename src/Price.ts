@@ -57,7 +57,7 @@ export const retrieve = (
   Effect.request(
     RetrievePriceRequest({ id, params }),
     RetrievePriceResolver
-  );
+  ).pipe(Effect.withRequestCaching(true));
 
 /**
  * Update a price
@@ -74,4 +74,6 @@ export const update = (
 export const list = (
   params?: Stripe.PriceListParams
 ): Effect.Effect<Stripe.ApiList<Stripe.Price>, StripeError, StripeService> =>
-  Effect.request(ListPricesRequest({ params }), ListPricesResolver);
+  Effect.request(ListPricesRequest({ params }), ListPricesResolver).pipe(
+    Effect.withRequestCaching(true)
+  );

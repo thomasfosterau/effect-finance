@@ -46,7 +46,7 @@ export const create = (
   Effect.request(
     CreateCustomerRequest({ params }),
     CreateCustomerResolver
-  ).pipe(Effect.withRequestCaching(true));
+  );
 
 /**
  * Retrieve a customer
@@ -74,7 +74,7 @@ export const update = (
   Effect.request(
     UpdateCustomerRequest({ id, params }),
     UpdateCustomerResolver
-  ).pipe(Effect.withRequestCaching(true));
+  );
 
 /**
  * Delete a customer
@@ -85,7 +85,7 @@ export const del = (
   Effect.request(
     DeleteCustomerRequest({ id }),
     DeleteCustomerResolver
-  ).pipe(Effect.withRequestCaching(true));
+  );
 
 /**
  * List customers

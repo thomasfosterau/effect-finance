@@ -61,7 +61,7 @@ export const retrieve = (
   Effect.request(
     RetrieveSubscriptionRequest({ id, params }),
     RetrieveSubscriptionResolver
-  );
+  ).pipe(Effect.withRequestCaching(true));
 
 /**
  * Update a subscription
@@ -100,4 +100,4 @@ export const list = (
   Effect.request(
     ListSubscriptionsRequest({ params }),
     ListSubscriptionsResolver
-  );
+  ).pipe(Effect.withRequestCaching(true));
