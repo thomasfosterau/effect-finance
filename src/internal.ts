@@ -33,14 +33,16 @@ export const handleStripeError = (error: unknown): StripeError => {
         return new StripeAuthenticationError({ message, statusCode });
       case "StripeRateLimitError": {
         // Extract retry-after information from headers
+        // Stripe returns this in the "Retry-After" header
         const rateLimitError = error as Stripe.errors.StripeRateLimitError;
         const headers = rateLimitError.headers;
         const retryAfterHeader =
-          headers?.["retry-after"] ?? headers?.["Retry-After"];
-        const retryAfter =
-          retryAfterHeader !== undefined
-            ? Number.parseInt(String(retryAfterHeader), 10)
-            : undefined;
+          headers?.["Retry-After"] ?? headers?.["retry-after"];
+        let retryAfter: number | undefined;
+        if (retryAfterHeader !== undefined) {
+          const parsed = Number.parseInt(String(retryAfterHeader), 10);
+          retryAfter = Number.isNaN(parsed) ? undefined : parsed;
+        }
         return new StripeRateLimitError({ message, retryAfter });
       }
       case "StripeInvalidRequestError":
