@@ -2,7 +2,7 @@
  * Subscription Request types and resolvers using Effect's RequestResolver pattern
  */
 
-import { Request, RequestResolver } from "effect";
+import { Effect, Request, RequestResolver } from "effect";
 import type Stripe from "stripe";
 import {
   makeStripeResolver,
@@ -22,7 +22,7 @@ export interface CreateSubscriptionRequest
 export const CreateSubscriptionRequest =
   Request.tagged<CreateSubscriptionRequest>("CreateSubscriptionRequest");
 
-export const CreateSubscriptionResolver: RequestResolver.RequestResolver<CreateSubscriptionRequest, StripeService> =
+export const CreateSubscriptionResolver: Effect.Effect<RequestResolver.RequestResolver<CreateSubscriptionRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.subscriptions.create(request.params)
@@ -41,7 +41,7 @@ export interface RetrieveSubscriptionRequest
 export const RetrieveSubscriptionRequest =
   Request.tagged<RetrieveSubscriptionRequest>("RetrieveSubscriptionRequest");
 
-export const RetrieveSubscriptionResolver: RequestResolver.RequestResolver<RetrieveSubscriptionRequest, StripeService> =
+export const RetrieveSubscriptionResolver: Effect.Effect<RequestResolver.RequestResolver<RetrieveSubscriptionRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.subscriptions.retrieve(request.id, request.params)
@@ -60,7 +60,7 @@ export interface UpdateSubscriptionRequest
 export const UpdateSubscriptionRequest =
   Request.tagged<UpdateSubscriptionRequest>("UpdateSubscriptionRequest");
 
-export const UpdateSubscriptionResolver: RequestResolver.RequestResolver<UpdateSubscriptionRequest, StripeService> =
+export const UpdateSubscriptionResolver: Effect.Effect<RequestResolver.RequestResolver<UpdateSubscriptionRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.subscriptions.update(request.id, request.params)
@@ -79,7 +79,7 @@ export interface CancelSubscriptionRequest
 export const CancelSubscriptionRequest =
   Request.tagged<CancelSubscriptionRequest>("CancelSubscriptionRequest");
 
-export const CancelSubscriptionResolver: RequestResolver.RequestResolver<CancelSubscriptionRequest, StripeService> =
+export const CancelSubscriptionResolver: Effect.Effect<RequestResolver.RequestResolver<CancelSubscriptionRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.subscriptions.cancel(request.id, request.params)
@@ -97,7 +97,7 @@ export interface ListSubscriptionsRequest
 export const ListSubscriptionsRequest =
   Request.tagged<ListSubscriptionsRequest>("ListSubscriptionsRequest");
 
-export const ListSubscriptionsResolver: RequestResolver.RequestResolver<ListSubscriptionsRequest, StripeService> =
+export const ListSubscriptionsResolver: Effect.Effect<RequestResolver.RequestResolver<ListSubscriptionsRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.subscriptions.list(request.params)

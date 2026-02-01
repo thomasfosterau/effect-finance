@@ -2,7 +2,7 @@
  * Price Request types and resolvers using Effect's RequestResolver pattern
  */
 
-import { Request, RequestResolver } from "effect";
+import { Effect, Request, RequestResolver } from "effect";
 import type Stripe from "stripe";
 import {
   makeStripeResolver,
@@ -22,7 +22,7 @@ export const CreatePriceRequest = Request.tagged<CreatePriceRequest>(
   "CreatePriceRequest"
 );
 
-export const CreatePriceResolver: RequestResolver.RequestResolver<CreatePriceRequest, StripeService> =
+export const CreatePriceResolver: Effect.Effect<RequestResolver.RequestResolver<CreatePriceRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) => stripe.prices.create(request.params)
   );
@@ -40,7 +40,7 @@ export const RetrievePriceRequest = Request.tagged<RetrievePriceRequest>(
   "RetrievePriceRequest"
 );
 
-export const RetrievePriceResolver: RequestResolver.RequestResolver<RetrievePriceRequest, StripeService> =
+export const RetrievePriceResolver: Effect.Effect<RequestResolver.RequestResolver<RetrievePriceRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.prices.retrieve(request.id, request.params)
@@ -59,7 +59,7 @@ export const UpdatePriceRequest = Request.tagged<UpdatePriceRequest>(
   "UpdatePriceRequest"
 );
 
-export const UpdatePriceResolver: RequestResolver.RequestResolver<UpdatePriceRequest, StripeService> =
+export const UpdatePriceResolver: Effect.Effect<RequestResolver.RequestResolver<UpdatePriceRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.prices.update(request.id, request.params)
@@ -78,7 +78,7 @@ export const ListPricesRequest = Request.tagged<ListPricesRequest>(
   "ListPricesRequest"
 );
 
-export const ListPricesResolver: RequestResolver.RequestResolver<ListPricesRequest, StripeService> =
+export const ListPricesResolver: Effect.Effect<RequestResolver.RequestResolver<ListPricesRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) => stripe.prices.list(request.params)
   );

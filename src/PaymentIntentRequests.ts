@@ -2,7 +2,7 @@
  * PaymentIntent Request types and resolvers using Effect's RequestResolver pattern
  */
 
-import { Request, RequestResolver } from "effect";
+import { Effect, Request, RequestResolver } from "effect";
 import type Stripe from "stripe";
 import {
   makeStripeResolver,
@@ -22,7 +22,7 @@ export interface CreatePaymentIntentRequest
 export const CreatePaymentIntentRequest =
   Request.tagged<CreatePaymentIntentRequest>("CreatePaymentIntentRequest");
 
-export const CreatePaymentIntentResolver: RequestResolver.RequestResolver<CreatePaymentIntentRequest, StripeService> =
+export const CreatePaymentIntentResolver: Effect.Effect<RequestResolver.RequestResolver<CreatePaymentIntentRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.paymentIntents.create(request.params)
@@ -41,7 +41,7 @@ export interface RetrievePaymentIntentRequest
 export const RetrievePaymentIntentRequest =
   Request.tagged<RetrievePaymentIntentRequest>("RetrievePaymentIntentRequest");
 
-export const RetrievePaymentIntentResolver: RequestResolver.RequestResolver<RetrievePaymentIntentRequest, StripeService> =
+export const RetrievePaymentIntentResolver: Effect.Effect<RequestResolver.RequestResolver<RetrievePaymentIntentRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.paymentIntents.retrieve(request.id, request.params)
@@ -60,7 +60,7 @@ export interface UpdatePaymentIntentRequest
 export const UpdatePaymentIntentRequest =
   Request.tagged<UpdatePaymentIntentRequest>("UpdatePaymentIntentRequest");
 
-export const UpdatePaymentIntentResolver: RequestResolver.RequestResolver<UpdatePaymentIntentRequest, StripeService> =
+export const UpdatePaymentIntentResolver: Effect.Effect<RequestResolver.RequestResolver<UpdatePaymentIntentRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.paymentIntents.update(request.id, request.params)
@@ -79,7 +79,7 @@ export interface ConfirmPaymentIntentRequest
 export const ConfirmPaymentIntentRequest =
   Request.tagged<ConfirmPaymentIntentRequest>("ConfirmPaymentIntentRequest");
 
-export const ConfirmPaymentIntentResolver: RequestResolver.RequestResolver<ConfirmPaymentIntentRequest, StripeService> =
+export const ConfirmPaymentIntentResolver: Effect.Effect<RequestResolver.RequestResolver<ConfirmPaymentIntentRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.paymentIntents.confirm(request.id, request.params)
@@ -98,7 +98,7 @@ export interface CancelPaymentIntentRequest
 export const CancelPaymentIntentRequest =
   Request.tagged<CancelPaymentIntentRequest>("CancelPaymentIntentRequest");
 
-export const CancelPaymentIntentResolver: RequestResolver.RequestResolver<CancelPaymentIntentRequest, StripeService> =
+export const CancelPaymentIntentResolver: Effect.Effect<RequestResolver.RequestResolver<CancelPaymentIntentRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.paymentIntents.cancel(request.id, request.params)
@@ -116,7 +116,7 @@ export interface ListPaymentIntentsRequest
 export const ListPaymentIntentsRequest =
   Request.tagged<ListPaymentIntentsRequest>("ListPaymentIntentsRequest");
 
-export const ListPaymentIntentsResolver: RequestResolver.RequestResolver<ListPaymentIntentsRequest, StripeService> =
+export const ListPaymentIntentsResolver: Effect.Effect<RequestResolver.RequestResolver<ListPaymentIntentsRequest>, never, StripeService> =
   makeStripeResolver(
     (stripe, request) =>
       stripe.paymentIntents.list(request.params)
