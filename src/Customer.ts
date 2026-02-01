@@ -22,8 +22,20 @@
 
 import { Effect } from "effect";
 import type Stripe from "stripe";
-import { wrapStripeCall, type StripeError } from "./internal.js";
+import { type StripeError } from "./internal.js";
 import type { StripeService } from "./Stripe.js";
+import {
+  CreateCustomerRequest,
+  CreateCustomerResolver,
+  RetrieveCustomerRequest,
+  RetrieveCustomerResolver,
+  UpdateCustomerRequest,
+  UpdateCustomerResolver,
+  DeleteCustomerRequest,
+  DeleteCustomerResolver,
+  ListCustomersRequest,
+  ListCustomersResolver,
+} from "./CustomerRequests.js";
 
 /**
  * Create a customer
@@ -31,7 +43,10 @@ import type { StripeService } from "./Stripe.js";
 export const create = (
   params?: Stripe.CustomerCreateParams
 ): Effect.Effect<Stripe.Customer, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.customers.create(params));
+  Effect.request(
+    CreateCustomerRequest({ params }),
+    CreateCustomerResolver
+  ).pipe(Effect.withRequestCaching(true));
 
 /**
  * Retrieve a customer
@@ -43,7 +58,11 @@ export const retrieve = (
   Stripe.Customer | Stripe.DeletedCustomer,
   StripeError,
   StripeService
-> => wrapStripeCall((stripe) => stripe.customers.retrieve(id, params));
+> =>
+  Effect.request(
+    RetrieveCustomerRequest({ id, params }),
+    RetrieveCustomerResolver
+  ).pipe(Effect.withRequestCaching(true));
 
 /**
  * Update a customer
@@ -52,7 +71,10 @@ export const update = (
   id: string,
   params?: Stripe.CustomerUpdateParams
 ): Effect.Effect<Stripe.Customer, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.customers.update(id, params));
+  Effect.request(
+    UpdateCustomerRequest({ id, params }),
+    UpdateCustomerResolver
+  ).pipe(Effect.withRequestCaching(true));
 
 /**
  * Delete a customer
@@ -60,7 +82,10 @@ export const update = (
 export const del = (
   id: string
 ): Effect.Effect<Stripe.DeletedCustomer, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.customers.del(id));
+  Effect.request(
+    DeleteCustomerRequest({ id }),
+    DeleteCustomerResolver
+  ).pipe(Effect.withRequestCaching(true));
 
 /**
  * List customers
@@ -68,4 +93,7 @@ export const del = (
 export const list = (
   params?: Stripe.CustomerListParams
 ): Effect.Effect<Stripe.ApiList<Stripe.Customer>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.customers.list(params));
+  Effect.request(
+    ListCustomersRequest({ params }),
+    ListCustomersResolver
+  ).pipe(Effect.withRequestCaching(true));

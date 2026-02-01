@@ -25,8 +25,20 @@
 
 import { Effect } from "effect";
 import type Stripe from "stripe";
-import { wrapStripeCall, type StripeError } from "./internal.js";
+import { type StripeError } from "./internal.js";
 import type { StripeService } from "./Stripe.js";
+import {
+  CreateSubscriptionRequest,
+  CreateSubscriptionResolver,
+  RetrieveSubscriptionRequest,
+  RetrieveSubscriptionResolver,
+  UpdateSubscriptionRequest,
+  UpdateSubscriptionResolver,
+  CancelSubscriptionRequest,
+  CancelSubscriptionResolver,
+  ListSubscriptionsRequest,
+  ListSubscriptionsResolver,
+} from "./SubscriptionRequests.js";
 
 /**
  * Create a subscription
@@ -34,7 +46,10 @@ import type { StripeService } from "./Stripe.js";
 export const create = (
   params: Stripe.SubscriptionCreateParams
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.subscriptions.create(params));
+  Effect.request(
+    CreateSubscriptionRequest({ params }),
+    CreateSubscriptionResolver
+  );
 
 /**
  * Retrieve a subscription
@@ -43,7 +58,10 @@ export const retrieve = (
   id: string,
   params?: Stripe.SubscriptionRetrieveParams
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.subscriptions.retrieve(id, params));
+  Effect.request(
+    RetrieveSubscriptionRequest({ id, params }),
+    RetrieveSubscriptionResolver
+  );
 
 /**
  * Update a subscription
@@ -52,7 +70,10 @@ export const update = (
   id: string,
   params?: Stripe.SubscriptionUpdateParams
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.subscriptions.update(id, params));
+  Effect.request(
+    UpdateSubscriptionRequest({ id, params }),
+    UpdateSubscriptionResolver
+  );
 
 /**
  * Cancel a subscription
@@ -61,7 +82,10 @@ export const cancel = (
   id: string,
   params?: Stripe.SubscriptionCancelParams
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.subscriptions.cancel(id, params));
+  Effect.request(
+    CancelSubscriptionRequest({ id, params }),
+    CancelSubscriptionResolver
+  );
 
 /**
  * List subscriptions
@@ -72,4 +96,8 @@ export const list = (
   Stripe.ApiList<Stripe.Subscription>,
   StripeError,
   StripeService
-> => wrapStripeCall((stripe) => stripe.subscriptions.list(params));
+> =>
+  Effect.request(
+    ListSubscriptionsRequest({ params }),
+    ListSubscriptionsResolver
+  );

@@ -21,8 +21,20 @@
 
 import { Effect } from "effect";
 import type Stripe from "stripe";
-import { wrapStripeCall, type StripeError } from "./internal.js";
+import { type StripeError } from "./internal.js";
 import type { StripeService } from "./Stripe.js";
+import {
+  CreateProductRequest,
+  CreateProductResolver,
+  RetrieveProductRequest,
+  RetrieveProductResolver,
+  UpdateProductRequest,
+  UpdateProductResolver,
+  DeleteProductRequest,
+  DeleteProductResolver,
+  ListProductsRequest,
+  ListProductsResolver,
+} from "./ProductRequests.js";
 
 /**
  * Create a product
@@ -30,7 +42,10 @@ import type { StripeService } from "./Stripe.js";
 export const create = (
   params: Stripe.ProductCreateParams
 ): Effect.Effect<Stripe.Product, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.products.create(params));
+  Effect.request(
+    CreateProductRequest({ params }),
+    CreateProductResolver
+  );
 
 /**
  * Retrieve a product
@@ -39,7 +54,10 @@ export const retrieve = (
   id: string,
   params?: Stripe.ProductRetrieveParams
 ): Effect.Effect<Stripe.Product, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.products.retrieve(id, params));
+  Effect.request(
+    RetrieveProductRequest({ id, params }),
+    RetrieveProductResolver
+  );
 
 /**
  * Update a product
@@ -48,7 +66,10 @@ export const update = (
   id: string,
   params?: Stripe.ProductUpdateParams
 ): Effect.Effect<Stripe.Product, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.products.update(id, params));
+  Effect.request(
+    UpdateProductRequest({ id, params }),
+    UpdateProductResolver
+  );
 
 /**
  * Delete a product
@@ -56,7 +77,10 @@ export const update = (
 export const del = (
   id: string
 ): Effect.Effect<Stripe.DeletedProduct, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.products.del(id));
+  Effect.request(
+    DeleteProductRequest({ id }),
+    DeleteProductResolver
+  );
 
 /**
  * List products
@@ -64,4 +88,7 @@ export const del = (
 export const list = (
   params?: Stripe.ProductListParams
 ): Effect.Effect<Stripe.ApiList<Stripe.Product>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.products.list(params));
+  Effect.request(
+    ListProductsRequest({ params }),
+    ListProductsResolver
+  );

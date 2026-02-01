@@ -26,8 +26,18 @@
 
 import { Effect } from "effect";
 import type Stripe from "stripe";
-import { wrapStripeCall, type StripeError } from "./internal.js";
+import { type StripeError } from "./internal.js";
 import type { StripeService } from "./Stripe.js";
+import {
+  CreatePriceRequest,
+  CreatePriceResolver,
+  RetrievePriceRequest,
+  RetrievePriceResolver,
+  UpdatePriceRequest,
+  UpdatePriceResolver,
+  ListPricesRequest,
+  ListPricesResolver,
+} from "./PriceRequests.js";
 
 /**
  * Create a price
@@ -35,7 +45,7 @@ import type { StripeService } from "./Stripe.js";
 export const create = (
   params: Stripe.PriceCreateParams
 ): Effect.Effect<Stripe.Price, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.prices.create(params));
+  Effect.request(CreatePriceRequest({ params }), CreatePriceResolver);
 
 /**
  * Retrieve a price
@@ -44,7 +54,10 @@ export const retrieve = (
   id: string,
   params?: Stripe.PriceRetrieveParams
 ): Effect.Effect<Stripe.Price, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.prices.retrieve(id, params));
+  Effect.request(
+    RetrievePriceRequest({ id, params }),
+    RetrievePriceResolver
+  );
 
 /**
  * Update a price
@@ -53,7 +66,7 @@ export const update = (
   id: string,
   params?: Stripe.PriceUpdateParams
 ): Effect.Effect<Stripe.Price, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.prices.update(id, params));
+  Effect.request(UpdatePriceRequest({ id, params }), UpdatePriceResolver);
 
 /**
  * List prices
@@ -61,4 +74,4 @@ export const update = (
 export const list = (
   params?: Stripe.PriceListParams
 ): Effect.Effect<Stripe.ApiList<Stripe.Price>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.prices.list(params));
+  Effect.request(ListPricesRequest({ params }), ListPricesResolver);

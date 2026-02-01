@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Request, RequestResolver } from "effect";
 import Stripe from "stripe";
 import { StripeService } from "./Stripe.js";
 import {
@@ -88,3 +88,20 @@ export const wrapStripeCall = <A>(
       catch: handleStripeError,
     });
   });
+
+/**
+ * Create a RequestResolver for Stripe API calls
+ * Returns a resolver that accesses StripeService from context
+ */
+export const makeStripeResolver = <R extends Request.Request<any, any>>(
+  execute: (stripe: Stripe, request: R) => Promise<Request.Request.Success<R>>
+): RequestResolver.RequestResolver<R, StripeService> =>
+  RequestResolver.fromEffect((request: R) =>
+    Effect.gen(function* () {
+      const stripe = yield* StripeService;
+      return yield* Effect.tryPromise({
+        try: () => execute(stripe, request),
+        catch: handleStripeError,
+      });
+    })
+  );
