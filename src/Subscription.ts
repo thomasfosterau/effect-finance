@@ -23,22 +23,103 @@
  * ```
  */
 
-import { Effect, RequestResolver } from "effect";
+import { Effect, Request, RequestResolver } from "effect";
 import type Stripe from "stripe";
-import { type StripeError } from "./internal.js";
-import type { StripeService } from "./Stripe.js";
-import {
-  CreateSubscriptionRequest,
-  CreateSubscriptionResolver,
-  RetrieveSubscriptionRequest,
-  RetrieveSubscriptionResolver,
-  UpdateSubscriptionRequest,
-  UpdateSubscriptionResolver,
-  CancelSubscriptionRequest,
-  CancelSubscriptionResolver,
-  ListSubscriptionsRequest,
-  ListSubscriptionsResolver,
-} from "./SubscriptionRequests.js";
+import { makeStripeResolver, type StripeError } from "./internal.js";
+import { StripeService } from "./Stripe.js";
+
+/**
+ * Request to create a subscription
+ */
+interface CreateSubscriptionRequest
+  extends Request.Request<Stripe.Subscription, StripeError> {
+  readonly _tag: "CreateSubscriptionRequest";
+  readonly params: Stripe.SubscriptionCreateParams;
+}
+
+const CreateSubscriptionRequest =
+  Request.tagged<CreateSubscriptionRequest>("CreateSubscriptionRequest");
+
+const CreateSubscriptionResolver: RequestResolver.RequestResolver<CreateSubscriptionRequest, StripeService> =
+  makeStripeResolver<CreateSubscriptionRequest>(
+    (stripe, request) =>
+      stripe.subscriptions.create(request.params)
+  );
+
+/**
+ * Request to retrieve a subscription
+ */
+interface RetrieveSubscriptionRequest
+  extends Request.Request<Stripe.Subscription, StripeError> {
+  readonly _tag: "RetrieveSubscriptionRequest";
+  readonly id: string;
+  readonly params?: Stripe.SubscriptionRetrieveParams;
+}
+
+const RetrieveSubscriptionRequest =
+  Request.tagged<RetrieveSubscriptionRequest>("RetrieveSubscriptionRequest");
+
+const RetrieveSubscriptionResolver: RequestResolver.RequestResolver<RetrieveSubscriptionRequest, StripeService> =
+  makeStripeResolver<RetrieveSubscriptionRequest>(
+    (stripe, request) =>
+      stripe.subscriptions.retrieve(request.id, request.params)
+  );
+
+/**
+ * Request to update a subscription
+ */
+interface UpdateSubscriptionRequest
+  extends Request.Request<Stripe.Subscription, StripeError> {
+  readonly _tag: "UpdateSubscriptionRequest";
+  readonly id: string;
+  readonly params?: Stripe.SubscriptionUpdateParams;
+}
+
+const UpdateSubscriptionRequest =
+  Request.tagged<UpdateSubscriptionRequest>("UpdateSubscriptionRequest");
+
+const UpdateSubscriptionResolver: RequestResolver.RequestResolver<UpdateSubscriptionRequest, StripeService> =
+  makeStripeResolver<UpdateSubscriptionRequest>(
+    (stripe, request) =>
+      stripe.subscriptions.update(request.id, request.params)
+  );
+
+/**
+ * Request to cancel a subscription
+ */
+interface CancelSubscriptionRequest
+  extends Request.Request<Stripe.Subscription, StripeError> {
+  readonly _tag: "CancelSubscriptionRequest";
+  readonly id: string;
+  readonly params?: Stripe.SubscriptionCancelParams;
+}
+
+const CancelSubscriptionRequest =
+  Request.tagged<CancelSubscriptionRequest>("CancelSubscriptionRequest");
+
+const CancelSubscriptionResolver: RequestResolver.RequestResolver<CancelSubscriptionRequest, StripeService> =
+  makeStripeResolver<CancelSubscriptionRequest>(
+    (stripe, request) =>
+      stripe.subscriptions.cancel(request.id, request.params)
+  );
+
+/**
+ * Request to list subscriptions
+ */
+interface ListSubscriptionsRequest
+  extends Request.Request<Stripe.ApiList<Stripe.Subscription>, StripeError> {
+  readonly _tag: "ListSubscriptionsRequest";
+  readonly params?: Stripe.SubscriptionListParams;
+}
+
+const ListSubscriptionsRequest =
+  Request.tagged<ListSubscriptionsRequest>("ListSubscriptionsRequest");
+
+const ListSubscriptionsResolver: RequestResolver.RequestResolver<ListSubscriptionsRequest, StripeService> =
+  makeStripeResolver<ListSubscriptionsRequest>(
+    (stripe, request) =>
+      stripe.subscriptions.list(request.params)
+  );
 
 /**
  * Create a subscription

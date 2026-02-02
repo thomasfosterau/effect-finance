@@ -19,22 +19,106 @@
  * ```
  */
 
-import { Effect, RequestResolver } from "effect";
+import { Effect, Request, RequestResolver } from "effect";
 import type Stripe from "stripe";
-import { type StripeError } from "./internal.js";
-import type { StripeService } from "./Stripe.js";
-import {
-  CreateProductRequest,
-  CreateProductResolver,
-  RetrieveProductRequest,
-  RetrieveProductResolver,
-  UpdateProductRequest,
-  UpdateProductResolver,
-  DeleteProductRequest,
-  DeleteProductResolver,
-  ListProductsRequest,
-  ListProductsResolver,
-} from "./ProductRequests.js";
+import { makeStripeResolver, type StripeError } from "./internal.js";
+import { StripeService } from "./Stripe.js";
+
+/**
+ * Request to create a product
+ */
+interface CreateProductRequest
+  extends Request.Request<Stripe.Product, StripeError> {
+  readonly _tag: "CreateProductRequest";
+  readonly params: Stripe.ProductCreateParams;
+}
+
+const CreateProductRequest = Request.tagged<CreateProductRequest>(
+  "CreateProductRequest"
+);
+
+const CreateProductResolver: RequestResolver.RequestResolver<CreateProductRequest, StripeService> =
+  makeStripeResolver<CreateProductRequest>(
+    (stripe, request) =>
+      stripe.products.create(request.params)
+  );
+
+/**
+ * Request to retrieve a product
+ */
+interface RetrieveProductRequest
+  extends Request.Request<Stripe.Product, StripeError> {
+  readonly _tag: "RetrieveProductRequest";
+  readonly id: string;
+  readonly params?: Stripe.ProductRetrieveParams;
+}
+
+const RetrieveProductRequest = Request.tagged<RetrieveProductRequest>(
+  "RetrieveProductRequest"
+);
+
+const RetrieveProductResolver: RequestResolver.RequestResolver<RetrieveProductRequest, StripeService> =
+  makeStripeResolver<RetrieveProductRequest>(
+    (stripe, request) =>
+      stripe.products.retrieve(request.id, request.params)
+  );
+
+/**
+ * Request to update a product
+ */
+interface UpdateProductRequest
+  extends Request.Request<Stripe.Product, StripeError> {
+  readonly _tag: "UpdateProductRequest";
+  readonly id: string;
+  readonly params?: Stripe.ProductUpdateParams;
+}
+
+const UpdateProductRequest = Request.tagged<UpdateProductRequest>(
+  "UpdateProductRequest"
+);
+
+const UpdateProductResolver: RequestResolver.RequestResolver<UpdateProductRequest, StripeService> =
+  makeStripeResolver<UpdateProductRequest>(
+    (stripe, request) =>
+      stripe.products.update(request.id, request.params)
+  );
+
+/**
+ * Request to delete a product
+ */
+interface DeleteProductRequest
+  extends Request.Request<Stripe.DeletedProduct, StripeError> {
+  readonly _tag: "DeleteProductRequest";
+  readonly id: string;
+}
+
+const DeleteProductRequest = Request.tagged<DeleteProductRequest>(
+  "DeleteProductRequest"
+);
+
+const DeleteProductResolver: RequestResolver.RequestResolver<DeleteProductRequest, StripeService> =
+  makeStripeResolver<DeleteProductRequest>(
+    (stripe, request) => stripe.products.del(request.id)
+  );
+
+/**
+ * Request to list products
+ */
+interface ListProductsRequest
+  extends Request.Request<Stripe.ApiList<Stripe.Product>, StripeError> {
+  readonly _tag: "ListProductsRequest";
+  readonly params?: Stripe.ProductListParams;
+}
+
+const ListProductsRequest = Request.tagged<ListProductsRequest>(
+  "ListProductsRequest"
+);
+
+const ListProductsResolver: RequestResolver.RequestResolver<ListProductsRequest, StripeService> =
+  makeStripeResolver<ListProductsRequest>(
+    (stripe, request) =>
+      stripe.products.list(request.params)
+  );
 
 /**
  * Create a product
