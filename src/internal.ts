@@ -91,17 +91,17 @@ export const wrapStripeCall = <A>(
 
 /**
  * Create a RequestResolver for Stripe API calls
- * Returns an Effect that provides a resolver accessing StripeService from context
+ * The resolver accesses StripeService from context for each request.
  */
 export const makeStripeResolver = <R extends Request.Request<any, any>>(
   execute: (stripe: Stripe, request: R) => Promise<Request.Request.Success<R>>
-): Effect.Effect<RequestResolver.RequestResolver<R>, never, StripeService> =>
-  Effect.gen(function* () {
-    const stripe = yield* StripeService;
-    return RequestResolver.fromEffect((request: R) =>
-      Effect.tryPromise({
+): RequestResolver.RequestResolver<R, StripeService> =>
+  RequestResolver.fromEffect((request: R) =>
+    Effect.gen(function* () {
+      const stripe = yield* StripeService;
+      return yield* Effect.tryPromise({
         try: () => execute(stripe, request),
         catch: handleStripeError,
-      }) as Effect.Effect<Request.Request.Success<R>, Request.Request.Error<R>, never>
-    );
-  });
+      }) as Effect.Effect<Request.Request.Success<R>, Request.Request.Error<R>, never>;
+    })
+  );

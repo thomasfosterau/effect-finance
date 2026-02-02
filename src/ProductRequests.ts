@@ -2,7 +2,7 @@
  * Product Request types and resolvers using Effect's RequestResolver pattern
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import { Request, RequestResolver } from "effect";
 import type Stripe from "stripe";
 import {
   makeStripeResolver,
@@ -23,8 +23,8 @@ export const CreateProductRequest = Request.tagged<CreateProductRequest>(
   "CreateProductRequest"
 );
 
-export const CreateProductResolver: Effect.Effect<RequestResolver.RequestResolver<CreateProductRequest>, never, StripeService> =
-  makeStripeResolver(
+export const CreateProductResolver: RequestResolver.RequestResolver<CreateProductRequest, StripeService> =
+  makeStripeResolver<CreateProductRequest>(
     (stripe, request) =>
       stripe.products.create(request.params)
   );
@@ -43,8 +43,8 @@ export const RetrieveProductRequest = Request.tagged<RetrieveProductRequest>(
   "RetrieveProductRequest"
 );
 
-export const RetrieveProductResolver: Effect.Effect<RequestResolver.RequestResolver<RetrieveProductRequest>, never, StripeService> =
-  makeStripeResolver(
+export const RetrieveProductResolver: RequestResolver.RequestResolver<RetrieveProductRequest, StripeService> =
+  makeStripeResolver<RetrieveProductRequest>(
     (stripe, request) =>
       stripe.products.retrieve(request.id, request.params)
   );
@@ -63,8 +63,8 @@ export const UpdateProductRequest = Request.tagged<UpdateProductRequest>(
   "UpdateProductRequest"
 );
 
-export const UpdateProductResolver: Effect.Effect<RequestResolver.RequestResolver<UpdateProductRequest>, never, StripeService> =
-  makeStripeResolver(
+export const UpdateProductResolver: RequestResolver.RequestResolver<UpdateProductRequest, StripeService> =
+  makeStripeResolver<UpdateProductRequest>(
     (stripe, request) =>
       stripe.products.update(request.id, request.params)
   );
@@ -82,8 +82,8 @@ export const DeleteProductRequest = Request.tagged<DeleteProductRequest>(
   "DeleteProductRequest"
 );
 
-export const DeleteProductResolver: Effect.Effect<RequestResolver.RequestResolver<DeleteProductRequest>, never, StripeService> =
-  makeStripeResolver(
+export const DeleteProductResolver: RequestResolver.RequestResolver<DeleteProductRequest, StripeService> =
+  makeStripeResolver<DeleteProductRequest>(
     (stripe, request) => stripe.products.del(request.id)
   );
 
@@ -100,8 +100,8 @@ export const ListProductsRequest = Request.tagged<ListProductsRequest>(
   "ListProductsRequest"
 );
 
-export const ListProductsResolver: Effect.Effect<RequestResolver.RequestResolver<ListProductsRequest>, never, StripeService> =
-  makeStripeResolver(
+export const ListProductsResolver: RequestResolver.RequestResolver<ListProductsRequest, StripeService> =
+  makeStripeResolver<ListProductsRequest>(
     (stripe, request) =>
       stripe.products.list(request.params)
   );

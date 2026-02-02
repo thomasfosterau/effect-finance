@@ -5,7 +5,7 @@
  * Requests enable automatic batching, deduplication, and caching.
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import { Request, RequestResolver } from "effect";
 import type Stripe from "stripe";
 import {
   makeStripeResolver,
@@ -26,8 +26,8 @@ export const CreateCustomerRequest = Request.tagged<CreateCustomerRequest>(
   "CreateCustomerRequest"
 );
 
-export const CreateCustomerResolver: Effect.Effect<RequestResolver.RequestResolver<CreateCustomerRequest>, never, StripeService> =
-  makeStripeResolver(
+export const CreateCustomerResolver: RequestResolver.RequestResolver<CreateCustomerRequest, StripeService> =
+  makeStripeResolver<CreateCustomerRequest>(
     (stripe, request) => stripe.customers.create(request.params)
   );
 
@@ -45,8 +45,8 @@ export const RetrieveCustomerRequest = Request.tagged<RetrieveCustomerRequest>(
   "RetrieveCustomerRequest"
 );
 
-export const RetrieveCustomerResolver: Effect.Effect<RequestResolver.RequestResolver<RetrieveCustomerRequest>, never, StripeService> =
-  makeStripeResolver(
+export const RetrieveCustomerResolver: RequestResolver.RequestResolver<RetrieveCustomerRequest, StripeService> =
+  makeStripeResolver<RetrieveCustomerRequest>(
     (stripe, request) => stripe.customers.retrieve(request.id, request.params)
   );
 
@@ -64,8 +64,8 @@ export const UpdateCustomerRequest = Request.tagged<UpdateCustomerRequest>(
   "UpdateCustomerRequest"
 );
 
-export const UpdateCustomerResolver: Effect.Effect<RequestResolver.RequestResolver<UpdateCustomerRequest>, never, StripeService> =
-  makeStripeResolver(
+export const UpdateCustomerResolver: RequestResolver.RequestResolver<UpdateCustomerRequest, StripeService> =
+  makeStripeResolver<UpdateCustomerRequest>(
     (stripe, request) => stripe.customers.update(request.id, request.params)
   );
 
@@ -82,8 +82,8 @@ export const DeleteCustomerRequest = Request.tagged<DeleteCustomerRequest>(
   "DeleteCustomerRequest"
 );
 
-export const DeleteCustomerResolver: Effect.Effect<RequestResolver.RequestResolver<DeleteCustomerRequest>, never, StripeService> =
-  makeStripeResolver(
+export const DeleteCustomerResolver: RequestResolver.RequestResolver<DeleteCustomerRequest, StripeService> =
+  makeStripeResolver<DeleteCustomerRequest>(
     (stripe, request) => stripe.customers.del(request.id)
   );
 
@@ -100,7 +100,7 @@ export const ListCustomersRequest = Request.tagged<ListCustomersRequest>(
   "ListCustomersRequest"
 );
 
-export const ListCustomersResolver: Effect.Effect<RequestResolver.RequestResolver<ListCustomersRequest>, never, StripeService> =
-  makeStripeResolver(
+export const ListCustomersResolver: RequestResolver.RequestResolver<ListCustomersRequest, StripeService> =
+  makeStripeResolver<ListCustomersRequest>(
     (stripe, request) => stripe.customers.list(request.params)
   );
