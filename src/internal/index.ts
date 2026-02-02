@@ -1,13 +1,13 @@
 import { Effect, Request, RequestResolver } from "effect";
 import Stripe from "stripe";
-import { StripeService } from "./Stripe.js";
+import { StripeService } from "../Stripe.js";
 import {
   StripeApiError,
   StripeAuthenticationError,
   StripeInvalidRequestError,
   StripeNetworkError,
   StripeRateLimitError,
-} from "./errors.js";
+} from "../errors.js";
 
 /**
  * All possible Stripe errors that can occur during API calls

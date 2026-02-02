@@ -22,7 +22,7 @@
 
 import { Effect, Request, RequestResolver } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal.js";
+import { makeStripeResolver, type StripeError } from "./internal/index.js";
 import { StripeService } from "./Stripe.js";
 
 /**
