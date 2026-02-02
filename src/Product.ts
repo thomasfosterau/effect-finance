@@ -19,7 +19,7 @@
  * ```
  */
 
-import { Effect } from "effect";
+import { Effect, RequestResolver } from "effect";
 import type Stripe from "stripe";
 import { type StripeError } from "./internal.js";
 import type { StripeService } from "./Stripe.js";
@@ -44,7 +44,7 @@ export const create = (
 ): Effect.Effect<Stripe.Product, StripeError, StripeService> =>
   Effect.request(
     CreateProductRequest({ params }),
-    CreateProductResolver
+    RequestResolver.contextFromEffect(CreateProductResolver)
   );
 
 /**
@@ -56,7 +56,7 @@ export const retrieve = (
 ): Effect.Effect<Stripe.Product, StripeError, StripeService> =>
   Effect.request(
     RetrieveProductRequest({ id, params }),
-    RetrieveProductResolver
+    RequestResolver.contextFromEffect(RetrieveProductResolver)
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -68,7 +68,7 @@ export const update = (
 ): Effect.Effect<Stripe.Product, StripeError, StripeService> =>
   Effect.request(
     UpdateProductRequest({ id, params }),
-    UpdateProductResolver
+    RequestResolver.contextFromEffect(UpdateProductResolver)
   );
 
 /**
@@ -79,7 +79,7 @@ export const del = (
 ): Effect.Effect<Stripe.DeletedProduct, StripeError, StripeService> =>
   Effect.request(
     DeleteProductRequest({ id }),
-    DeleteProductResolver
+    RequestResolver.contextFromEffect(DeleteProductResolver)
   );
 
 /**
@@ -90,5 +90,5 @@ export const list = (
 ): Effect.Effect<Stripe.ApiList<Stripe.Product>, StripeError, StripeService> =>
   Effect.request(
     ListProductsRequest({ params }),
-    ListProductsResolver
+    RequestResolver.contextFromEffect(ListProductsResolver)
   ).pipe(Effect.withRequestCaching(true));

@@ -20,7 +20,7 @@
  * ```
  */
 
-import { Effect } from "effect";
+import { Effect, RequestResolver } from "effect";
 import type Stripe from "stripe";
 import { type StripeError } from "./internal.js";
 import type { StripeService } from "./Stripe.js";
@@ -47,7 +47,7 @@ export const create = (
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
   Effect.request(
     CreatePaymentIntentRequest({ params }),
-    CreatePaymentIntentResolver
+    RequestResolver.contextFromEffect(CreatePaymentIntentResolver)
   );
 
 /**
@@ -59,7 +59,7 @@ export const retrieve = (
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
   Effect.request(
     RetrievePaymentIntentRequest({ id, params }),
-    RetrievePaymentIntentResolver
+    RequestResolver.contextFromEffect(RetrievePaymentIntentResolver)
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -71,7 +71,7 @@ export const update = (
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
   Effect.request(
     UpdatePaymentIntentRequest({ id, params }),
-    UpdatePaymentIntentResolver
+    RequestResolver.contextFromEffect(UpdatePaymentIntentResolver)
   );
 
 /**
@@ -83,7 +83,7 @@ export const confirm = (
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
   Effect.request(
     ConfirmPaymentIntentRequest({ id, params }),
-    ConfirmPaymentIntentResolver
+    RequestResolver.contextFromEffect(ConfirmPaymentIntentResolver)
   );
 
 /**
@@ -95,7 +95,7 @@ export const cancel = (
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
   Effect.request(
     CancelPaymentIntentRequest({ id, params }),
-    CancelPaymentIntentResolver
+    RequestResolver.contextFromEffect(CancelPaymentIntentResolver)
   );
 
 /**
@@ -110,5 +110,5 @@ export const list = (
 > =>
   Effect.request(
     ListPaymentIntentsRequest({ params }),
-    ListPaymentIntentsResolver
+    RequestResolver.contextFromEffect(ListPaymentIntentsResolver)
   ).pipe(Effect.withRequestCaching(true));

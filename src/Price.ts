@@ -24,7 +24,7 @@
  * ```
  */
 
-import { Effect } from "effect";
+import { Effect, RequestResolver } from "effect";
 import type Stripe from "stripe";
 import { type StripeError } from "./internal.js";
 import type { StripeService } from "./Stripe.js";
@@ -45,7 +45,7 @@ import {
 export const create = (
   params: Stripe.PriceCreateParams
 ): Effect.Effect<Stripe.Price, StripeError, StripeService> =>
-  Effect.request(CreatePriceRequest({ params }), CreatePriceResolver);
+  Effect.request(CreatePriceRequest({ params }), RequestResolver.contextFromEffect(CreatePriceResolver));
 
 /**
  * Retrieve a price
@@ -56,7 +56,7 @@ export const retrieve = (
 ): Effect.Effect<Stripe.Price, StripeError, StripeService> =>
   Effect.request(
     RetrievePriceRequest({ id, params }),
-    RetrievePriceResolver
+    RequestResolver.contextFromEffect(RetrievePriceResolver)
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -66,7 +66,7 @@ export const update = (
   id: string,
   params?: Stripe.PriceUpdateParams
 ): Effect.Effect<Stripe.Price, StripeError, StripeService> =>
-  Effect.request(UpdatePriceRequest({ id, params }), UpdatePriceResolver);
+  Effect.request(UpdatePriceRequest({ id, params }), RequestResolver.contextFromEffect(UpdatePriceResolver));
 
 /**
  * List prices
@@ -74,6 +74,6 @@ export const update = (
 export const list = (
   params?: Stripe.PriceListParams
 ): Effect.Effect<Stripe.ApiList<Stripe.Price>, StripeError, StripeService> =>
-  Effect.request(ListPricesRequest({ params }), ListPricesResolver).pipe(
+  Effect.request(ListPricesRequest({ params }), RequestResolver.contextFromEffect(ListPricesResolver)).pipe(
     Effect.withRequestCaching(true)
   );

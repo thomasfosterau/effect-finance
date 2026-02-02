@@ -23,7 +23,7 @@
  * ```
  */
 
-import { Effect } from "effect";
+import { Effect, RequestResolver } from "effect";
 import type Stripe from "stripe";
 import { type StripeError } from "./internal.js";
 import type { StripeService } from "./Stripe.js";
@@ -48,7 +48,7 @@ export const create = (
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
   Effect.request(
     CreateSubscriptionRequest({ params }),
-    CreateSubscriptionResolver
+    RequestResolver.contextFromEffect(CreateSubscriptionResolver)
   );
 
 /**
@@ -60,7 +60,7 @@ export const retrieve = (
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
   Effect.request(
     RetrieveSubscriptionRequest({ id, params }),
-    RetrieveSubscriptionResolver
+    RequestResolver.contextFromEffect(RetrieveSubscriptionResolver)
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -72,7 +72,7 @@ export const update = (
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
   Effect.request(
     UpdateSubscriptionRequest({ id, params }),
-    UpdateSubscriptionResolver
+    RequestResolver.contextFromEffect(UpdateSubscriptionResolver)
   );
 
 /**
@@ -84,7 +84,7 @@ export const cancel = (
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
   Effect.request(
     CancelSubscriptionRequest({ id, params }),
-    CancelSubscriptionResolver
+    RequestResolver.contextFromEffect(CancelSubscriptionResolver)
   );
 
 /**
@@ -99,5 +99,5 @@ export const list = (
 > =>
   Effect.request(
     ListSubscriptionsRequest({ params }),
-    ListSubscriptionsResolver
+    RequestResolver.contextFromEffect(ListSubscriptionsResolver)
   ).pipe(Effect.withRequestCaching(true));
