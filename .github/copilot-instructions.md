@@ -8,7 +8,7 @@ An Effect wrapper around the Stripe API that provides type-safe error handling, 
 
 - **Runtime**: Node.js 20+
 - **Language**: TypeScript 5.6+
-- **Framework**: Effect 3.10+ (functional effect system)
+- **Framework**: Effect 3.0+ (functional effect system)
 - **External API**: Stripe Node.js SDK 17.6+
 - **Testing**: Vitest 2.0+
 - **Linting**: ESLint 9+ with TypeScript ESLint
