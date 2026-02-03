@@ -13,7 +13,7 @@ An Effect wrapper around the Stripe API that provides type-safe error handling, 
 - **Testing**: Vitest 2.0+
 - **Linting**: ESLint 9+ with TypeScript ESLint
 - **Formatting**: Prettier 3.3+
-- **Package Manager**: pnpm (with npm fallback)
+- **Package Manager**: npm (lockfile: `package-lock.json`)
 
 ## Architecture & Design Principles
 
