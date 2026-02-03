@@ -37,7 +37,8 @@ const product = yield* stripe.products.create({ name: "My Product" });
 ### Effect Patterns
 
 - Use `Effect.gen` for composing operations
-- All operations return `Effect<T, StripeError, StripeService>`
+- Resource operations (e.g., Customer/Product/etc.) return `Effect<T, StripeError, StripeService>`
+- The root `Stripe` module provides configuration and layering helpers (e.g., `Stripe.make`, `Stripe.layer*`) with their own specific return and error types (e.g., `Effect<Stripe, StripeConfigError>` or `Layer<StripeError, StripeService>`)
 - Leverage Effect's error handling with `catchTag` for specific error types
 - Use Effect Layers for dependency injection and resource management
 - Use Request/RequestResolver pattern for API operations with caching support
