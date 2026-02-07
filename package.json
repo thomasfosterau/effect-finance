@@ -134,6 +134,10 @@
     "./SubscriptionSchedule": {
       "import": "./dist/SubscriptionSchedule.js",
       "types": "./dist/SubscriptionSchedule.d.ts"
+    },
+    "./Webhook": {
+      "import": "./dist/Webhook.js",
+      "types": "./dist/Webhook.d.ts"
     }
   },
   "files": [

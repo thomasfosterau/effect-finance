@@ -66,3 +66,14 @@ export class StripeInvalidRequestError extends Data.TaggedError(
   readonly param?: string;
   readonly statusCode?: number;
 }> {}
+
+/**
+ * Error thrown when webhook signature verification fails
+ */
+export class StripeSignatureVerificationError extends Data.TaggedError(
+  "StripeSignatureVerificationError"
+)<{
+  readonly message: string;
+  readonly header?: string;
+  readonly payload?: string;
+}> {}
