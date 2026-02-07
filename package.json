@@ -46,6 +46,86 @@
     "./Terminal.ConnectionToken": {
       "import": "./dist/Terminal.ConnectionToken.js",
       "types": "./dist/Terminal.ConnectionToken.d.ts"
+    },
+    "./Account": {
+      "import": "./dist/Account.js",
+      "types": "./dist/Account.d.ts"
+    },
+    "./AccountLink": {
+      "import": "./dist/AccountLink.js",
+      "types": "./dist/AccountLink.d.ts"
+    },
+    "./Person": {
+      "import": "./dist/Person.js",
+      "types": "./dist/Person.d.ts"
+    },
+    "./ExternalAccount": {
+      "import": "./dist/ExternalAccount.js",
+      "types": "./dist/ExternalAccount.d.ts"
+    },
+    "./Transfer": {
+      "import": "./dist/Transfer.js",
+      "types": "./dist/Transfer.d.ts"
+    },
+    "./Topup": {
+      "import": "./dist/Topup.js",
+      "types": "./dist/Topup.d.ts"
+    },
+    "./PaymentMethod": {
+      "import": "./dist/PaymentMethod.js",
+      "types": "./dist/PaymentMethod.d.ts"
+    },
+    "./Invoice": {
+      "import": "./dist/Invoice.js",
+      "types": "./dist/Invoice.d.ts"
+    },
+    "./Charge": {
+      "import": "./dist/Charge.js",
+      "types": "./dist/Charge.d.ts"
+    },
+    "./Refund": {
+      "import": "./dist/Refund.js",
+      "types": "./dist/Refund.d.ts"
+    },
+    "./BalanceTransaction": {
+      "import": "./dist/BalanceTransaction.js",
+      "types": "./dist/BalanceTransaction.d.ts"
+    },
+    "./SetupIntent": {
+      "import": "./dist/SetupIntent.js",
+      "types": "./dist/SetupIntent.d.ts"
+    },
+    "./Payout": {
+      "import": "./dist/Payout.js",
+      "types": "./dist/Payout.d.ts"
+    },
+    "./Dispute": {
+      "import": "./dist/Dispute.js",
+      "types": "./dist/Dispute.d.ts"
+    },
+    "./File": {
+      "import": "./dist/File.js",
+      "types": "./dist/File.d.ts"
+    },
+    "./TaxRate": {
+      "import": "./dist/TaxRate.js",
+      "types": "./dist/TaxRate.d.ts"
+    },
+    "./PromotionCode": {
+      "import": "./dist/PromotionCode.js",
+      "types": "./dist/PromotionCode.d.ts"
+    },
+    "./Coupon": {
+      "import": "./dist/Coupon.js",
+      "types": "./dist/Coupon.d.ts"
+    },
+    "./CheckoutSession": {
+      "import": "./dist/CheckoutSession.js",
+      "types": "./dist/CheckoutSession.d.ts"
+    },
+    "./SubscriptionSchedule": {
+      "import": "./dist/SubscriptionSchedule.js",
+      "types": "./dist/SubscriptionSchedule.d.ts"
     }
   },
   "files": [
@@ -62,7 +142,7 @@
     "typecheck": "tsc --noEmit",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "release": "bun run build && changeset publish"
   },
   "keywords": [
     "effect",
