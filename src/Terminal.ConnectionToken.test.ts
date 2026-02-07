@@ -1,22 +1,64 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { Effect, Layer } from "effect";
+import type Stripe from "stripe";
 import * as TerminalConnectionToken from "./Terminal.ConnectionToken.js";
+import { StripeService } from "./Stripe.js";
 
 describe("Terminal.ConnectionToken", () => {
-  describe("create", () => {
-    it("should have create function that requires Stripe service", () => {
-      const effect = TerminalConnectionToken.create();
+  const createMockStripe = () => {
+    const mockToken: Stripe.Terminal.ConnectionToken = {
+      object: "terminal.connection_token",
+      secret: "pst_test_123456789",
+      location: "tml_123",
+    } as Stripe.Terminal.ConnectionToken;
 
-      // Check that the effect type includes StripeService requirement
-      expect(typeof effect).toBe("object");
+    return {
+      terminal: {
+        connectionTokens: {
+          create: vi.fn().mockResolvedValue(mockToken),
+        },
+      },
+    } as unknown as Stripe;
+  };
+
+  const createTestLayer = (mockStripe: Stripe) =>
+    Layer.succeed(StripeService, mockStripe);
+
+  describe("create", () => {
+    it("should call stripe.terminal.connectionTokens.create with no params", async () => {
+      const mockStripe = createMockStripe();
+      const layer = createTestLayer(mockStripe);
+
+      const result = await Effect.runPromise(
+        TerminalConnectionToken.create().pipe(Effect.provide(layer))
+      );
+
+      expect(mockStripe.terminal.connectionTokens.create).toHaveBeenCalledWith(
+        undefined
+      );
+      expect(result.secret).toBe("pst_test_123456789");
     });
 
-    it("should accept optional location parameter", () => {
-      const effect = TerminalConnectionToken.create({
-        location: "tml_123",
-      });
+    it("should call stripe.terminal.connectionTokens.create with location param", async () => {
+      const mockStripe = createMockStripe();
+      const layer = createTestLayer(mockStripe);
 
-      // Check that the effect type includes StripeService requirement
-      expect(typeof effect).toBe("object");
+      const params = { location: "tml_123" };
+
+      const result = await Effect.runPromise(
+        TerminalConnectionToken.create(params).pipe(Effect.provide(layer))
+      );
+
+      expect(mockStripe.terminal.connectionTokens.create).toHaveBeenCalledWith(
+        params
+      );
+      expect(result.location).toBe("tml_123");
+    });
+
+    it("should fail when StripeService is not provided", async () => {
+      const effect = TerminalConnectionToken.create();
+
+      await expect(Effect.runPromise(effect)).rejects.toThrow();
     });
   });
 });
