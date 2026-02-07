@@ -30,35 +30,32 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create an external account
  */
-interface CreateExternalAccountRequest
-  extends Request.Request<
-    Stripe.BankAccount | Stripe.Card,
-    StripeError
-  > {
+interface CreateExternalAccountRequest extends Request.Request<
+  Stripe.BankAccount | Stripe.Card,
+  StripeError
+> {
   readonly _tag: "CreateExternalAccountRequest";
   readonly account: string;
   readonly params: Stripe.ExternalAccountCreateParams;
 }
 
 const CreateExternalAccountRequest =
-  Request.tagged<CreateExternalAccountRequest>(
-    "CreateExternalAccountRequest"
-  );
+  Request.tagged<CreateExternalAccountRequest>("CreateExternalAccountRequest");
 
-const CreateExternalAccountResolver: RequestResolver.RequestResolver<CreateExternalAccountRequest, StripeService> =
-  makeStripeResolver<CreateExternalAccountRequest>(
-    (stripe, request) =>
-      stripe.accounts.createExternalAccount(request.account, request.params)
-  );
+const CreateExternalAccountResolver: RequestResolver.RequestResolver<
+  CreateExternalAccountRequest,
+  StripeService
+> = makeStripeResolver<CreateExternalAccountRequest>((stripe, request) =>
+  stripe.accounts.createExternalAccount(request.account, request.params)
+);
 
 /**
  * Request to retrieve an external account
  */
-interface RetrieveExternalAccountRequest
-  extends Request.Request<
-    Stripe.BankAccount | Stripe.Card,
-    StripeError
-  > {
+interface RetrieveExternalAccountRequest extends Request.Request<
+  Stripe.BankAccount | Stripe.Card,
+  StripeError
+> {
   readonly _tag: "RetrieveExternalAccountRequest";
   readonly account: string;
   readonly id: string;
@@ -70,24 +67,24 @@ const RetrieveExternalAccountRequest =
     "RetrieveExternalAccountRequest"
   );
 
-const RetrieveExternalAccountResolver: RequestResolver.RequestResolver<RetrieveExternalAccountRequest, StripeService> =
-  makeStripeResolver<RetrieveExternalAccountRequest>(
-    (stripe, request) =>
-      stripe.accounts.retrieveExternalAccount(
-        request.account,
-        request.id,
-        request.params
-      )
-  );
+const RetrieveExternalAccountResolver: RequestResolver.RequestResolver<
+  RetrieveExternalAccountRequest,
+  StripeService
+> = makeStripeResolver<RetrieveExternalAccountRequest>((stripe, request) =>
+  stripe.accounts.retrieveExternalAccount(
+    request.account,
+    request.id,
+    request.params
+  )
+);
 
 /**
  * Request to update an external account
  */
-interface UpdateExternalAccountRequest
-  extends Request.Request<
-    Stripe.BankAccount | Stripe.Card,
-    StripeError
-  > {
+interface UpdateExternalAccountRequest extends Request.Request<
+  Stripe.BankAccount | Stripe.Card,
+  StripeError
+> {
   readonly _tag: "UpdateExternalAccountRequest";
   readonly account: string;
   readonly id: string;
@@ -95,65 +92,63 @@ interface UpdateExternalAccountRequest
 }
 
 const UpdateExternalAccountRequest =
-  Request.tagged<UpdateExternalAccountRequest>(
-    "UpdateExternalAccountRequest"
-  );
+  Request.tagged<UpdateExternalAccountRequest>("UpdateExternalAccountRequest");
 
-const UpdateExternalAccountResolver: RequestResolver.RequestResolver<UpdateExternalAccountRequest, StripeService> =
-  makeStripeResolver<UpdateExternalAccountRequest>(
-    (stripe, request) =>
-      stripe.accounts.updateExternalAccount(
-        request.account,
-        request.id,
-        request.params
-      )
-  );
+const UpdateExternalAccountResolver: RequestResolver.RequestResolver<
+  UpdateExternalAccountRequest,
+  StripeService
+> = makeStripeResolver<UpdateExternalAccountRequest>((stripe, request) =>
+  stripe.accounts.updateExternalAccount(
+    request.account,
+    request.id,
+    request.params
+  )
+);
 
 /**
  * Request to delete an external account
  */
-interface DeleteExternalAccountRequest
-  extends Request.Request<
-    Stripe.DeletedBankAccount | Stripe.DeletedCard,
-    StripeError
-  > {
+interface DeleteExternalAccountRequest extends Request.Request<
+  Stripe.DeletedBankAccount | Stripe.DeletedCard,
+  StripeError
+> {
   readonly _tag: "DeleteExternalAccountRequest";
   readonly account: string;
   readonly id: string;
 }
 
 const DeleteExternalAccountRequest =
-  Request.tagged<DeleteExternalAccountRequest>(
-    "DeleteExternalAccountRequest"
-  );
+  Request.tagged<DeleteExternalAccountRequest>("DeleteExternalAccountRequest");
 
-const DeleteExternalAccountResolver: RequestResolver.RequestResolver<DeleteExternalAccountRequest, StripeService> =
-  makeStripeResolver<DeleteExternalAccountRequest>(
-    (stripe, request) =>
-      stripe.accounts.deleteExternalAccount(request.account, request.id)
-  );
+const DeleteExternalAccountResolver: RequestResolver.RequestResolver<
+  DeleteExternalAccountRequest,
+  StripeService
+> = makeStripeResolver<DeleteExternalAccountRequest>((stripe, request) =>
+  stripe.accounts.deleteExternalAccount(request.account, request.id)
+);
 
 /**
  * Request to list external accounts
  */
-interface ListExternalAccountsRequest
-  extends Request.Request<
-    Stripe.ApiList<Stripe.BankAccount | Stripe.Card>,
-    StripeError
-  > {
+interface ListExternalAccountsRequest extends Request.Request<
+  Stripe.ApiList<Stripe.BankAccount | Stripe.Card>,
+  StripeError
+> {
   readonly _tag: "ListExternalAccountsRequest";
   readonly account: string;
   readonly params?: Stripe.ExternalAccountListParams;
 }
 
-const ListExternalAccountsRequest =
-  Request.tagged<ListExternalAccountsRequest>("ListExternalAccountsRequest");
+const ListExternalAccountsRequest = Request.tagged<ListExternalAccountsRequest>(
+  "ListExternalAccountsRequest"
+);
 
-const ListExternalAccountsResolver: RequestResolver.RequestResolver<ListExternalAccountsRequest, StripeService> =
-  makeStripeResolver<ListExternalAccountsRequest>(
-    (stripe, request) =>
-      stripe.accounts.listExternalAccounts(request.account, request.params)
-  );
+const ListExternalAccountsResolver: RequestResolver.RequestResolver<
+  ListExternalAccountsRequest,
+  StripeService
+> = makeStripeResolver<ListExternalAccountsRequest>((stripe, request) =>
+  stripe.accounts.listExternalAccounts(request.account, request.params)
+);
 
 /**
  * Create an external account

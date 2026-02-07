@@ -28,8 +28,10 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create an account
  */
-interface CreateAccountRequest
-  extends Request.Request<Stripe.Account, StripeError> {
+interface CreateAccountRequest extends Request.Request<
+  Stripe.Account,
+  StripeError
+> {
   readonly _tag: "CreateAccountRequest";
   readonly params: Stripe.AccountCreateParams;
 }
@@ -38,16 +40,20 @@ const CreateAccountRequest = Request.tagged<CreateAccountRequest>(
   "CreateAccountRequest"
 );
 
-const CreateAccountResolver: RequestResolver.RequestResolver<CreateAccountRequest, StripeService> =
-  makeStripeResolver<CreateAccountRequest>(
-    (stripe, request) => stripe.accounts.create(request.params)
-  );
+const CreateAccountResolver: RequestResolver.RequestResolver<
+  CreateAccountRequest,
+  StripeService
+> = makeStripeResolver<CreateAccountRequest>((stripe, request) =>
+  stripe.accounts.create(request.params)
+);
 
 /**
  * Request to retrieve an account
  */
-interface RetrieveAccountRequest
-  extends Request.Request<Stripe.Account, StripeError> {
+interface RetrieveAccountRequest extends Request.Request<
+  Stripe.Account,
+  StripeError
+> {
   readonly _tag: "RetrieveAccountRequest";
   readonly id: string;
   readonly params?: Stripe.AccountRetrieveParams;
@@ -57,16 +63,20 @@ const RetrieveAccountRequest = Request.tagged<RetrieveAccountRequest>(
   "RetrieveAccountRequest"
 );
 
-const RetrieveAccountResolver: RequestResolver.RequestResolver<RetrieveAccountRequest, StripeService> =
-  makeStripeResolver<RetrieveAccountRequest>(
-    (stripe, request) => stripe.accounts.retrieve(request.id, request.params)
-  );
+const RetrieveAccountResolver: RequestResolver.RequestResolver<
+  RetrieveAccountRequest,
+  StripeService
+> = makeStripeResolver<RetrieveAccountRequest>((stripe, request) =>
+  stripe.accounts.retrieve(request.id, request.params)
+);
 
 /**
  * Request to update an account
  */
-interface UpdateAccountRequest
-  extends Request.Request<Stripe.Account, StripeError> {
+interface UpdateAccountRequest extends Request.Request<
+  Stripe.Account,
+  StripeError
+> {
   readonly _tag: "UpdateAccountRequest";
   readonly id: string;
   readonly params?: Stripe.AccountUpdateParams;
@@ -76,16 +86,20 @@ const UpdateAccountRequest = Request.tagged<UpdateAccountRequest>(
   "UpdateAccountRequest"
 );
 
-const UpdateAccountResolver: RequestResolver.RequestResolver<UpdateAccountRequest, StripeService> =
-  makeStripeResolver<UpdateAccountRequest>(
-    (stripe, request) => stripe.accounts.update(request.id, request.params)
-  );
+const UpdateAccountResolver: RequestResolver.RequestResolver<
+  UpdateAccountRequest,
+  StripeService
+> = makeStripeResolver<UpdateAccountRequest>((stripe, request) =>
+  stripe.accounts.update(request.id, request.params)
+);
 
 /**
  * Request to delete an account
  */
-interface DeleteAccountRequest
-  extends Request.Request<Stripe.DeletedAccount, StripeError> {
+interface DeleteAccountRequest extends Request.Request<
+  Stripe.DeletedAccount,
+  StripeError
+> {
   readonly _tag: "DeleteAccountRequest";
   readonly id: string;
 }
@@ -94,16 +108,20 @@ const DeleteAccountRequest = Request.tagged<DeleteAccountRequest>(
   "DeleteAccountRequest"
 );
 
-const DeleteAccountResolver: RequestResolver.RequestResolver<DeleteAccountRequest, StripeService> =
-  makeStripeResolver<DeleteAccountRequest>(
-    (stripe, request) => stripe.accounts.del(request.id)
-  );
+const DeleteAccountResolver: RequestResolver.RequestResolver<
+  DeleteAccountRequest,
+  StripeService
+> = makeStripeResolver<DeleteAccountRequest>((stripe, request) =>
+  stripe.accounts.del(request.id)
+);
 
 /**
  * Request to list accounts
  */
-interface ListAccountsRequest
-  extends Request.Request<Stripe.ApiList<Stripe.Account>, StripeError> {
+interface ListAccountsRequest extends Request.Request<
+  Stripe.ApiList<Stripe.Account>,
+  StripeError
+> {
   readonly _tag: "ListAccountsRequest";
   readonly params?: Stripe.AccountListParams;
 }
@@ -112,10 +130,12 @@ const ListAccountsRequest = Request.tagged<ListAccountsRequest>(
   "ListAccountsRequest"
 );
 
-const ListAccountsResolver: RequestResolver.RequestResolver<ListAccountsRequest, StripeService> =
-  makeStripeResolver<ListAccountsRequest>(
-    (stripe, request) => stripe.accounts.list(request.params)
-  );
+const ListAccountsResolver: RequestResolver.RequestResolver<
+  ListAccountsRequest,
+  StripeService
+> = makeStripeResolver<ListAccountsRequest>((stripe, request) =>
+  stripe.accounts.list(request.params)
+);
 
 /**
  * Create an account

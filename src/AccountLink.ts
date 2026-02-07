@@ -33,8 +33,10 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create an account link
  */
-interface CreateAccountLinkRequest
-  extends Request.Request<Stripe.AccountLink, StripeError> {
+interface CreateAccountLinkRequest extends Request.Request<
+  Stripe.AccountLink,
+  StripeError
+> {
   readonly _tag: "CreateAccountLinkRequest";
   readonly params: Stripe.AccountLinkCreateParams;
 }
@@ -43,10 +45,12 @@ const CreateAccountLinkRequest = Request.tagged<CreateAccountLinkRequest>(
   "CreateAccountLinkRequest"
 );
 
-const CreateAccountLinkResolver: RequestResolver.RequestResolver<CreateAccountLinkRequest, StripeService> =
-  makeStripeResolver<CreateAccountLinkRequest>(
-    (stripe, request) => stripe.accountLinks.create(request.params)
-  );
+const CreateAccountLinkResolver: RequestResolver.RequestResolver<
+  CreateAccountLinkRequest,
+  StripeService
+> = makeStripeResolver<CreateAccountLinkRequest>((stripe, request) =>
+  stripe.accountLinks.create(request.params)
+);
 
 /**
  * Create an account link

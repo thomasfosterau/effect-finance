@@ -32,26 +32,31 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a topup
  */
-interface CreateTopupRequest
-  extends Request.Request<Stripe.Topup, StripeError> {
+interface CreateTopupRequest extends Request.Request<
+  Stripe.Topup,
+  StripeError
+> {
   readonly _tag: "CreateTopupRequest";
   readonly params: Stripe.TopupCreateParams;
 }
 
-const CreateTopupRequest = Request.tagged<CreateTopupRequest>(
-  "CreateTopupRequest"
-);
+const CreateTopupRequest =
+  Request.tagged<CreateTopupRequest>("CreateTopupRequest");
 
-const CreateTopupResolver: RequestResolver.RequestResolver<CreateTopupRequest, StripeService> =
-  makeStripeResolver<CreateTopupRequest>(
-    (stripe, request) => stripe.topups.create(request.params)
-  );
+const CreateTopupResolver: RequestResolver.RequestResolver<
+  CreateTopupRequest,
+  StripeService
+> = makeStripeResolver<CreateTopupRequest>((stripe, request) =>
+  stripe.topups.create(request.params)
+);
 
 /**
  * Request to retrieve a topup
  */
-interface RetrieveTopupRequest
-  extends Request.Request<Stripe.Topup, StripeError> {
+interface RetrieveTopupRequest extends Request.Request<
+  Stripe.Topup,
+  StripeError
+> {
   readonly _tag: "RetrieveTopupRequest";
   readonly id: string;
   readonly params?: Stripe.TopupRetrieveParams;
@@ -61,47 +66,55 @@ const RetrieveTopupRequest = Request.tagged<RetrieveTopupRequest>(
   "RetrieveTopupRequest"
 );
 
-const RetrieveTopupResolver: RequestResolver.RequestResolver<RetrieveTopupRequest, StripeService> =
-  makeStripeResolver<RetrieveTopupRequest>(
-    (stripe, request) => stripe.topups.retrieve(request.id, request.params)
-  );
+const RetrieveTopupResolver: RequestResolver.RequestResolver<
+  RetrieveTopupRequest,
+  StripeService
+> = makeStripeResolver<RetrieveTopupRequest>((stripe, request) =>
+  stripe.topups.retrieve(request.id, request.params)
+);
 
 /**
  * Request to update a topup
  */
-interface UpdateTopupRequest
-  extends Request.Request<Stripe.Topup, StripeError> {
+interface UpdateTopupRequest extends Request.Request<
+  Stripe.Topup,
+  StripeError
+> {
   readonly _tag: "UpdateTopupRequest";
   readonly id: string;
   readonly params?: Stripe.TopupUpdateParams;
 }
 
-const UpdateTopupRequest = Request.tagged<UpdateTopupRequest>(
-  "UpdateTopupRequest"
-);
+const UpdateTopupRequest =
+  Request.tagged<UpdateTopupRequest>("UpdateTopupRequest");
 
-const UpdateTopupResolver: RequestResolver.RequestResolver<UpdateTopupRequest, StripeService> =
-  makeStripeResolver<UpdateTopupRequest>(
-    (stripe, request) => stripe.topups.update(request.id, request.params)
-  );
+const UpdateTopupResolver: RequestResolver.RequestResolver<
+  UpdateTopupRequest,
+  StripeService
+> = makeStripeResolver<UpdateTopupRequest>((stripe, request) =>
+  stripe.topups.update(request.id, request.params)
+);
 
 /**
  * Request to list topups
  */
-interface ListTopupsRequest
-  extends Request.Request<Stripe.ApiList<Stripe.Topup>, StripeError> {
+interface ListTopupsRequest extends Request.Request<
+  Stripe.ApiList<Stripe.Topup>,
+  StripeError
+> {
   readonly _tag: "ListTopupsRequest";
   readonly params?: Stripe.TopupListParams;
 }
 
-const ListTopupsRequest = Request.tagged<ListTopupsRequest>(
-  "ListTopupsRequest"
-);
+const ListTopupsRequest =
+  Request.tagged<ListTopupsRequest>("ListTopupsRequest");
 
-const ListTopupsResolver: RequestResolver.RequestResolver<ListTopupsRequest, StripeService> =
-  makeStripeResolver<ListTopupsRequest>(
-    (stripe, request) => stripe.topups.list(request.params)
-  );
+const ListTopupsResolver: RequestResolver.RequestResolver<
+  ListTopupsRequest,
+  StripeService
+> = makeStripeResolver<ListTopupsRequest>((stripe, request) =>
+  stripe.topups.list(request.params)
+);
 
 /**
  * Create a topup
