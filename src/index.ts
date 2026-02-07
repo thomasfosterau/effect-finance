@@ -71,5 +71,6 @@ export * as PromotionCode from "./PromotionCode.js";
 export * as Coupon from "./Coupon.js";
 export * as CheckoutSession from "./CheckoutSession.js";
 export * as SubscriptionSchedule from "./SubscriptionSchedule.js";
+export * as Webhook from "./Webhook.js";
 export type { StripeError as StripeErrors } from "./internal/index.js";
 export type { StripeConfig } from "./Stripe.js";

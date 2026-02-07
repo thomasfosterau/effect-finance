@@ -12,6 +12,7 @@ An Effect wrapper around the Stripe API that provides type-safe error handling, 
 - 🛡️ **Error Handling** - Comprehensive error types using Effect's error channel
 - 🔄 **Composable** - Use Effect's combinators to build complex workflows
 - 🚀 **Resource-safe** - Manage Stripe client lifecycle with Effect Layers
+- 🔐 **Webhook Support** - Built-in signature verification for secure webhook handling
 - 📦 **Tree-shakeable** - ESM-only package with subpath exports
 - ✅ **Well-tested** - Growing test suite for core functionality
 - 🎨 **Resource-centric** - Idiomatic Effect API design
@@ -245,6 +246,93 @@ const program = Effect.gen(function* () {
 );
 ```
 
+### Handling Webhooks
+
+The `Webhook` module provides utilities for verifying and processing Stripe webhook events:
+
+```typescript
+import { Effect } from "effect";
+import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
+import * as Webhook from "@thomasfosterau/effect-stripe/Webhook";
+
+// In your webhook endpoint handler (e.g., Express, Fastify, etc.)
+const handleWebhook = (
+  requestBody: string | Buffer,
+  signatureHeader: string,
+  webhookSecret: string
+) =>
+  Effect.gen(function* () {
+    // Verify signature and construct event
+    const event = yield* Webhook.constructEvent(
+      requestBody,
+      signatureHeader,
+      webhookSecret
+    );
+
+    // Handle different event types
+    switch (event.type) {
+      case "payment_intent.succeeded":
+        const paymentIntent = event.data.object;
+        console.log("Payment succeeded:", paymentIntent.id);
+        break;
+      case "customer.created":
+        const customer = event.data.object;
+        console.log("Customer created:", customer.id);
+        break;
+      // Handle other event types...
+    }
+
+    return { received: true };
+  }).pipe(
+    Effect.catchTag("StripeSignatureVerificationError", (error) => {
+      console.error("Invalid webhook signature:", error.message);
+      return Effect.fail(new Error("Invalid signature"));
+    })
+  );
+
+const layer = Stripe.layer({ apiKey: "sk_test_..." });
+await Effect.runPromise(handleWebhook(body, signature, secret).pipe(Effect.provide(layer)));
+```
+
+#### Async Verification
+
+For environments that require async cryptography:
+
+```typescript
+import * as Webhook from "@thomasfosterau/effect-stripe/Webhook";
+
+const program = Effect.gen(function* () {
+  const event = yield* Webhook.constructEventAsync(
+    requestBody,
+    signatureHeader,
+    webhookSecret
+  );
+  // Handle event...
+});
+```
+
+#### Testing Webhooks
+
+Generate test signatures for local testing:
+
+```typescript
+import * as Webhook from "@thomasfosterau/effect-stripe/Webhook";
+
+const program = Effect.gen(function* () {
+  const payload = JSON.stringify({ type: "payment_intent.succeeded" });
+  const secret = "whsec_test_secret";
+
+  // Generate a test signature
+  const signature = yield* Webhook.generateTestHeaderString(payload, secret);
+
+  // Verify it works
+  const event = yield* Webhook.constructEvent(payload, signature, secret);
+  console.log("Event verified:", event.type);
+});
+```
+
+See the [webhooks example](examples/webhooks.ts) for comprehensive usage patterns.
+
 ### Composing Operations
 
 Use Effect's combinators to build complex workflows:
@@ -281,6 +369,13 @@ const program = pipe(
   - `layer(config)` - Create a Stripe layer from configuration
   - `layerFromEnv(envVar?)` - Create a Stripe layer from environment variable
 
+- **`Webhook`** - Webhook signature verification and event processing
+  - `constructEvent(payload, signature, secret, tolerance?)` - Verify and construct an event (sync)
+  - `constructEventAsync(payload, signature, secret, tolerance?, cryptoProvider?)` - Verify and construct an event (async)
+  - `generateTestHeaderString(payload, secret, timestamp?)` - Generate a test signature for testing (sync)
+  - `generateTestHeaderStringAsync(payload, secret, timestamp?, cryptoProvider?)` - Generate a test signature for testing (async)
+  - `DEFAULT_TOLERANCE` - Default tolerance for timestamp verification (300 seconds)
+
 ### Resources
 
 Each resource module provides standard CRUD operations:
@@ -302,6 +397,7 @@ All operations return `Effect<T, StripeError, Stripe.StripeService>`.
 - **`StripeAuthenticationError`** - Authentication failed
 - **`StripeRateLimitError`** - Rate limit exceeded
 - **`StripeInvalidRequestError`** - Request parameters are invalid
+- **`StripeSignatureVerificationError`** - Webhook signature verification failed
 
 ## Development
 
