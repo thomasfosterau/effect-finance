@@ -35,6 +35,14 @@
       "import": "./dist/Subscription.js",
       "types": "./dist/Subscription.d.ts"
     },
+    "./Identity.VerificationSession": {
+      "import": "./dist/Identity.VerificationSession.js",
+      "types": "./dist/Identity.VerificationSession.d.ts"
+    },
+    "./Identity.VerificationReport": {
+      "import": "./dist/Identity.VerificationReport.js",
+      "types": "./dist/Identity.VerificationReport.d.ts"
+    },
     "./Terminal.Reader": {
       "import": "./dist/Terminal.Reader.js",
       "types": "./dist/Terminal.Reader.d.ts"
