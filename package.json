@@ -55,6 +55,46 @@
       "import": "./dist/Treasury.OutboundTransfer.js",
       "types": "./dist/Treasury.OutboundTransfer.d.ts"
     },
+    "./Balance": {
+      "import": "./dist/Balance.js",
+      "types": "./dist/Balance.d.ts"
+    },
+    "./Event": {
+      "import": "./dist/Event.js",
+      "types": "./dist/Event.d.ts"
+    },
+    "./WebhookEndpoint": {
+      "import": "./dist/WebhookEndpoint.js",
+      "types": "./dist/WebhookEndpoint.d.ts"
+    },
+    "./Review": {
+      "import": "./dist/Review.js",
+      "types": "./dist/Review.d.ts"
+    },
+    "./CountrySpec": {
+      "import": "./dist/CountrySpec.js",
+      "types": "./dist/CountrySpec.d.ts"
+    },
+    "./Issuing.Card": {
+      "import": "./dist/Issuing.Card.js",
+      "types": "./dist/Issuing.Card.d.ts"
+    },
+    "./Issuing.Cardholder": {
+      "import": "./dist/Issuing.Cardholder.js",
+      "types": "./dist/Issuing.Cardholder.d.ts"
+    },
+    "./Issuing.Authorization": {
+      "import": "./dist/Issuing.Authorization.js",
+      "types": "./dist/Issuing.Authorization.d.ts"
+    },
+    "./Issuing.Transaction": {
+      "import": "./dist/Issuing.Transaction.js",
+      "types": "./dist/Issuing.Transaction.d.ts"
+    },
+    "./Issuing.Dispute": {
+      "import": "./dist/Issuing.Dispute.js",
+      "types": "./dist/Issuing.Dispute.d.ts"
+    },
     "./Identity.VerificationSession": {
       "import": "./dist/Identity.VerificationSession.js",
       "types": "./dist/Identity.VerificationSession.d.ts"
