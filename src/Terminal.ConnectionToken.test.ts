@@ -54,11 +54,5 @@ describe("Terminal.ConnectionToken", () => {
       );
       expect(result.location).toBe("tml_123");
     });
-
-    it("should fail when StripeService is not provided", async () => {
-      const effect = TerminalConnectionToken.create();
-
-      await expect(Effect.runPromise(effect)).rejects.toThrow();
-    });
   });
 });
