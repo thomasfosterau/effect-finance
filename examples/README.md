@@ -8,7 +8,7 @@ Before running the examples, make sure you have:
 
 1. Installed dependencies:
    ```bash
-   pnpm install
+   bun install
    ```
 
 2. Set your Stripe API key:
@@ -16,9 +16,9 @@ Before running the examples, make sure you have:
    export STRIPE_API_KEY=sk_test_your_key_here
    ```
 
-3. Run an example using tsx or ts-node:
+3. Run an example using Bun:
    ```bash
-   npx tsx examples/basic.ts
+   bun examples/basic.ts
    ```
 
 ## Available Examples
