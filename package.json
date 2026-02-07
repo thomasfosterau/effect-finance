@@ -35,6 +35,30 @@
       "import": "./dist/Subscription.js",
       "types": "./dist/Subscription.d.ts"
     },
+    "./Account": {
+      "import": "./dist/Account.js",
+      "types": "./dist/Account.d.ts"
+    },
+    "./AccountLink": {
+      "import": "./dist/AccountLink.js",
+      "types": "./dist/AccountLink.d.ts"
+    },
+    "./Person": {
+      "import": "./dist/Person.js",
+      "types": "./dist/Person.d.ts"
+    },
+    "./ExternalAccount": {
+      "import": "./dist/ExternalAccount.js",
+      "types": "./dist/ExternalAccount.d.ts"
+    },
+    "./Transfer": {
+      "import": "./dist/Transfer.js",
+      "types": "./dist/Transfer.d.ts"
+    },
+    "./Topup": {
+      "import": "./dist/Topup.js",
+      "types": "./dist/Topup.d.ts"
+    },
     "./PaymentMethod": {
       "import": "./dist/PaymentMethod.js",
       "types": "./dist/PaymentMethod.d.ts"
