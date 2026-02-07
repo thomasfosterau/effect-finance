@@ -313,10 +313,10 @@ bun install
 bun run build
 
 # Run tests
-bun test
+bun run test
 
 # Run tests in watch mode
-bun test --watch
+bun run test:watch
 
 # Lint
 bun run lint
