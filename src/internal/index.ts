@@ -102,6 +102,10 @@ export const makeStripeResolver = <R extends Request.Request<any, any>>(
       return yield* Effect.tryPromise({
         try: () => execute(stripe, request),
         catch: handleStripeError,
-      }) as Effect.Effect<Request.Request.Success<R>, Request.Request.Error<R>, never>;
+      }) as Effect.Effect<
+        Request.Request.Success<R>,
+        Request.Request.Error<R>,
+        never
+      >;
     })
   );
