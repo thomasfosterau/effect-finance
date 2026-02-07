@@ -3,7 +3,6 @@ import { Effect } from "effect";
 import * as IdentityVerificationSession from "./Identity.VerificationSession.js";
 
 describe("Identity.VerificationSession", () => {
-
   describe("create", () => {
     it("should return an effect that creates a verification session", () => {
       const effect = IdentityVerificationSession.create({

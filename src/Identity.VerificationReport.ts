@@ -25,11 +25,10 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to retrieve a verification report
  */
-interface RetrieveVerificationReportRequest
-  extends Request.Request<
-    Stripe.Identity.VerificationReport,
-    StripeError
-  > {
+interface RetrieveVerificationReportRequest extends Request.Request<
+  Stripe.Identity.VerificationReport,
+  StripeError
+> {
   readonly _tag: "RetrieveVerificationReportRequest";
   readonly id: string;
   readonly params?: Stripe.Identity.VerificationReportRetrieveParams;
@@ -43,19 +42,17 @@ const RetrieveVerificationReportRequest =
 const RetrieveVerificationReportResolver: RequestResolver.RequestResolver<
   RetrieveVerificationReportRequest,
   StripeService
-> = makeStripeResolver<RetrieveVerificationReportRequest>(
-  (stripe, request) =>
-    stripe.identity.verificationReports.retrieve(request.id, request.params)
+> = makeStripeResolver<RetrieveVerificationReportRequest>((stripe, request) =>
+  stripe.identity.verificationReports.retrieve(request.id, request.params)
 );
 
 /**
  * Request to list verification reports
  */
-interface ListVerificationReportsRequest
-  extends Request.Request<
-    Stripe.ApiList<Stripe.Identity.VerificationReport>,
-    StripeError
-  > {
+interface ListVerificationReportsRequest extends Request.Request<
+  Stripe.ApiList<Stripe.Identity.VerificationReport>,
+  StripeError
+> {
   readonly _tag: "ListVerificationReportsRequest";
   readonly params?: Stripe.Identity.VerificationReportListParams;
 }
@@ -68,9 +65,8 @@ const ListVerificationReportsRequest =
 const ListVerificationReportsResolver: RequestResolver.RequestResolver<
   ListVerificationReportsRequest,
   StripeService
-> = makeStripeResolver<ListVerificationReportsRequest>(
-  (stripe, request) =>
-    stripe.identity.verificationReports.list(request.params)
+> = makeStripeResolver<ListVerificationReportsRequest>((stripe, request) =>
+  stripe.identity.verificationReports.list(request.params)
 );
 
 /**
