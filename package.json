@@ -35,6 +35,26 @@
       "import": "./dist/Subscription.js",
       "types": "./dist/Subscription.d.ts"
     },
+    "./Issuing.Card": {
+      "import": "./dist/Issuing.Card.js",
+      "types": "./dist/Issuing.Card.d.ts"
+    },
+    "./Issuing.Cardholder": {
+      "import": "./dist/Issuing.Cardholder.js",
+      "types": "./dist/Issuing.Cardholder.d.ts"
+    },
+    "./Issuing.Authorization": {
+      "import": "./dist/Issuing.Authorization.js",
+      "types": "./dist/Issuing.Authorization.d.ts"
+    },
+    "./Issuing.Transaction": {
+      "import": "./dist/Issuing.Transaction.js",
+      "types": "./dist/Issuing.Transaction.d.ts"
+    },
+    "./Issuing.Dispute": {
+      "import": "./dist/Issuing.Dispute.js",
+      "types": "./dist/Issuing.Dispute.d.ts"
+    },
     "./Identity.VerificationSession": {
       "import": "./dist/Identity.VerificationSession.js",
       "types": "./dist/Identity.VerificationSession.d.ts"
