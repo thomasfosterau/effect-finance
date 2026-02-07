@@ -86,8 +86,11 @@ dist
 dist/
 *.tsbuildinfo
 
-# pnpm
-pnpm-lock.yaml
+# Bun binary lockfile (older format)
+bun.lockb
+
+# npm lockfile (project uses Bun)
+package-lock.json
 
 # Gatsby files
 .cache/
