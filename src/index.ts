@@ -35,5 +35,8 @@ export * as Product from "./Product.js";
 export * as Price from "./Price.js";
 export * as PaymentIntent from "./PaymentIntent.js";
 export * as Subscription from "./Subscription.js";
+export * as TerminalReader from "./Terminal.Reader.js";
+export * as TerminalLocation from "./Terminal.Location.js";
+export * as TerminalConnectionToken from "./Terminal.ConnectionToken.js";
 export type { StripeError as StripeErrors } from "./internal/index.js";
 export type { StripeConfig } from "./Stripe.js";
