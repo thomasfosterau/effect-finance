@@ -40,6 +40,8 @@ export * as Event from "./Event.js";
 export * as WebhookEndpoint from "./WebhookEndpoint.js";
 export * as Review from "./Review.js";
 export * as CountrySpec from "./CountrySpec.js";
+export * as IdentityVerificationSession from "./Identity.VerificationSession.js";
+export * as IdentityVerificationReport from "./Identity.VerificationReport.js";
 export * as TerminalReader from "./Terminal.Reader.js";
 export * as TerminalLocation from "./Terminal.Location.js";
 export * as TerminalConnectionToken from "./Terminal.ConnectionToken.js";
