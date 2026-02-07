@@ -27,8 +27,10 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to retrieve a transaction
  */
-interface RetrieveTransactionRequest
-  extends Request.Request<Stripe.Treasury.Transaction, StripeError> {
+interface RetrieveTransactionRequest extends Request.Request<
+  Stripe.Treasury.Transaction,
+  StripeError
+> {
   readonly _tag: "RetrieveTransactionRequest";
   readonly id: string;
   readonly params?: Stripe.Treasury.TransactionRetrieveParams;
@@ -41,19 +43,17 @@ const RetrieveTransactionRequest = Request.tagged<RetrieveTransactionRequest>(
 const RetrieveTransactionResolver: RequestResolver.RequestResolver<
   RetrieveTransactionRequest,
   StripeService
-> = makeStripeResolver<RetrieveTransactionRequest>(
-  (stripe, request) =>
-    stripe.treasury.transactions.retrieve(request.id, request.params)
+> = makeStripeResolver<RetrieveTransactionRequest>((stripe, request) =>
+  stripe.treasury.transactions.retrieve(request.id, request.params)
 );
 
 /**
  * Request to list transactions
  */
-interface ListTransactionsRequest
-  extends Request.Request<
-    Stripe.ApiList<Stripe.Treasury.Transaction>,
-    StripeError
-  > {
+interface ListTransactionsRequest extends Request.Request<
+  Stripe.ApiList<Stripe.Treasury.Transaction>,
+  StripeError
+> {
   readonly _tag: "ListTransactionsRequest";
   readonly params: Stripe.Treasury.TransactionListParams;
 }
@@ -65,8 +65,8 @@ const ListTransactionsRequest = Request.tagged<ListTransactionsRequest>(
 const ListTransactionsResolver: RequestResolver.RequestResolver<
   ListTransactionsRequest,
   StripeService
-> = makeStripeResolver<ListTransactionsRequest>(
-  (stripe, request) => stripe.treasury.transactions.list(request.params)
+> = makeStripeResolver<ListTransactionsRequest>((stripe, request) =>
+  stripe.treasury.transactions.list(request.params)
 );
 
 /**

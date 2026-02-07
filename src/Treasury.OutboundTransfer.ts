@@ -33,8 +33,10 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create an outbound transfer
  */
-interface CreateOutboundTransferRequest
-  extends Request.Request<Stripe.Treasury.OutboundTransfer, StripeError> {
+interface CreateOutboundTransferRequest extends Request.Request<
+  Stripe.Treasury.OutboundTransfer,
+  StripeError
+> {
   readonly _tag: "CreateOutboundTransferRequest";
   readonly params: Stripe.Treasury.OutboundTransferCreateParams;
 }
@@ -47,15 +49,17 @@ const CreateOutboundTransferRequest =
 const CreateOutboundTransferResolver: RequestResolver.RequestResolver<
   CreateOutboundTransferRequest,
   StripeService
-> = makeStripeResolver<CreateOutboundTransferRequest>(
-  (stripe, request) => stripe.treasury.outboundTransfers.create(request.params)
+> = makeStripeResolver<CreateOutboundTransferRequest>((stripe, request) =>
+  stripe.treasury.outboundTransfers.create(request.params)
 );
 
 /**
  * Request to retrieve an outbound transfer
  */
-interface RetrieveOutboundTransferRequest
-  extends Request.Request<Stripe.Treasury.OutboundTransfer, StripeError> {
+interface RetrieveOutboundTransferRequest extends Request.Request<
+  Stripe.Treasury.OutboundTransfer,
+  StripeError
+> {
   readonly _tag: "RetrieveOutboundTransferRequest";
   readonly id: string;
   readonly params?: Stripe.Treasury.OutboundTransferRetrieveParams;
@@ -69,40 +73,38 @@ const RetrieveOutboundTransferRequest =
 const RetrieveOutboundTransferResolver: RequestResolver.RequestResolver<
   RetrieveOutboundTransferRequest,
   StripeService
-> = makeStripeResolver<RetrieveOutboundTransferRequest>(
-  (stripe, request) =>
-    stripe.treasury.outboundTransfers.retrieve(request.id, request.params)
+> = makeStripeResolver<RetrieveOutboundTransferRequest>((stripe, request) =>
+  stripe.treasury.outboundTransfers.retrieve(request.id, request.params)
 );
 
 /**
  * Request to list outbound transfers
  */
-interface ListOutboundTransfersRequest
-  extends Request.Request<
-    Stripe.ApiList<Stripe.Treasury.OutboundTransfer>,
-    StripeError
-  > {
+interface ListOutboundTransfersRequest extends Request.Request<
+  Stripe.ApiList<Stripe.Treasury.OutboundTransfer>,
+  StripeError
+> {
   readonly _tag: "ListOutboundTransfersRequest";
   readonly params: Stripe.Treasury.OutboundTransferListParams;
 }
 
 const ListOutboundTransfersRequest =
-  Request.tagged<ListOutboundTransfersRequest>(
-    "ListOutboundTransfersRequest"
-  );
+  Request.tagged<ListOutboundTransfersRequest>("ListOutboundTransfersRequest");
 
 const ListOutboundTransfersResolver: RequestResolver.RequestResolver<
   ListOutboundTransfersRequest,
   StripeService
-> = makeStripeResolver<ListOutboundTransfersRequest>(
-  (stripe, request) => stripe.treasury.outboundTransfers.list(request.params)
+> = makeStripeResolver<ListOutboundTransfersRequest>((stripe, request) =>
+  stripe.treasury.outboundTransfers.list(request.params)
 );
 
 /**
  * Request to cancel an outbound transfer
  */
-interface CancelOutboundTransferRequest
-  extends Request.Request<Stripe.Treasury.OutboundTransfer, StripeError> {
+interface CancelOutboundTransferRequest extends Request.Request<
+  Stripe.Treasury.OutboundTransfer,
+  StripeError
+> {
   readonly _tag: "CancelOutboundTransferRequest";
   readonly id: string;
 }
@@ -115,8 +117,8 @@ const CancelOutboundTransferRequest =
 const CancelOutboundTransferResolver: RequestResolver.RequestResolver<
   CancelOutboundTransferRequest,
   StripeService
-> = makeStripeResolver<CancelOutboundTransferRequest>(
-  (stripe, request) => stripe.treasury.outboundTransfers.cancel(request.id)
+> = makeStripeResolver<CancelOutboundTransferRequest>((stripe, request) =>
+  stripe.treasury.outboundTransfers.cancel(request.id)
 );
 
 /**

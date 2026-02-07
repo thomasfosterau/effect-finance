@@ -28,8 +28,10 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a customer
  */
-interface CreateCustomerRequest
-  extends Request.Request<Stripe.Customer, StripeError> {
+interface CreateCustomerRequest extends Request.Request<
+  Stripe.Customer,
+  StripeError
+> {
   readonly _tag: "CreateCustomerRequest";
   readonly params?: Stripe.CustomerCreateParams;
 }
@@ -38,16 +40,20 @@ const CreateCustomerRequest = Request.tagged<CreateCustomerRequest>(
   "CreateCustomerRequest"
 );
 
-const CreateCustomerResolver: RequestResolver.RequestResolver<CreateCustomerRequest, StripeService> =
-  makeStripeResolver<CreateCustomerRequest>(
-    (stripe, request) => stripe.customers.create(request.params)
-  );
+const CreateCustomerResolver: RequestResolver.RequestResolver<
+  CreateCustomerRequest,
+  StripeService
+> = makeStripeResolver<CreateCustomerRequest>((stripe, request) =>
+  stripe.customers.create(request.params)
+);
 
 /**
  * Request to retrieve a customer
  */
-interface RetrieveCustomerRequest
-  extends Request.Request<Stripe.Customer | Stripe.DeletedCustomer, StripeError> {
+interface RetrieveCustomerRequest extends Request.Request<
+  Stripe.Customer | Stripe.DeletedCustomer,
+  StripeError
+> {
   readonly _tag: "RetrieveCustomerRequest";
   readonly id: string;
   readonly params?: Stripe.CustomerRetrieveParams;
@@ -57,16 +63,20 @@ const RetrieveCustomerRequest = Request.tagged<RetrieveCustomerRequest>(
   "RetrieveCustomerRequest"
 );
 
-const RetrieveCustomerResolver: RequestResolver.RequestResolver<RetrieveCustomerRequest, StripeService> =
-  makeStripeResolver<RetrieveCustomerRequest>(
-    (stripe, request) => stripe.customers.retrieve(request.id, request.params)
-  );
+const RetrieveCustomerResolver: RequestResolver.RequestResolver<
+  RetrieveCustomerRequest,
+  StripeService
+> = makeStripeResolver<RetrieveCustomerRequest>((stripe, request) =>
+  stripe.customers.retrieve(request.id, request.params)
+);
 
 /**
  * Request to update a customer
  */
-interface UpdateCustomerRequest
-  extends Request.Request<Stripe.Customer, StripeError> {
+interface UpdateCustomerRequest extends Request.Request<
+  Stripe.Customer,
+  StripeError
+> {
   readonly _tag: "UpdateCustomerRequest";
   readonly id: string;
   readonly params?: Stripe.CustomerUpdateParams;
@@ -76,16 +86,20 @@ const UpdateCustomerRequest = Request.tagged<UpdateCustomerRequest>(
   "UpdateCustomerRequest"
 );
 
-const UpdateCustomerResolver: RequestResolver.RequestResolver<UpdateCustomerRequest, StripeService> =
-  makeStripeResolver<UpdateCustomerRequest>(
-    (stripe, request) => stripe.customers.update(request.id, request.params)
-  );
+const UpdateCustomerResolver: RequestResolver.RequestResolver<
+  UpdateCustomerRequest,
+  StripeService
+> = makeStripeResolver<UpdateCustomerRequest>((stripe, request) =>
+  stripe.customers.update(request.id, request.params)
+);
 
 /**
  * Request to delete a customer
  */
-interface DeleteCustomerRequest
-  extends Request.Request<Stripe.DeletedCustomer, StripeError> {
+interface DeleteCustomerRequest extends Request.Request<
+  Stripe.DeletedCustomer,
+  StripeError
+> {
   readonly _tag: "DeleteCustomerRequest";
   readonly id: string;
 }
@@ -94,16 +108,20 @@ const DeleteCustomerRequest = Request.tagged<DeleteCustomerRequest>(
   "DeleteCustomerRequest"
 );
 
-const DeleteCustomerResolver: RequestResolver.RequestResolver<DeleteCustomerRequest, StripeService> =
-  makeStripeResolver<DeleteCustomerRequest>(
-    (stripe, request) => stripe.customers.del(request.id)
-  );
+const DeleteCustomerResolver: RequestResolver.RequestResolver<
+  DeleteCustomerRequest,
+  StripeService
+> = makeStripeResolver<DeleteCustomerRequest>((stripe, request) =>
+  stripe.customers.del(request.id)
+);
 
 /**
  * Request to list customers
  */
-interface ListCustomersRequest
-  extends Request.Request<Stripe.ApiList<Stripe.Customer>, StripeError> {
+interface ListCustomersRequest extends Request.Request<
+  Stripe.ApiList<Stripe.Customer>,
+  StripeError
+> {
   readonly _tag: "ListCustomersRequest";
   readonly params?: Stripe.CustomerListParams;
 }
@@ -112,10 +130,12 @@ const ListCustomersRequest = Request.tagged<ListCustomersRequest>(
   "ListCustomersRequest"
 );
 
-const ListCustomersResolver: RequestResolver.RequestResolver<ListCustomersRequest, StripeService> =
-  makeStripeResolver<ListCustomersRequest>(
-    (stripe, request) => stripe.customers.list(request.params)
-  );
+const ListCustomersResolver: RequestResolver.RequestResolver<
+  ListCustomersRequest,
+  StripeService
+> = makeStripeResolver<ListCustomersRequest>((stripe, request) =>
+  stripe.customers.list(request.params)
+);
 
 /**
  * Create a customer
