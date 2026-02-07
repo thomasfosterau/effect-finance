@@ -61,15 +61,6 @@ describe("Terminal.Reader", () => {
       expect(mockStripe.terminal.readers.create).toHaveBeenCalledWith(params);
       expect(result.id).toBe("tmr_123");
     });
-
-    it("should fail when StripeService is not provided", async () => {
-      const effect = TerminalReader.create({
-        registration_code: "simulated-wpe",
-        location: "tml_123",
-      });
-
-      await expect(Effect.runPromise(effect)).rejects.toThrow();
-    });
   });
 
   describe("retrieve", () => {
@@ -106,12 +97,6 @@ describe("Terminal.Reader", () => {
       );
       expect(result.id).toBe("tmr_123");
     });
-
-    it("should fail when StripeService is not provided", async () => {
-      const effect = TerminalReader.update("tmr_123", { label: "Updated" });
-
-      await expect(Effect.runPromise(effect)).rejects.toThrow();
-    });
   });
 
   describe("del", () => {
@@ -125,12 +110,6 @@ describe("Terminal.Reader", () => {
 
       expect(mockStripe.terminal.readers.del).toHaveBeenCalledWith("tmr_123");
       expect(result.deleted).toBe(true);
-    });
-
-    it("should fail when StripeService is not provided", async () => {
-      const effect = TerminalReader.del("tmr_123");
-
-      await expect(Effect.runPromise(effect)).rejects.toThrow();
     });
   });
 

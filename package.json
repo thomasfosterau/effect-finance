@@ -35,6 +35,26 @@
       "import": "./dist/Subscription.js",
       "types": "./dist/Subscription.d.ts"
     },
+    "./Balance": {
+      "import": "./dist/Balance.js",
+      "types": "./dist/Balance.d.ts"
+    },
+    "./Event": {
+      "import": "./dist/Event.js",
+      "types": "./dist/Event.d.ts"
+    },
+    "./WebhookEndpoint": {
+      "import": "./dist/WebhookEndpoint.js",
+      "types": "./dist/WebhookEndpoint.d.ts"
+    },
+    "./Review": {
+      "import": "./dist/Review.js",
+      "types": "./dist/Review.d.ts"
+    },
+    "./CountrySpec": {
+      "import": "./dist/CountrySpec.js",
+      "types": "./dist/CountrySpec.d.ts"
+    },
     "./Issuing.Card": {
       "import": "./dist/Issuing.Card.js",
       "types": "./dist/Issuing.Card.d.ts"

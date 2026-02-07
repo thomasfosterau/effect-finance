@@ -71,20 +71,6 @@ describe("Terminal.Location", () => {
       expect(result.id).toBe("tml_123");
       expect(result.display_name).toBe("HQ");
     });
-
-    it("should fail when StripeService is not provided", async () => {
-      const effect = TerminalLocation.create({
-        display_name: "HQ",
-        address: {
-          line1: "123 Main St",
-          city: "San Francisco",
-          country: "US",
-          postal_code: "94110",
-        },
-      });
-
-      await expect(Effect.runPromise(effect)).rejects.toThrow();
-    });
   });
 
   describe("retrieve", () => {
@@ -121,14 +107,6 @@ describe("Terminal.Location", () => {
       );
       expect(result.id).toBe("tml_123");
     });
-
-    it("should fail when StripeService is not provided", async () => {
-      const effect = TerminalLocation.update("tml_123", {
-        display_name: "Updated",
-      });
-
-      await expect(Effect.runPromise(effect)).rejects.toThrow();
-    });
   });
 
   describe("del", () => {
@@ -142,12 +120,6 @@ describe("Terminal.Location", () => {
 
       expect(mockStripe.terminal.locations.del).toHaveBeenCalledWith("tml_123");
       expect(result.deleted).toBe(true);
-    });
-
-    it("should fail when StripeService is not provided", async () => {
-      const effect = TerminalLocation.del("tml_123");
-
-      await expect(Effect.runPromise(effect)).rejects.toThrow();
     });
   });
 

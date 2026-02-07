@@ -3,7 +3,6 @@ import { Effect } from "effect";
 import * as IdentityVerificationReport from "./Identity.VerificationReport.js";
 
 describe("Identity.VerificationReport", () => {
-
   describe("retrieve", () => {
     it("should return an effect that retrieves a verification report", () => {
       const effect = IdentityVerificationReport.retrieve("vr_123");
