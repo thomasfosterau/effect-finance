@@ -35,6 +35,26 @@
       "import": "./dist/Subscription.js",
       "types": "./dist/Subscription.d.ts"
     },
+    "./Treasury": {
+      "import": "./dist/Treasury.js",
+      "types": "./dist/Treasury.d.ts"
+    },
+    "./Treasury.FinancialAccount": {
+      "import": "./dist/Treasury.FinancialAccount.js",
+      "types": "./dist/Treasury.FinancialAccount.d.ts"
+    },
+    "./Treasury.Transaction": {
+      "import": "./dist/Treasury.Transaction.js",
+      "types": "./dist/Treasury.Transaction.d.ts"
+    },
+    "./Treasury.InboundTransfer": {
+      "import": "./dist/Treasury.InboundTransfer.js",
+      "types": "./dist/Treasury.InboundTransfer.d.ts"
+    },
+    "./Treasury.OutboundTransfer": {
+      "import": "./dist/Treasury.OutboundTransfer.js",
+      "types": "./dist/Treasury.OutboundTransfer.d.ts"
+    },
     "./Balance": {
       "import": "./dist/Balance.js",
       "types": "./dist/Balance.d.ts"

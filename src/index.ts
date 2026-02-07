@@ -35,6 +35,7 @@ export * as Product from "./Product.js";
 export * as Price from "./Price.js";
 export * as PaymentIntent from "./PaymentIntent.js";
 export * as Subscription from "./Subscription.js";
+export * as Treasury from "./Treasury.js";
 export * as Balance from "./Balance.js";
 export * as Event from "./Event.js";
 export * as WebhookEndpoint from "./WebhookEndpoint.js";
