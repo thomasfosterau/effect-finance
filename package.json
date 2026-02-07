@@ -35,6 +35,18 @@
       "import": "./dist/Subscription.js",
       "types": "./dist/Subscription.d.ts"
     },
+    "./Terminal.Reader": {
+      "import": "./dist/Terminal.Reader.js",
+      "types": "./dist/Terminal.Reader.d.ts"
+    },
+    "./Terminal.Location": {
+      "import": "./dist/Terminal.Location.js",
+      "types": "./dist/Terminal.Location.d.ts"
+    },
+    "./Terminal.ConnectionToken": {
+      "import": "./dist/Terminal.ConnectionToken.js",
+      "types": "./dist/Terminal.ConnectionToken.d.ts"
+    },
     "./Account": {
       "import": "./dist/Account.js",
       "types": "./dist/Account.d.ts"
