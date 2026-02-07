@@ -30,6 +30,10 @@ pnpm add @thomasfosterau/effect-stripe effect stripe
 yarn add @thomasfosterau/effect-stripe effect stripe
 ```
 
+```bash
+bun add @thomasfosterau/effect-stripe effect stripe
+```
+
 ## Quick Start
 
 ```typescript
@@ -303,25 +307,25 @@ All operations return `Effect<T, StripeError, Stripe.StripeService>`.
 
 ```bash
 # Install dependencies
-pnpm install
+bun install
 
 # Build the library
-pnpm build
+bun run build
 
 # Run tests
-pnpm test
+bun test
 
 # Run tests in watch mode
-pnpm test:watch
+bun test --watch
 
 # Lint
-pnpm lint
+bun run lint
 
 # Format
-pnpm format
+bun run format
 
 # Type check
-pnpm typecheck
+bun run typecheck
 ```
 
 ## Contributing

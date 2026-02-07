@@ -50,7 +50,7 @@
     "typecheck": "tsc --noEmit",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "release": "bun run build && changeset publish"
   },
   "keywords": [
     "effect",
