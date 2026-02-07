@@ -32,8 +32,10 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a terminal reader
  */
-interface CreateReaderRequest
-  extends Request.Request<Stripe.Terminal.Reader, StripeError> {
+interface CreateReaderRequest extends Request.Request<
+  Stripe.Terminal.Reader,
+  StripeError
+> {
   readonly _tag: "CreateReaderRequest";
   readonly params: Stripe.Terminal.ReaderCreateParams;
 }
@@ -42,16 +44,20 @@ const CreateReaderRequest = Request.tagged<CreateReaderRequest>(
   "CreateReaderRequest"
 );
 
-const CreateReaderResolver: RequestResolver.RequestResolver<CreateReaderRequest, StripeService> =
-  makeStripeResolver<CreateReaderRequest>(
-    (stripe, request) => stripe.terminal.readers.create(request.params)
-  );
+const CreateReaderResolver: RequestResolver.RequestResolver<
+  CreateReaderRequest,
+  StripeService
+> = makeStripeResolver<CreateReaderRequest>((stripe, request) =>
+  stripe.terminal.readers.create(request.params)
+);
 
 /**
  * Request to retrieve a terminal reader
  */
-interface RetrieveReaderRequest
-  extends Request.Request<Stripe.Terminal.Reader, StripeError> {
+interface RetrieveReaderRequest extends Request.Request<
+  Stripe.Terminal.Reader,
+  StripeError
+> {
   readonly _tag: "RetrieveReaderRequest";
   readonly id: string;
   readonly params?: Stripe.Terminal.ReaderRetrieveParams;
@@ -61,17 +67,24 @@ const RetrieveReaderRequest = Request.tagged<RetrieveReaderRequest>(
   "RetrieveReaderRequest"
 );
 
-const RetrieveReaderResolver: RequestResolver.RequestResolver<RetrieveReaderRequest, StripeService> =
-  makeStripeResolver<RetrieveReaderRequest>(
-    (stripe, request) =>
-      stripe.terminal.readers.retrieve(request.id, request.params) as Promise<Stripe.Terminal.Reader>
-  );
+const RetrieveReaderResolver: RequestResolver.RequestResolver<
+  RetrieveReaderRequest,
+  StripeService
+> = makeStripeResolver<RetrieveReaderRequest>(
+  (stripe, request) =>
+    stripe.terminal.readers.retrieve(
+      request.id,
+      request.params
+    ) as Promise<Stripe.Terminal.Reader>
+);
 
 /**
  * Request to update a terminal reader
  */
-interface UpdateReaderRequest
-  extends Request.Request<Stripe.Terminal.Reader, StripeError> {
+interface UpdateReaderRequest extends Request.Request<
+  Stripe.Terminal.Reader,
+  StripeError
+> {
   readonly _tag: "UpdateReaderRequest";
   readonly id: string;
   readonly params?: Stripe.Terminal.ReaderUpdateParams;
@@ -81,17 +94,24 @@ const UpdateReaderRequest = Request.tagged<UpdateReaderRequest>(
   "UpdateReaderRequest"
 );
 
-const UpdateReaderResolver: RequestResolver.RequestResolver<UpdateReaderRequest, StripeService> =
-  makeStripeResolver<UpdateReaderRequest>(
-    (stripe, request) =>
-      stripe.terminal.readers.update(request.id, request.params) as Promise<Stripe.Terminal.Reader>
-  );
+const UpdateReaderResolver: RequestResolver.RequestResolver<
+  UpdateReaderRequest,
+  StripeService
+> = makeStripeResolver<UpdateReaderRequest>(
+  (stripe, request) =>
+    stripe.terminal.readers.update(
+      request.id,
+      request.params
+    ) as Promise<Stripe.Terminal.Reader>
+);
 
 /**
  * Request to delete a terminal reader
  */
-interface DeleteReaderRequest
-  extends Request.Request<Stripe.Terminal.DeletedReader, StripeError> {
+interface DeleteReaderRequest extends Request.Request<
+  Stripe.Terminal.DeletedReader,
+  StripeError
+> {
   readonly _tag: "DeleteReaderRequest";
   readonly id: string;
 }
@@ -100,31 +120,33 @@ const DeleteReaderRequest = Request.tagged<DeleteReaderRequest>(
   "DeleteReaderRequest"
 );
 
-const DeleteReaderResolver: RequestResolver.RequestResolver<DeleteReaderRequest, StripeService> =
-  makeStripeResolver<DeleteReaderRequest>(
-    (stripe, request) => stripe.terminal.readers.del(request.id)
-  );
+const DeleteReaderResolver: RequestResolver.RequestResolver<
+  DeleteReaderRequest,
+  StripeService
+> = makeStripeResolver<DeleteReaderRequest>((stripe, request) =>
+  stripe.terminal.readers.del(request.id)
+);
 
 /**
  * Request to list terminal readers
  */
-interface ListReadersRequest
-  extends Request.Request<
-    Stripe.ApiList<Stripe.Terminal.Reader>,
-    StripeError
-  > {
+interface ListReadersRequest extends Request.Request<
+  Stripe.ApiList<Stripe.Terminal.Reader>,
+  StripeError
+> {
   readonly _tag: "ListReadersRequest";
   readonly params?: Stripe.Terminal.ReaderListParams;
 }
 
-const ListReadersRequest = Request.tagged<ListReadersRequest>(
-  "ListReadersRequest"
-);
+const ListReadersRequest =
+  Request.tagged<ListReadersRequest>("ListReadersRequest");
 
-const ListReadersResolver: RequestResolver.RequestResolver<ListReadersRequest, StripeService> =
-  makeStripeResolver<ListReadersRequest>(
-    (stripe, request) => stripe.terminal.readers.list(request.params)
-  );
+const ListReadersResolver: RequestResolver.RequestResolver<
+  ListReadersRequest,
+  StripeService
+> = makeStripeResolver<ListReadersRequest>((stripe, request) =>
+  stripe.terminal.readers.list(request.params)
+);
 
 /**
  * Create a terminal reader

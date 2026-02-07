@@ -30,21 +30,23 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a terminal connection token
  */
-interface CreateConnectionTokenRequest
-  extends Request.Request<Stripe.Terminal.ConnectionToken, StripeError> {
+interface CreateConnectionTokenRequest extends Request.Request<
+  Stripe.Terminal.ConnectionToken,
+  StripeError
+> {
   readonly _tag: "CreateConnectionTokenRequest";
   readonly params?: Stripe.Terminal.ConnectionTokenCreateParams;
 }
 
-const CreateConnectionTokenRequest = Request.tagged<CreateConnectionTokenRequest>(
-  "CreateConnectionTokenRequest"
-);
+const CreateConnectionTokenRequest =
+  Request.tagged<CreateConnectionTokenRequest>("CreateConnectionTokenRequest");
 
-const CreateConnectionTokenResolver: RequestResolver.RequestResolver<CreateConnectionTokenRequest, StripeService> =
-  makeStripeResolver<CreateConnectionTokenRequest>(
-    (stripe, request) =>
-      stripe.terminal.connectionTokens.create(request.params)
-  );
+const CreateConnectionTokenResolver: RequestResolver.RequestResolver<
+  CreateConnectionTokenRequest,
+  StripeService
+> = makeStripeResolver<CreateConnectionTokenRequest>((stripe, request) =>
+  stripe.terminal.connectionTokens.create(request.params)
+);
 
 /**
  * Create a terminal connection token
@@ -55,11 +57,7 @@ const CreateConnectionTokenResolver: RequestResolver.RequestResolver<CreateConne
  */
 export const create = (
   params?: Stripe.Terminal.ConnectionTokenCreateParams
-): Effect.Effect<
-  Stripe.Terminal.ConnectionToken,
-  StripeError,
-  StripeService
-> =>
+): Effect.Effect<Stripe.Terminal.ConnectionToken, StripeError, StripeService> =>
   Effect.request(
     CreateConnectionTokenRequest({ params }),
     RequestResolver.contextFromEffect(CreateConnectionTokenResolver)
