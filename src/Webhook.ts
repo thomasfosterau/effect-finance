@@ -61,7 +61,7 @@ export interface WebhookConfig {
  * @param payload - The raw request body as a string or Buffer
  * @param signature - The Stripe-Signature header value
  * @param secret - The webhook endpoint secret (starts with `whsec_`)
- * @param tolerance - Optional tolerance in seconds for timestamp verification
+ * @param tolerance - Tolerance in seconds for timestamp verification (default: 300)
  * @returns Effect that resolves to the verified Event object
  *
  * @example
@@ -88,7 +88,7 @@ export const constructEvent = (
   payload: string | Buffer,
   signature: string,
   secret: string,
-  tolerance?: number
+  tolerance: number = DEFAULT_TOLERANCE
 ): Effect.Effect<
   Stripe.Event,
   StripeSignatureVerificationError,
@@ -102,10 +102,12 @@ export const constructEvent = (
         stripe.webhooks.constructEvent(payload, signature, secret, tolerance),
       catch: (error) => {
         const message = error instanceof Error ? error.message : String(error);
+        const payloadString =
+          typeof payload === "string" ? payload : payload.toString("utf8");
         return new StripeSignatureVerificationError({
           message,
           header: signature,
-          payload: typeof payload === "string" ? payload : undefined,
+          payload: payloadString,
         });
       },
     });
@@ -120,7 +122,7 @@ export const constructEvent = (
  * @param payload - The raw request body as a string or Buffer
  * @param signature - The Stripe-Signature header value
  * @param secret - The webhook endpoint secret (starts with `whsec_`)
- * @param tolerance - Optional tolerance in seconds for timestamp verification
+ * @param tolerance - Tolerance in seconds for timestamp verification (default: 300)
  * @param cryptoProvider - Optional custom crypto provider
  * @returns Effect that resolves to the verified Event object
  *
@@ -148,7 +150,7 @@ export const constructEventAsync = (
   payload: string | Buffer,
   signature: string,
   secret: string,
-  tolerance?: number,
+  tolerance: number = DEFAULT_TOLERANCE,
   cryptoProvider?: Stripe.CryptoProvider
 ): Effect.Effect<
   Stripe.Event,
@@ -169,10 +171,12 @@ export const constructEventAsync = (
         ),
       catch: (error) => {
         const message = error instanceof Error ? error.message : String(error);
+        const payloadString =
+          typeof payload === "string" ? payload : payload.toString("utf8");
         return new StripeSignatureVerificationError({
           message,
           header: signature,
-          payload: typeof payload === "string" ? payload : undefined,
+          payload: payloadString,
         });
       },
     });
@@ -213,13 +217,27 @@ export const generateTestHeaderString = (
   payload: string | Buffer,
   secret: string,
   timestamp?: number
-): Effect.Effect<string, never, StripeService> =>
+): Effect.Effect<string, StripeSignatureVerificationError, StripeService> =>
   Effect.gen(function* () {
     const stripe = yield* StripeService;
-    return stripe.webhooks.generateTestHeaderString({
-      payload: typeof payload === "string" ? payload : payload.toString("utf8"),
-      secret,
-      timestamp,
+    return yield* Effect.try({
+      try: () =>
+        stripe.webhooks.generateTestHeaderString({
+          payload:
+            typeof payload === "string" ? payload : payload.toString("utf8"),
+          secret,
+          timestamp,
+        }),
+      catch: (error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        const payloadString =
+          typeof payload === "string" ? payload : payload.toString("utf8");
+        return new StripeSignatureVerificationError({
+          message,
+          header: undefined,
+          payload: payloadString,
+        });
+      },
     });
   });
 
@@ -267,18 +285,29 @@ export const generateTestHeaderStringAsync = (
   secret: string,
   timestamp?: number,
   cryptoProvider?: Stripe.CryptoProvider
-): Effect.Effect<string, never, StripeService> =>
+): Effect.Effect<string, StripeSignatureVerificationError, StripeService> =>
   Effect.gen(function* () {
     const stripe = yield* StripeService;
-    return yield* Effect.promise(() =>
-      stripe.webhooks.generateTestHeaderStringAsync({
-        payload:
-          typeof payload === "string" ? payload : payload.toString("utf8"),
-        secret,
-        timestamp,
-        cryptoProvider,
-      })
-    );
+    return yield* Effect.tryPromise({
+      try: () =>
+        stripe.webhooks.generateTestHeaderStringAsync({
+          payload:
+            typeof payload === "string" ? payload : payload.toString("utf8"),
+          secret,
+          timestamp,
+          cryptoProvider,
+        }),
+      catch: (error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        const payloadString =
+          typeof payload === "string" ? payload : payload.toString("utf8");
+        return new StripeSignatureVerificationError({
+          message,
+          header: undefined,
+          payload: payloadString,
+        });
+      },
+    });
   });
 
 /**

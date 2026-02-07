@@ -9,10 +9,10 @@
  */
 
 import { Effect } from "effect";
-import * as Stripe from "../src/Stripe.js";
-import * as Webhook from "../src/Webhook.js";
-import * as Customer from "../src/Customer.js";
-import { StripeSignatureVerificationError } from "../src/errors.js";
+import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
+import * as Webhook from "@thomasfosterau/effect-stripe/Webhook";
+import * as Customer from "@thomasfosterau/effect-stripe/Customer";
+import { StripeSignatureVerificationError } from "@thomasfosterau/effect-stripe";
 
 /**
  * Handle a webhook event based on its type
