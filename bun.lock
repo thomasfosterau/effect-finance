@@ -24,6 +24,16 @@
         "effect": "^3.10.0",
       },
     },
+    "packages/payments-airwallex": {
+      "name": "@thomasfosterau/effect-payments-airwallex",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thomasfosterau/effect-payments": "workspace:*",
+      },
+      "peerDependencies": {
+        "effect": "^3.10.0",
+      },
+    },
     "packages/payments-stripe": {
       "name": "@thomasfosterau/effect-payments-stripe",
       "version": "0.0.0",
@@ -212,6 +222,8 @@
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@thomasfosterau/effect-payments": ["@thomasfosterau/effect-payments@workspace:packages/payments"],
+
+    "@thomasfosterau/effect-payments-airwallex": ["@thomasfosterau/effect-payments-airwallex@workspace:packages/payments-airwallex"],
 
     "@thomasfosterau/effect-payments-stripe": ["@thomasfosterau/effect-payments-stripe@workspace:packages/payments-stripe"],
 

@@ -14,6 +14,7 @@ concrete implementation.
 | --- | --- |
 | [`@thomasfosterau/effect-payments`](packages/payments) | The vendor-neutral core: abstract capabilities, neutral domain types, and a neutral error channel. Depend on this in your application code. |
 | [`@thomasfosterau/effect-payments-stripe`](packages/payments-stripe) | The Stripe implementation. Provides `Layer`s that satisfy the core's capabilities, plus the full set of Stripe-specific resource modules. |
+| [`@thomasfosterau/effect-payments-airwallex`](packages/payments-airwallex) | The Airwallex implementation. Provides `Layer`s for the `Customers`, `PaymentIntents` and `Refunds` capabilities. |
 
 ## The idea
 
@@ -49,6 +50,19 @@ const result = await Effect.runPromise(
   onboard("jane@example.com", "price_123").pipe(Effect.provide(layer))
 );
 ```
+
+The same program runs on a different provider by changing only the layer:
+
+```typescript
+import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
+
+const layer = AirwallexPayments.layer({ clientId: "...", apiKey: "..." });
+```
+
+Providers may implement only the capabilities they support (Airwallex, for
+example, covers customers, payment intents and refunds but not subscriptions).
+The type system enforces this: a program that needs a capability the provided
+layer doesn't supply simply won't type-check.
 
 ## Installation
 

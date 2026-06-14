@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun run --filter '@thomasfosterau/effect-payments' build && bun run --filter '@thomasfosterau/effect-payments-stripe' build",
+    "build": "bun run --filter '@thomasfosterau/effect-payments' build && bun run --filter '@thomasfosterau/effect-payments-stripe' build && bun run --filter '@thomasfosterau/effect-payments-airwallex' build",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint packages/*/src",
