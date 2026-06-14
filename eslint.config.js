@@ -14,6 +14,7 @@ export default [
           "./packages/payments/tsconfig.json",
           "./packages/payments-stripe/tsconfig.json",
           "./packages/payments-airwallex/tsconfig.json",
+          "./packages/payments-paypal/tsconfig.json",
         ],
       },
     },

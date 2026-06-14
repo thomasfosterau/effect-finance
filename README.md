@@ -15,6 +15,7 @@ concrete implementation.
 | [`@thomasfosterau/effect-payments`](packages/payments) | The vendor-neutral core: abstract capabilities, neutral domain types, and a neutral error channel. Depend on this in your application code. |
 | [`@thomasfosterau/effect-payments-stripe`](packages/payments-stripe) | The Stripe implementation. Provides `Layer`s that satisfy the core's capabilities, plus the full set of Stripe-specific resource modules. |
 | [`@thomasfosterau/effect-payments-airwallex`](packages/payments-airwallex) | The Airwallex implementation. Provides `Layer`s for the `Customers`, `PaymentIntents` and `Refunds` capabilities. |
+| [`@thomasfosterau/effect-payments-paypal`](packages/payments-paypal) | The PayPal implementation. Provides `Layer`s for the `Products`, `Prices`, `PaymentIntents`, `Subscriptions` and `Refunds` capabilities. |
 
 ## The idea
 
@@ -59,10 +60,11 @@ import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/Ai
 const layer = AirwallexPayments.layer({ clientId: "...", apiKey: "..." });
 ```
 
-Providers may implement only the capabilities they support (Airwallex, for
-example, covers customers, payment intents and refunds but not subscriptions).
-The type system enforces this: a program that needs a capability the provided
-layer doesn't supply simply won't type-check.
+Providers may implement only the capabilities they support, and different
+providers cover different subsets — Airwallex covers customers, payment intents
+and refunds; PayPal covers products, prices, subscriptions, payment intents and
+refunds but has no customers. The type system enforces this: a program that
+needs a capability the provided layer doesn't supply simply won't type-check.
 
 ## Installation
 
