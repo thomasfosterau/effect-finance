@@ -1,0 +1,82 @@
+{
+  "name": "@thomasfosterau/effect-payments",
+  "version": "0.0.0",
+  "description": "A vendor-neutral payments core for Effect",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./Customer": {
+      "import": "./dist/Customer.js",
+      "types": "./dist/Customer.d.ts"
+    },
+    "./Product": {
+      "import": "./dist/Product.js",
+      "types": "./dist/Product.d.ts"
+    },
+    "./Price": {
+      "import": "./dist/Price.js",
+      "types": "./dist/Price.d.ts"
+    },
+    "./PaymentIntent": {
+      "import": "./dist/PaymentIntent.js",
+      "types": "./dist/PaymentIntent.d.ts"
+    },
+    "./Subscription": {
+      "import": "./dist/Subscription.js",
+      "types": "./dist/Subscription.d.ts"
+    },
+    "./Refund": {
+      "import": "./dist/Refund.js",
+      "types": "./dist/Refund.d.ts"
+    },
+    "./Money": {
+      "import": "./dist/Money.js",
+      "types": "./dist/Money.d.ts"
+    },
+    "./Page": {
+      "import": "./dist/Page.js",
+      "types": "./dist/Page.d.ts"
+    },
+    "./PaymentsError": {
+      "import": "./dist/PaymentsError.js",
+      "types": "./dist/PaymentsError.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "effect",
+    "payments",
+    "api",
+    "typescript"
+  ],
+  "author": "Thomas Foster",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thomasfosterau/effect-stripe.git",
+    "directory": "packages/payments"
+  },
+  "bugs": {
+    "url": "https://github.com/thomasfosterau/effect-stripe/issues"
+  },
+  "homepage": "https://github.com/thomasfosterau/effect-stripe#readme",
+  "peerDependencies": {
+    "effect": "^3.10.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
+  }
+}

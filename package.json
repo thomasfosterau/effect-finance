@@ -1,216 +1,20 @@
 {
-  "name": "@thomasfosterau/effect-stripe",
+  "name": "effect-payments-monorepo",
   "version": "0.0.0",
-  "description": "An Effect wrapper around the Stripe API",
+  "private": true,
+  "description": "A vendor-neutral payments core for Effect, with a Stripe implementation",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./Stripe": {
-      "import": "./dist/Stripe.js",
-      "types": "./dist/Stripe.d.ts"
-    },
-    "./Customer": {
-      "import": "./dist/Customer.js",
-      "types": "./dist/Customer.d.ts"
-    },
-    "./Product": {
-      "import": "./dist/Product.js",
-      "types": "./dist/Product.d.ts"
-    },
-    "./Price": {
-      "import": "./dist/Price.js",
-      "types": "./dist/Price.d.ts"
-    },
-    "./PaymentIntent": {
-      "import": "./dist/PaymentIntent.js",
-      "types": "./dist/PaymentIntent.d.ts"
-    },
-    "./Subscription": {
-      "import": "./dist/Subscription.js",
-      "types": "./dist/Subscription.d.ts"
-    },
-    "./Treasury": {
-      "import": "./dist/Treasury.js",
-      "types": "./dist/Treasury.d.ts"
-    },
-    "./Treasury.FinancialAccount": {
-      "import": "./dist/Treasury.FinancialAccount.js",
-      "types": "./dist/Treasury.FinancialAccount.d.ts"
-    },
-    "./Treasury.Transaction": {
-      "import": "./dist/Treasury.Transaction.js",
-      "types": "./dist/Treasury.Transaction.d.ts"
-    },
-    "./Treasury.InboundTransfer": {
-      "import": "./dist/Treasury.InboundTransfer.js",
-      "types": "./dist/Treasury.InboundTransfer.d.ts"
-    },
-    "./Treasury.OutboundTransfer": {
-      "import": "./dist/Treasury.OutboundTransfer.js",
-      "types": "./dist/Treasury.OutboundTransfer.d.ts"
-    },
-    "./Balance": {
-      "import": "./dist/Balance.js",
-      "types": "./dist/Balance.d.ts"
-    },
-    "./Event": {
-      "import": "./dist/Event.js",
-      "types": "./dist/Event.d.ts"
-    },
-    "./WebhookEndpoint": {
-      "import": "./dist/WebhookEndpoint.js",
-      "types": "./dist/WebhookEndpoint.d.ts"
-    },
-    "./Review": {
-      "import": "./dist/Review.js",
-      "types": "./dist/Review.d.ts"
-    },
-    "./CountrySpec": {
-      "import": "./dist/CountrySpec.js",
-      "types": "./dist/CountrySpec.d.ts"
-    },
-    "./Issuing.Card": {
-      "import": "./dist/Issuing.Card.js",
-      "types": "./dist/Issuing.Card.d.ts"
-    },
-    "./Issuing.Cardholder": {
-      "import": "./dist/Issuing.Cardholder.js",
-      "types": "./dist/Issuing.Cardholder.d.ts"
-    },
-    "./Issuing.Authorization": {
-      "import": "./dist/Issuing.Authorization.js",
-      "types": "./dist/Issuing.Authorization.d.ts"
-    },
-    "./Issuing.Transaction": {
-      "import": "./dist/Issuing.Transaction.js",
-      "types": "./dist/Issuing.Transaction.d.ts"
-    },
-    "./Issuing.Dispute": {
-      "import": "./dist/Issuing.Dispute.js",
-      "types": "./dist/Issuing.Dispute.d.ts"
-    },
-    "./Identity.VerificationSession": {
-      "import": "./dist/Identity.VerificationSession.js",
-      "types": "./dist/Identity.VerificationSession.d.ts"
-    },
-    "./Identity.VerificationReport": {
-      "import": "./dist/Identity.VerificationReport.js",
-      "types": "./dist/Identity.VerificationReport.d.ts"
-    },
-    "./Terminal.Reader": {
-      "import": "./dist/Terminal.Reader.js",
-      "types": "./dist/Terminal.Reader.d.ts"
-    },
-    "./Terminal.Location": {
-      "import": "./dist/Terminal.Location.js",
-      "types": "./dist/Terminal.Location.d.ts"
-    },
-    "./Terminal.ConnectionToken": {
-      "import": "./dist/Terminal.ConnectionToken.js",
-      "types": "./dist/Terminal.ConnectionToken.d.ts"
-    },
-    "./Account": {
-      "import": "./dist/Account.js",
-      "types": "./dist/Account.d.ts"
-    },
-    "./AccountLink": {
-      "import": "./dist/AccountLink.js",
-      "types": "./dist/AccountLink.d.ts"
-    },
-    "./Person": {
-      "import": "./dist/Person.js",
-      "types": "./dist/Person.d.ts"
-    },
-    "./ExternalAccount": {
-      "import": "./dist/ExternalAccount.js",
-      "types": "./dist/ExternalAccount.d.ts"
-    },
-    "./Transfer": {
-      "import": "./dist/Transfer.js",
-      "types": "./dist/Transfer.d.ts"
-    },
-    "./Topup": {
-      "import": "./dist/Topup.js",
-      "types": "./dist/Topup.d.ts"
-    },
-    "./PaymentMethod": {
-      "import": "./dist/PaymentMethod.js",
-      "types": "./dist/PaymentMethod.d.ts"
-    },
-    "./Invoice": {
-      "import": "./dist/Invoice.js",
-      "types": "./dist/Invoice.d.ts"
-    },
-    "./Charge": {
-      "import": "./dist/Charge.js",
-      "types": "./dist/Charge.d.ts"
-    },
-    "./Refund": {
-      "import": "./dist/Refund.js",
-      "types": "./dist/Refund.d.ts"
-    },
-    "./BalanceTransaction": {
-      "import": "./dist/BalanceTransaction.js",
-      "types": "./dist/BalanceTransaction.d.ts"
-    },
-    "./SetupIntent": {
-      "import": "./dist/SetupIntent.js",
-      "types": "./dist/SetupIntent.d.ts"
-    },
-    "./Payout": {
-      "import": "./dist/Payout.js",
-      "types": "./dist/Payout.d.ts"
-    },
-    "./Dispute": {
-      "import": "./dist/Dispute.js",
-      "types": "./dist/Dispute.d.ts"
-    },
-    "./File": {
-      "import": "./dist/File.js",
-      "types": "./dist/File.d.ts"
-    },
-    "./TaxRate": {
-      "import": "./dist/TaxRate.js",
-      "types": "./dist/TaxRate.d.ts"
-    },
-    "./PromotionCode": {
-      "import": "./dist/PromotionCode.js",
-      "types": "./dist/PromotionCode.d.ts"
-    },
-    "./Coupon": {
-      "import": "./dist/Coupon.js",
-      "types": "./dist/Coupon.d.ts"
-    },
-    "./CheckoutSession": {
-      "import": "./dist/CheckoutSession.js",
-      "types": "./dist/CheckoutSession.d.ts"
-    },
-    "./SubscriptionSchedule": {
-      "import": "./dist/SubscriptionSchedule.js",
-      "types": "./dist/SubscriptionSchedule.d.ts"
-    },
-    "./Webhook": {
-      "import": "./dist/Webhook.js",
-      "types": "./dist/Webhook.d.ts"
-    }
-  },
-  "files": [
-    "dist"
+  "workspaces": [
+    "packages/*"
   ],
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
+    "build": "bun run --filter '@thomasfosterau/effect-payments' build && bun run --filter '@thomasfosterau/effect-payments-stripe' build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\"",
+    "lint": "eslint packages/*/src",
+    "lint:fix": "eslint packages/*/src --fix",
+    "format": "prettier --write \"packages/*/src/**/*.ts\"",
+    "format:check": "prettier --check \"packages/*/src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "changeset": "changeset",
     "version": "changeset version",
@@ -218,8 +22,8 @@
   },
   "keywords": [
     "effect",
-    "stripe",
     "payments",
+    "stripe",
     "api",
     "typescript"
   ],
@@ -233,12 +37,6 @@
     "url": "https://github.com/thomasfosterau/effect-stripe/issues"
   },
   "homepage": "https://github.com/thomasfosterau/effect-stripe#readme",
-  "peerDependencies": {
-    "effect": "^3.0.0"
-  },
-  "dependencies": {
-    "stripe": "^17.6.0"
-  },
   "devDependencies": {
     "@changesets/cli": "^2.27.1",
     "@types/node": "^22.0.0",
@@ -247,11 +45,8 @@
     "effect": "^3.10.0",
     "eslint": "^9.0.0",
     "prettier": "^3.3.0",
+    "stripe": "^17.6.0",
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
-  },
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://npm.pkg.github.com"
   }
 }

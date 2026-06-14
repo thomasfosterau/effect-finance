@@ -1,0 +1,36 @@
+/**
+ * A vendor-neutral monetary amount.
+ *
+ * @module
+ */
+
+import { Schema } from "effect";
+
+/**
+ * Represents an amount of money in the smallest currency unit (e.g. cents for
+ * USD), paired with an ISO 4217 currency code.
+ *
+ * Using the smallest currency unit avoids floating-point rounding issues and
+ * matches the representation used by most payment providers.
+ */
+export class Money extends Schema.Class<Money>("@effect-payments/Money")({
+  /** The amount in the smallest currency unit (e.g. `2000` = $20.00). */
+  amount: Schema.Number,
+  /** The lower-cased ISO 4217 currency code, e.g. `"usd"`. */
+  currency: Schema.String,
+}) {}
+
+/**
+ * Construct a {@link Money} value from a minor-unit amount and currency.
+ */
+export const make = (amount: number, currency: string): Money =>
+  Money.make({ amount, currency });
+
+/** Shared shape for metadata bags accepted/returned across resources. */
+export const Metadata = Schema.Record({
+  key: Schema.String,
+  value: Schema.String,
+});
+
+/** A bag of arbitrary string key/value pairs attached to a resource. */
+export type Metadata = Schema.Schema.Type<typeof Metadata>;

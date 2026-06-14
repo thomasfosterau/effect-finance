@@ -1,0 +1,68 @@
+import { Effect, Console } from "effect";
+import * as Customer from "@thomasfosterau/effect-payments/Customer";
+import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
+import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
+
+/**
+ * Example: Create a customer and a payment intent using the vendor-neutral core.
+ *
+ * Notice that the program below imports only from `@thomasfosterau/effect-payments`
+ * — it never mentions Stripe. The provider is chosen at the edge, by the layer we
+ * provide. Swapping providers means swapping the layer, not the program.
+ */
+
+const program = Effect.gen(function* () {
+  yield* Console.log("Creating customer...");
+
+  const customer = yield* Customer.create({
+    email: "customer@example.com",
+    name: "John Doe",
+    metadata: { userId: "user_123" },
+  });
+
+  yield* Console.log(`Customer created: ${customer.id}`);
+
+  yield* Console.log("Creating payment intent...");
+
+  const paymentIntent = yield* PaymentIntent.create({
+    amount: 2000, // $20.00 in minor units
+    currency: "usd",
+    customer: customer.id,
+    metadata: { orderId: "order_456" },
+  });
+
+  yield* Console.log(`Payment intent created: ${paymentIntent.id}`);
+  yield* Console.log(`Status: ${paymentIntent.status}`);
+  yield* Console.log(`Amount: $${paymentIntent.amount / 100}`);
+
+  return { customer, paymentIntent };
+}).pipe(
+  // Errors are vendor-neutral, regardless of the underlying provider. We log
+  // them with `tapErrorTag` and leave the failure in the channel for the caller.
+  Effect.tapErrorTag("PaymentAuthenticationError", (error) =>
+    Console.error("Authentication failed:", error.message)
+  ),
+  Effect.tapErrorTag("PaymentProviderError", (error) =>
+    Console.error(
+      `Provider error from ${error.provider} (${error.code ?? "?"}):`,
+      error.message
+    )
+  )
+);
+
+// Choose the provider here. To run on Stripe from an env var instead, use
+// `StripePayments.layerFromEnv()`.
+const layer = StripePayments.layer({
+  apiKey: process.env.STRIPE_API_KEY || "sk_test_...",
+});
+
+Effect.runPromise(program.pipe(Effect.provide(layer)))
+  .then((result) => {
+    console.log("\nSuccess!");
+    console.log("Customer ID:", result.customer.id);
+    console.log("Payment Intent ID:", result.paymentIntent.id);
+  })
+  .catch((error) => {
+    console.error("\nFailed:", error);
+    process.exit(1);
+  });

@@ -1,348 +1,32 @@
-# effect-stripe
+# effect-payments
 
-An Effect wrapper around the Stripe API that provides type-safe error handling, composable operations, and seamless integration with the Effect ecosystem.
+A **vendor-neutral payments core for Effect**, with a **Stripe implementation** —
+the payments analogue of Effect's AI packages, where [`@effect/ai`](https://effect.website/docs/ai/introduction/)
+defines a provider-agnostic abstraction and `@effect/ai-openai` supplies a
+concrete implementation.
 
 [![CI](https://github.com/thomasfosterau/effect-stripe/actions/workflows/ci.yml/badge.svg)](https://github.com/thomasfosterau/effect-stripe/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/@thomasfosterau/effect-stripe.svg)](https://www.npmjs.com/package/@thomasfosterau/effect-stripe)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+## Packages
 
-- 🎯 **Type-safe** - Full TypeScript support with Effect's type system
-- 🛡️ **Error Handling** - Comprehensive error types using Effect's error channel
-- 🔄 **Composable** - Use Effect's combinators to build complex workflows
-- 🚀 **Resource-safe** - Manage Stripe client lifecycle with Effect Layers
-- 🔐 **Webhook Support** - Built-in signature verification for secure webhook handling
-- 📦 **Tree-shakeable** - ESM-only package with subpath exports
-- ✅ **Well-tested** - Growing test suite for core functionality
-- 🎨 **Resource-centric** - Idiomatic Effect API design
+| Package | Description |
+| --- | --- |
+| [`@thomasfosterau/effect-payments`](packages/payments) | The vendor-neutral core: abstract capabilities, neutral domain types, and a neutral error channel. Depend on this in your application code. |
+| [`@thomasfosterau/effect-payments-stripe`](packages/payments-stripe) | The Stripe implementation. Provides `Layer`s that satisfy the core's capabilities, plus the full set of Stripe-specific resource modules. |
 
-## Installation
+## The idea
 
-```bash
-npm install @thomasfosterau/effect-stripe effect stripe
-```
-
-```bash
-pnpm add @thomasfosterau/effect-stripe effect stripe
-```
-
-```bash
-yarn add @thomasfosterau/effect-stripe effect stripe
-```
-
-```bash
-bun add @thomasfosterau/effect-stripe effect stripe
-```
-
-## Quick Start
+Your program depends only on **capabilities** defined by the core — it never
+imports Stripe:
 
 ```typescript
 import { Effect } from "effect";
-import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
-import * as Product from "@thomasfosterau/effect-stripe/Product";
-
-// Create a function that returns an Effect
-const createProduct = (name: string) => Product.create({ name });
-
-// Use it in a program
-const program = Effect.gen(function* () {
-  const product = yield* createProduct("Premium Plan");
-  return product;
-});
-
-// Create the Stripe layer and run
-const layer = Stripe.layer({ apiKey: "sk_test_..." });
-const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
-```
-
-## API Design
-
-This library follows Effect's conventions with a **resource-centric API**. Instead of accessing resources through a service object, you import and use resource modules directly:
-
-```typescript
-// ✅ Effect-like (resource-centric)
-import * as Product from "@thomasfosterau/effect-stripe/Product";
-const product = yield* Product.create({ name: "My Product" });
-
-// ❌ Not Effect-like (service-centric)
-const stripe = yield* StripeService;
-const product = yield* stripe.products.create({ name: "My Product" });
-```
-
-## Usage
-
-### Creating the Stripe Layer
-
-The `Stripe` module provides functions to create Effect Layers:
-
-#### From Configuration Object
-
-```typescript
-import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
-
-const layer = Stripe.layer({
-  apiKey: "sk_test_...",
-  maxNetworkRetries: 3,
-  timeout: 10000,
-});
-```
-
-#### From Environment Variable
-
-```typescript
-import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
-
-// Uses STRIPE_API_KEY environment variable by default
-const layer = Stripe.layerFromEnv();
-
-// Or specify a custom environment variable
-const layer = Stripe.layerFromEnv("MY_STRIPE_KEY");
-```
-
-### Working with Resources
-
-Each Stripe resource has its own module with standard CRUD operations:
-
-#### Products
-
-```typescript
-import { Effect } from "effect";
-import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
-import * as Product from "@thomasfosterau/effect-stripe/Product";
-
-const program = Effect.gen(function* () {
-  // Create a product
-  const product = yield* Product.create({
-    name: "Premium Subscription",
-    description: "Monthly premium plan",
-  });
-
-  // Retrieve a product
-  const retrieved = yield* Product.retrieve(product.id);
-
-  // Update a product
-  const updated = yield* Product.update(product.id, {
-    description: "Updated description",
-  });
-
-  // List products
-  const products = yield* Product.list({ limit: 10 });
-
-  // Delete a product
-  const deleted = yield* Product.del(product.id);
-
-  return { product, retrieved, updated, products, deleted };
-});
-
-const layer = Stripe.layer({ apiKey: "sk_test_..." });
-await Effect.runPromise(program.pipe(Effect.provide(layer)));
-```
-
-#### Customers
-
-```typescript
-import * as Customer from "@thomasfosterau/effect-stripe/Customer";
-
-const program = Effect.gen(function* () {
-  const customer = yield* Customer.create({
-    email: "customer@example.com",
-    name: "John Doe",
-  });
-
-  const updated = yield* Customer.update(customer.id, {
-    name: "Jane Doe",
-  });
-
-  const customers = yield* Customer.list({ limit: 10 });
-
-  return { customer, updated, customers };
-});
-```
-
-#### Payment Intents
-
-```typescript
-import * as PaymentIntent from "@thomasfosterau/effect-stripe/PaymentIntent";
-
-const program = Effect.gen(function* () {
-  const intent = yield* PaymentIntent.create({
-    amount: 2000,
-    currency: "usd",
-  });
-
-  const confirmed = yield* PaymentIntent.confirm(intent.id);
-
-  return { intent, confirmed };
-});
-```
-
-#### Subscriptions
-
-```typescript
-import * as Subscription from "@thomasfosterau/effect-stripe/Subscription";
-
-const program = Effect.gen(function* () {
-  const subscription = yield* Subscription.create({
-    customer: "cus_123",
-    items: [{ price: "price_123" }],
-  });
-
-  const updated = yield* Subscription.update(subscription.id, {
-    metadata: { plan: "premium" },
-  });
-
-  return { subscription, updated };
-});
-```
-
-#### Prices
-
-```typescript
-import * as Price from "@thomasfosterau/effect-stripe/Price";
-
-const program = Effect.gen(function* () {
-  const price = yield* Price.create({
-    product: "prod_123",
-    unit_amount: 1999,
-    currency: "usd",
-  });
-
-  return price;
-});
-```
-
-### Error Handling
-
-The library provides specific error types for different Stripe scenarios:
-
-```typescript
-import { Effect } from "effect";
-import * as Customer from "@thomasfosterau/effect-stripe/Customer";
-import {
-  StripeApiError,
-  StripeAuthenticationError,
-  StripeRateLimitError,
-} from "@thomasfosterau/effect-stripe";
-
-const program = Effect.gen(function* () {
-  const customer = yield* Customer.create({
-    email: "customer@example.com",
-  });
-  return customer;
-}).pipe(
-  Effect.catchTag("StripeAuthenticationError", (error) => {
-    console.error("Authentication failed:", error.message);
-    return Effect.fail(new Error("Invalid API key"));
-  }),
-  Effect.catchTag("StripeRateLimitError", (error) => {
-    console.error("Rate limit exceeded:", error.message);
-    return Effect.fail(new Error("Too many requests"));
-  }),
-  Effect.catchTag("StripeApiError", (error) => {
-    console.error("API error:", error.message);
-    return Effect.fail(new Error("Stripe API error"));
-  })
-);
-```
-
-### Handling Webhooks
-
-The `Webhook` module provides utilities for verifying and processing Stripe webhook events:
-
-```typescript
-import { Effect } from "effect";
-import * as Stripe from "@thomasfosterau/effect-stripe/Stripe";
-import * as Webhook from "@thomasfosterau/effect-stripe/Webhook";
-
-// In your webhook endpoint handler (e.g., Express, Fastify, etc.)
-const handleWebhook = (
-  requestBody: string | Buffer,
-  signatureHeader: string,
-  webhookSecret: string
-) =>
-  Effect.gen(function* () {
-    // Verify signature and construct event
-    const event = yield* Webhook.constructEvent(
-      requestBody,
-      signatureHeader,
-      webhookSecret
-    );
-
-    // Handle different event types
-    switch (event.type) {
-      case "payment_intent.succeeded":
-        const paymentIntent = event.data.object;
-        console.log("Payment succeeded:", paymentIntent.id);
-        break;
-      case "customer.created":
-        const customer = event.data.object;
-        console.log("Customer created:", customer.id);
-        break;
-      // Handle other event types...
-    }
-
-    return { received: true };
-  }).pipe(
-    Effect.catchTag("StripeSignatureVerificationError", (error) => {
-      console.error("Invalid webhook signature:", error.message);
-      return Effect.fail(new Error("Invalid signature"));
-    })
-  );
-
-const layer = Stripe.layer({ apiKey: "sk_test_..." });
-await Effect.runPromise(handleWebhook(body, signature, secret).pipe(Effect.provide(layer)));
-```
-
-#### Async Verification
-
-For environments that require async cryptography:
-
-```typescript
-import * as Webhook from "@thomasfosterau/effect-stripe/Webhook";
-
-const program = Effect.gen(function* () {
-  const event = yield* Webhook.constructEventAsync(
-    requestBody,
-    signatureHeader,
-    webhookSecret
-  );
-  // Handle event...
-});
-```
-
-#### Testing Webhooks
-
-Generate test signatures for local testing:
-
-```typescript
-import * as Webhook from "@thomasfosterau/effect-stripe/Webhook";
-
-const program = Effect.gen(function* () {
-  const payload = JSON.stringify({ type: "payment_intent.succeeded" });
-  const secret = "whsec_test_secret";
-
-  // Generate a test signature
-  const signature = yield* Webhook.generateTestHeaderString(payload, secret);
-
-  // Verify it works
-  const event = yield* Webhook.constructEvent(payload, signature, secret);
-  console.log("Event verified:", event.type);
-});
-```
-
-See the [webhooks example](examples/webhooks.ts) for comprehensive usage patterns.
-
-### Composing Operations
-
-Use Effect's combinators to build complex workflows:
-
-```typescript
-import { Effect, pipe } from "effect";
-import * as Customer from "@thomasfosterau/effect-stripe/Customer";
-import * as Subscription from "@thomasfosterau/effect-stripe/Subscription";
-
-const createCustomerWithSubscription = (email: string, priceId: string) =>
+import * as Customer from "@thomasfosterau/effect-payments/Customer";
+import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
+
+// Effect<{ customer, subscription }, PaymentsError, Customers | Subscriptions>
+const onboard = (email: string, priceId: string) =>
   Effect.gen(function* () {
     const customer = yield* Customer.create({ email });
     const subscription = yield* Subscription.create({
@@ -351,82 +35,157 @@ const createCustomerWithSubscription = (email: string, priceId: string) =>
     });
     return { customer, subscription };
   });
+```
 
-// Use with retry and timeout
-const program = pipe(
-  createCustomerWithSubscription("customer@example.com", "price_123"),
-  Effect.retry({ times: 3 }),
-  Effect.timeout("30 seconds")
+The **provider** is chosen at the edge of your application by providing a layer.
+Swapping providers means swapping the layer, not the program:
+
+```typescript
+import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
+
+const layer = StripePayments.layer({ apiKey: "sk_test_..." });
+
+const result = await Effect.runPromise(
+  onboard("jane@example.com", "price_123").pipe(Effect.provide(layer))
 );
 ```
 
-## API Reference
+## Installation
 
-### Modules
+```bash
+npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe effect stripe
+```
 
-- **`Stripe`** - Layer creation and configuration
-  - `make(config)` - Create a Stripe client
-  - `layer(config)` - Create a Stripe layer from configuration
-  - `layerFromEnv(envVar?)` - Create a Stripe layer from environment variable
+`effect` is a peer dependency of both packages; `stripe` is required by the
+Stripe provider.
 
-- **`Webhook`** - Webhook signature verification and event processing
-  - `constructEvent(payload, signature, secret, tolerance?)` - Verify and construct an event (sync)
-  - `constructEventAsync(payload, signature, secret, tolerance?, cryptoProvider?)` - Verify and construct an event (async)
-  - `generateTestHeaderString(payload, secret, timestamp?)` - Generate a test signature for testing (sync)
-  - `generateTestHeaderStringAsync(payload, secret, timestamp?, cryptoProvider?)` - Generate a test signature for testing (async)
-  - `DEFAULT_TOLERANCE` - Default tolerance for timestamp verification (300 seconds)
+## The vendor-neutral core
 
-### Resources
+### Capabilities
 
-Each resource module provides standard CRUD operations:
+Each resource is an abstract Effect service (a `Context.Tag`). A program that
+calls `Customer.create(...)` requires the `Customers` capability in its
+environment; nothing more.
 
-- **`Customer`** - `create, retrieve, update, del, list`
-- **`Product`** - `create, retrieve, update, del, list`
-- **`Price`** - `create, retrieve, update, list`
-- **`PaymentIntent`** - `create, retrieve, update, confirm, cancel, list`
-- **`Subscription`** - `create, retrieve, update, cancel, list`
+| Module | Capability | Operations |
+| --- | --- | --- |
+| `Customer` | `Customers` | `create`, `retrieve`, `update`, `del`, `list` |
+| `Product` | `Products` | `create`, `retrieve`, `update`, `del`, `list` |
+| `Price` | `Prices` | `create`, `retrieve`, `update`, `list` |
+| `PaymentIntent` | `PaymentIntents` | `create`, `retrieve`, `update`, `confirm`, `cancel`, `list` |
+| `Subscription` | `Subscriptions` | `create`, `retrieve`, `update`, `cancel`, `list` |
+| `Refund` | `Refunds` | `create`, `retrieve`, `update`, `list` |
 
-All operations return `Effect<T, StripeError, Stripe.StripeService>`.
+Every operation returns `Effect<Entity, PaymentsError, Capability>`. List
+operations return a neutral `Page<Entity>` (`{ data, hasMore }`); deletions
+return `Deleted` (`{ id, deleted: true }`).
 
-### Error Types
+### Domain types
 
-- **`StripeError`** - Union of all Stripe errors
-- **`StripeApiError`** - Stripe API returned an error
-- **`StripeConfigError`** - Configuration is invalid
-- **`StripeNetworkError`** - Network error occurred
-- **`StripeAuthenticationError`** - Authentication failed
-- **`StripeRateLimitError`** - Rate limit exceeded
-- **`StripeInvalidRequestError`** - Request parameters are invalid
-- **`StripeSignatureVerificationError`** - Webhook signature verification failed
+Entities are provider-agnostic [`effect/Schema`](https://effect.website/docs/schema/introduction/)
+classes — e.g. `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`,
+`Refund`, and `Money` (amounts are always in the smallest currency unit). They
+contain only fields that are meaningful across providers, in a normalized shape
+(`camelCase`, neutral status enums).
+
+### Errors
+
+The failure channel is the neutral `PaymentsError` union:
+
+- `PaymentProviderError` — a provider rejected the request (carries `provider`, `code`, `statusCode`)
+- `PaymentAuthenticationError` — authentication failed
+- `PaymentRateLimitError` — too many requests (carries `retryAfter`)
+- `PaymentInvalidRequestError` — invalid parameters
+- `PaymentNetworkError` — transport-level failure
+
+Plus `PaymentConfigError` (raised while building a provider layer) and
+`SignatureVerificationError` (webhook verification).
+
+```typescript
+import * as Customer from "@thomasfosterau/effect-payments/Customer";
+
+const program = Customer.create({ email: "jane@example.com" }).pipe(
+  Effect.catchTag("PaymentAuthenticationError", (e) =>
+    Effect.logError(`Auth failed: ${e.message}`)
+  ),
+  Effect.catchTag("PaymentRateLimitError", (e) =>
+    Effect.logError(`Rate limited; retry after ${e.retryAfter}s`)
+  )
+);
+```
+
+## The Stripe provider
+
+### Providing the capabilities
+
+`StripePayments.layer` bundles the Stripe client and every capability so a
+neutral program can be satisfied with a single `Effect.provide`:
+
+```typescript
+import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
+
+const layer = StripePayments.layer({
+  apiKey: "sk_test_...",
+  maxNetworkRetries: 3,
+  timeout: 10_000,
+});
+
+// Or from an environment variable (STRIPE_API_KEY by default):
+const layer = StripePayments.layerFromEnv();
+```
+
+For finer control, `StripePayments.capabilities` provides every capability but
+requires a `StripeService`, and individual layers
+(`StripePayments.customersLayer`, etc.) are exported too. The `Stripe` module
+provides just the client (`Stripe.layer` / `Stripe.layerFromEnv` / `Stripe.make`).
+
+### The Stripe escape hatch
+
+The neutral core deliberately covers only concepts common to payment providers.
+Stripe-specific resources — Treasury, Issuing, Terminal, Identity, Connect,
+Invoices, Checkout, and many more — remain available as full-fidelity modules
+that return Stripe SDK types directly:
+
+```typescript
+import * as Treasury from "@thomasfosterau/effect-payments-stripe/Treasury";
+import * as Invoice from "@thomasfosterau/effect-payments-stripe/Invoice";
+```
+
+These require the `Stripe` service (provided by any of the layers above) and
+fail with the neutral `PaymentsError` channel.
+
+### Webhooks
+
+```typescript
+import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
+
+const handle = (body: string | Buffer, signature: string, secret: string) =>
+  Effect.gen(function* () {
+    const event = yield* Webhook.constructEvent(body, signature, secret);
+    // event is a typed Stripe.Event
+    return event;
+  }).pipe(
+    Effect.catchTag("SignatureVerificationError", (e) =>
+      Effect.logError(`Invalid webhook signature: ${e.message}`)
+    )
+  );
+```
+
+See [`packages/payments-stripe/examples`](packages/payments-stripe/examples) for
+runnable examples.
 
 ## Development
 
+This is a [Bun](https://bun.sh) workspace.
+
 ```bash
-# Install dependencies
-bun install
-
-# Build the library
-bun run build
-
-# Run tests
-bun run test
-
-# Run tests in watch mode
-bun run test:watch
-
-# Lint
-bun run lint
-
-# Format
-bun run format
-
-# Type check
-bun run typecheck
+bun install         # install all workspace dependencies
+bun run build       # build the core, then the Stripe provider
+bun run test        # run the full test suite (Vitest)
+bun run typecheck   # type-check the whole workspace
+bun run lint        # lint
+bun run format      # format with Prettier
 ```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
@@ -434,6 +193,6 @@ MIT © Thomas Foster
 
 ## Acknowledgments
 
-Built with:
-- [Effect](https://effect.website/) - The Effect TypeScript framework
-- [Stripe Node.js SDK](https://github.com/stripe/stripe-node) - Official Stripe SDK
+Built with [Effect](https://effect.website/) and the
+[Stripe Node.js SDK](https://github.com/stripe/stripe-node). The two-package
+shape is inspired by [`@effect/ai`](https://effect.website/docs/ai/introduction/).
