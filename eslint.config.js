@@ -3,14 +3,14 @@ import tsparser from "@typescript-eslint/parser";
 
 export default [
   {
-    ignores: ["dist/**", "node_modules/**", "*.config.js", "*.config.ts"],
+    ignores: ["**/dist/**", "**/node_modules/**", "*.config.js", "*.config.ts"],
   },
   {
-    files: ["src/**/*.ts"],
+    files: ["packages/*/src/**/*.ts"],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
-        project: "./tsconfig.json",
+        project: ["./packages/payments/tsconfig.json", "./packages/payments-stripe/tsconfig.json"],
       },
     },
     plugins: {
