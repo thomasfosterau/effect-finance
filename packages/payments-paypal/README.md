@@ -1,0 +1,68 @@
+# @thomasfosterau/effect-payments-paypal
+
+A **PayPal implementation** of the vendor-neutral
+[`@thomasfosterau/effect-payments`](../payments) core.
+
+The same neutral program runs on PayPal, Stripe or Airwallex — only the layer
+you provide changes.
+
+## Installation
+
+```bash
+npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-paypal effect
+```
+
+## Usage
+
+```typescript
+import { Effect } from "effect";
+import * as Product from "@thomasfosterau/effect-payments/Product";
+import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
+
+const program = Product.create({ name: "Premium" });
+
+const layer = PayPalPayments.layer({
+  clientId: process.env.PAYPAL_CLIENT_ID!,
+  clientSecret: process.env.PAYPAL_CLIENT_SECRET!,
+  // baseUrl: "https://api-m.sandbox.paypal.com", // for sandbox
+});
+// const layer = PayPalPayments.layerFromEnv();
+
+const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+```
+
+## Supported capabilities
+
+PayPal's billing suite and checkout APIs map onto a subset of the core
+capabilities — a different subset from Airwallex, which makes it a good test of
+the abstraction:
+
+| Capability | Maps to | Notes |
+| --- | --- | --- |
+| `Products` | Catalog Products | no `del` |
+| `Prices` | Billing Plans | recurring only; `update` toggles active via activate/deactivate |
+| `PaymentIntents` | Orders | `confirm` = capture; no `update` / `cancel` / `list` |
+| `Subscriptions` | Subscriptions | no `update` / `list` |
+| `Refunds` | Capture refunds | refund a `charge` (capture id) or a captured `paymentIntent`; no `update` / `list` |
+| `Customers` | — | **not provided** (PayPal has no first-class customer resource) |
+
+Because each capability is an independent Effect service, a program that only
+uses the supported capabilities is fully satisfied; one that needs `Customers`
+will not type-check against the PayPal layer. Individual operations without a
+PayPal equivalent fail with a neutral `PaymentInvalidRequestError`.
+
+## Notes
+
+- **Money** — the core uses minor units (e.g. cents); PayPal uses major-unit
+  decimal *strings* (e.g. `"10.00"`). This provider converts in both directions,
+  currency-aware.
+- **`PayPal`** — the client service performs the OAuth client-credentials
+  handshake and caches the access token. Inject a custom `fetch` via
+  `PayPalConfig` for testing; set `baseUrl` to the sandbox host for testing
+  against PayPal sandbox.
+
+See the [repository README](../../README.md) for the full guide.
+
+## License
+
+MIT © Thomas Foster

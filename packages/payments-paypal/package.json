@@ -1,0 +1,58 @@
+{
+  "name": "@thomasfosterau/effect-payments-paypal",
+  "version": "0.0.0",
+  "description": "A PayPal implementation of the vendor-neutral effect-payments core",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./PayPal": {
+      "import": "./dist/PayPal.js",
+      "types": "./dist/PayPal.d.ts"
+    },
+    "./PayPalPayments": {
+      "import": "./dist/PayPalPayments.js",
+      "types": "./dist/PayPalPayments.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "effect",
+    "paypal",
+    "payments",
+    "api",
+    "typescript"
+  ],
+  "author": "Thomas Foster",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thomasfosterau/effect-stripe.git",
+    "directory": "packages/payments-paypal"
+  },
+  "bugs": {
+    "url": "https://github.com/thomasfosterau/effect-stripe/issues"
+  },
+  "homepage": "https://github.com/thomasfosterau/effect-stripe#readme",
+  "peerDependencies": {
+    "effect": "^3.10.0"
+  },
+  "dependencies": {
+    "@thomasfosterau/effect-payments": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
+  }
+}

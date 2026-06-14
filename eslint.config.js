@@ -10,7 +10,12 @@ export default [
     languageOptions: {
       parser: tsparser,
       parserOptions: {
-        project: ["./packages/payments/tsconfig.json", "./packages/payments-stripe/tsconfig.json"],
+        project: [
+          "./packages/payments/tsconfig.json",
+          "./packages/payments-stripe/tsconfig.json",
+          "./packages/payments-airwallex/tsconfig.json",
+          "./packages/payments-paypal/tsconfig.json",
+        ],
       },
     },
     plugins: {
