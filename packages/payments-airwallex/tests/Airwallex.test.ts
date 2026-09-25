@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import { Effect, Fiber, Layer } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
 import { PaymentAuthenticationError, PaymentConfigError } from "@thomasfosterau/effect-payments";
 import { make, type AirwallexConfig } from "../src/Airwallex.ts";
@@ -196,5 +196,70 @@ describe("Airwallex client", () => {
 
     expect(second.id).toBe("x");
     expect(calls.filter((c) => c.url.endsWith(LOGIN_PATH))).toHaveLength(2);
+  });
+  it("keeps a newer token when a request made with the old one gets a late 401", async () => {
+    // Login 1 hands out a token that is already inside the refresh window, so
+    // the next caller logs in again (login 2) while the first request is
+    // still in flight. The first request's 401 then arrives late.
+    let logins = 0;
+    let releaseSlow!: () => void;
+    const slowReleased = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    let markSlowStarted!: () => void;
+    const slowStarted = new Promise<void>((resolve) => {
+      markSlowStarted = resolve;
+    });
+    const seen: Array<{ url: string; authorization: string | null }> = [];
+    const fetchImpl: typeof globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      const authorization = new Headers(init?.headers).get("authorization");
+      seen.push({ url, authorization });
+      if (url.endsWith("/api/v1/authentication/login")) {
+        logins += 1;
+        return logins === 1
+          ? jsonResponse(200, {
+              token: "tok_1",
+              expires_at: new Date(Date.now() + 30_000).toISOString(),
+            })
+          : jsonResponse(200, {
+              token: "tok_2",
+              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+            });
+      }
+      if (url.endsWith("/api/v1/pa/customers/SLOW")) {
+        markSlowStarted();
+        await slowReleased;
+        return jsonResponse(401, { message: "token revoked" });
+      }
+      return jsonResponse(200, { id: "x" });
+    };
+    const http = FetchHttpClient.layer.pipe(
+      Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
+    );
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        const slow = yield* Effect.forkChild(
+          Effect.flip(client.request({ method: "GET", path: "/api/v1/pa/customers/SLOW" })),
+        );
+        yield* Effect.tryPromise(() => slowStarted);
+        // Refreshes the token (login 2) while the T1 request is in flight.
+        yield* client.request({ method: "GET", path: "/api/v1/pa/customers/FAST" });
+        releaseSlow();
+        const error = yield* Fiber.join(slow);
+        expect(error).toBeInstanceOf(PaymentAuthenticationError);
+        // T2 must survive T1's late 401: no third login, and T2 is sent.
+        yield* client.request({ method: "GET", path: "/api/v1/pa/customers/FAST" });
+      }).pipe(Effect.provide(http)),
+    );
+
+    expect(logins).toBe(2);
+    const fast = seen.filter((c) => c.url.endsWith("/api/v1/pa/customers/FAST"));
+    expect(fast.map((c) => c.authorization)).toEqual(["Bearer tok_2", "Bearer tok_2"]);
+    expect(seen.find((c) => c.url.endsWith("/api/v1/pa/customers/SLOW"))!.authorization).toBe(
+      "Bearer tok_1",
+    );
   });
 });

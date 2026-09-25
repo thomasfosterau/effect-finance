@@ -180,9 +180,9 @@ export const make = (
         const base = HttpClientRequest.make(req.method)(
           buildUrl(baseUrl, req.path, req.query),
         ).pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.acceptJson);
-        // `Content-Type: application/json` goes on EVERY request, body or not,
-        // as it did before the move to HttpClient: PayPal answers a bodyless
-        // POST (`/v1/billing/plans/{id}/activate`) without it with 415.
+        // `Content-Type: application/json` goes on EVERY request, body or not:
+        // this restores the pre-HttpClient behaviour and keeps the client
+        // consistent with the PayPal one.
         const response = yield* execute(
           req.body != null
             ? HttpClientRequest.bodyJsonUnsafe(base, req.body)
@@ -190,8 +190,13 @@ export const make = (
         );
         if (response.status === 401) {
           // A revoked or rotated token: forget it, so the next call logs in
-          // again instead of replaying the rejected token until it expires.
-          yield* Ref.set(tokenRef, Option.none());
+          // again instead of replaying the rejected token until it expires —
+          // but only if it is still the stored one. A late 401 for a token
+          // another caller has already replaced must not clear the new one.
+          yield* Ref.update(
+            tokenRef,
+            Option.filter((stored) => stored.token !== token),
+          );
         }
         if (!isOk(response.status)) {
           return yield* handleAirwallexError(

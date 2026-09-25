@@ -187,8 +187,13 @@ export const make = (
         );
         if (response.status === 401) {
           // A revoked or rotated token: forget it, so the next call logs in
-          // again instead of replaying the rejected token until it expires.
-          yield* Ref.set(tokenRef, Option.none());
+          // again instead of replaying the rejected token until it expires —
+          // but only if it is still the stored one. A late 401 for a token
+          // another caller has already replaced must not clear the new one.
+          yield* Ref.update(
+            tokenRef,
+            Option.filter((stored) => stored.token !== token),
+          );
         }
         if (!isOk(response.status)) {
           return yield* handlePayPalError(response.status, errorBodyOf(yield* readJson(response)));
