@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // Resolve the package names to the EMITTED declarations rather than
+    // through the workspace — which is also why this package declares no
+    // dependency on any of them: the mapping below is the whole resolution.
+    // Relative to this file; TypeScript 7 removed `baseUrl`.
+    "paths": {
+      "@thomasfosterau/effect-payments": ["../../packages/payments/dist/index.d.ts"],
+      "@thomasfosterau/effect-payments/*": ["../../packages/payments/dist/*.d.ts"],
+      "@thomasfosterau/effect-payments-stripe": ["../../packages/payments-stripe/dist/index.d.ts"],
+      "@thomasfosterau/effect-payments-stripe/*": ["../../packages/payments-stripe/dist/*.d.ts"],
+      "@thomasfosterau/effect-payments-paypal": ["../../packages/payments-paypal/dist/index.d.ts"],
+      "@thomasfosterau/effect-payments-paypal/*": ["../../packages/payments-paypal/dist/*.d.ts"],
+      "@thomasfosterau/effect-payments-airwallex": [
+        "../../packages/payments-airwallex/dist/index.d.ts"
+      ],
+      "@thomasfosterau/effect-payments-airwallex/*": [
+        "../../packages/payments-airwallex/dist/*.d.ts"
+      ]
+    }
+  },
+  "include": ["src"]
+}

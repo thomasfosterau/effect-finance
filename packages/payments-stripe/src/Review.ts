@@ -26,91 +26,71 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to retrieve a review
  */
-interface RetrieveReviewRequest extends Request.Request<
-  Stripe.Review,
-  StripeError
-> {
+interface RetrieveReviewRequest extends Request.Request<Stripe.Review, StripeError> {
   readonly _tag: "RetrieveReviewRequest";
   readonly id: string;
-  readonly params?: Stripe.ReviewRetrieveParams;
+  readonly params?: Stripe.ReviewRetrieveParams | undefined;
 }
 
-const RetrieveReviewRequest = Request.tagged<RetrieveReviewRequest>(
-  "RetrieveReviewRequest"
-);
+const RetrieveReviewRequest = Request.tagged<RetrieveReviewRequest>("RetrieveReviewRequest");
 
 const RetrieveReviewResolver: RequestResolver.RequestResolver<
   RetrieveReviewRequest,
   StripeService
 > = makeStripeResolver<RetrieveReviewRequest>((stripe, request) =>
-  stripe.reviews.retrieve(request.id, request.params)
+  stripe.reviews.retrieve(request.id, request.params),
 );
 
 /**
  * Request to list reviews
  */
-interface ListReviewsRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Review>,
-  StripeError
-> {
+interface ListReviewsRequest extends Request.Request<Stripe.ApiList<Stripe.Review>, StripeError> {
   readonly _tag: "ListReviewsRequest";
-  readonly params?: Stripe.ReviewListParams;
+  readonly params?: Stripe.ReviewListParams | undefined;
 }
 
-const ListReviewsRequest =
-  Request.tagged<ListReviewsRequest>("ListReviewsRequest");
+const ListReviewsRequest = Request.tagged<ListReviewsRequest>("ListReviewsRequest");
 
-const ListReviewsResolver: RequestResolver.RequestResolver<
-  ListReviewsRequest,
-  StripeService
-> = makeStripeResolver<ListReviewsRequest>((stripe, request) =>
-  stripe.reviews.list(request.params)
-);
+const ListReviewsResolver: RequestResolver.RequestResolver<ListReviewsRequest, StripeService> =
+  makeStripeResolver<ListReviewsRequest>((stripe, request) => stripe.reviews.list(request.params));
 
 /**
  * Request to approve a review
  */
-interface ApproveReviewRequest extends Request.Request<
-  Stripe.Review,
-  StripeError
-> {
+interface ApproveReviewRequest extends Request.Request<Stripe.Review, StripeError> {
   readonly _tag: "ApproveReviewRequest";
   readonly id: string;
-  readonly params?: Stripe.ReviewApproveParams;
+  readonly params?: Stripe.ReviewApproveParams | undefined;
 }
 
-const ApproveReviewRequest = Request.tagged<ApproveReviewRequest>(
-  "ApproveReviewRequest"
-);
+const ApproveReviewRequest = Request.tagged<ApproveReviewRequest>("ApproveReviewRequest");
 
-const ApproveReviewResolver: RequestResolver.RequestResolver<
-  ApproveReviewRequest,
-  StripeService
-> = makeStripeResolver<ApproveReviewRequest>((stripe, request) =>
-  stripe.reviews.approve(request.id, request.params)
-);
+const ApproveReviewResolver: RequestResolver.RequestResolver<ApproveReviewRequest, StripeService> =
+  makeStripeResolver<ApproveReviewRequest>((stripe, request) =>
+    stripe.reviews.approve(request.id, request.params),
+  );
 
 /**
  * Retrieve a review
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.ReviewRetrieveParams
+  params?: Stripe.ReviewRetrieveParams,
 ): Effect.Effect<Stripe.Review, StripeError, StripeService> =>
   Effect.request(
     RetrieveReviewRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveReviewResolver)
+    RequestResolver.contextFromEffect(RetrieveReviewResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
  * List reviews
  */
 export const list = (
-  params?: Stripe.ReviewListParams
+  params?: Stripe.ReviewListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Review>, StripeError, StripeService> =>
   Effect.request(
     ListReviewsRequest({ params }),
-    RequestResolver.contextFromEffect(ListReviewsResolver)
+    RequestResolver.contextFromEffect(ListReviewsResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -118,9 +98,9 @@ export const list = (
  */
 export const approve = (
   id: string,
-  params?: Stripe.ReviewApproveParams
+  params?: Stripe.ReviewApproveParams,
 ): Effect.Effect<Stripe.Review, StripeError, StripeService> =>
   Effect.request(
     ApproveReviewRequest({ id, params }),
-    RequestResolver.contextFromEffect(ApproveReviewResolver)
+    RequestResolver.contextFromEffect(ApproveReviewResolver),
   );

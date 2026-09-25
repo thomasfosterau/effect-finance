@@ -17,7 +17,7 @@ export const RefundStatus = Schema.Literal(
   "requires_action",
   "succeeded",
   "failed",
-  "canceled"
+  "canceled",
 );
 export type RefundStatus = Schema.Schema.Type<typeof RefundStatus>;
 
@@ -42,25 +42,25 @@ export class Refund extends Schema.Class<Refund>("@effect-payments/Refund")({
 
 /** Parameters for creating a refund. Provide either a payment intent or charge. */
 export interface CreateParams {
-  readonly paymentIntent?: string;
-  readonly charge?: string;
+  readonly paymentIntent?: string | undefined;
+  readonly charge?: string | undefined;
   /** Amount to refund in the smallest currency unit; omit for a full refund. */
-  readonly amount?: number;
-  readonly reason?: string;
-  readonly metadata?: Record<string, string>;
+  readonly amount?: number | undefined;
+  readonly reason?: string | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for updating a refund. */
 export interface UpdateParams {
-  readonly metadata?: Record<string, string>;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for listing refunds. */
 export interface ListParams {
-  readonly limit?: number;
-  readonly paymentIntent?: string;
-  readonly charge?: string;
-  readonly startingAfter?: string;
+  readonly limit?: number | undefined;
+  readonly paymentIntent?: string | undefined;
+  readonly charge?: string | undefined;
+  readonly startingAfter?: string | undefined;
 }
 
 /**
@@ -69,17 +69,10 @@ export interface ListParams {
 export class Refunds extends Context.Tag("@effect-payments/Refunds")<
   Refunds,
   {
-    readonly create: (
-      params: CreateParams
-    ) => Effect.Effect<Refund, PaymentsError>;
+    readonly create: (params: CreateParams) => Effect.Effect<Refund, PaymentsError>;
     readonly retrieve: (id: string) => Effect.Effect<Refund, PaymentsError>;
-    readonly update: (
-      id: string,
-      params: UpdateParams
-    ) => Effect.Effect<Refund, PaymentsError>;
-    readonly list: (
-      params?: ListParams
-    ) => Effect.Effect<Page<Refund>, PaymentsError>;
+    readonly update: (id: string, params: UpdateParams) => Effect.Effect<Refund, PaymentsError>;
+    readonly list: (params?: ListParams) => Effect.Effect<Page<Refund>, PaymentsError>;
   }
 >() {}
 

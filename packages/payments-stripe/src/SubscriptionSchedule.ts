@@ -33,19 +33,18 @@ interface CreateSubscriptionScheduleRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "CreateSubscriptionScheduleRequest";
-  readonly params?: Stripe.SubscriptionScheduleCreateParams;
+  readonly params?: Stripe.SubscriptionScheduleCreateParams | undefined;
 }
 
-const CreateSubscriptionScheduleRequest =
-  Request.tagged<CreateSubscriptionScheduleRequest>(
-    "CreateSubscriptionScheduleRequest"
-  );
+const CreateSubscriptionScheduleRequest = Request.tagged<CreateSubscriptionScheduleRequest>(
+  "CreateSubscriptionScheduleRequest",
+);
 
 const CreateSubscriptionScheduleResolver: RequestResolver.RequestResolver<
   CreateSubscriptionScheduleRequest,
   StripeService
 > = makeStripeResolver<CreateSubscriptionScheduleRequest>((stripe, request) =>
-  stripe.subscriptionSchedules.create(request.params)
+  stripe.subscriptionSchedules.create(request.params),
 );
 
 /**
@@ -57,19 +56,18 @@ interface RetrieveSubscriptionScheduleRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveSubscriptionScheduleRequest";
   readonly id: string;
-  readonly params?: Stripe.SubscriptionScheduleRetrieveParams;
+  readonly params?: Stripe.SubscriptionScheduleRetrieveParams | undefined;
 }
 
-const RetrieveSubscriptionScheduleRequest =
-  Request.tagged<RetrieveSubscriptionScheduleRequest>(
-    "RetrieveSubscriptionScheduleRequest"
-  );
+const RetrieveSubscriptionScheduleRequest = Request.tagged<RetrieveSubscriptionScheduleRequest>(
+  "RetrieveSubscriptionScheduleRequest",
+);
 
 const RetrieveSubscriptionScheduleResolver: RequestResolver.RequestResolver<
   RetrieveSubscriptionScheduleRequest,
   StripeService
 > = makeStripeResolver<RetrieveSubscriptionScheduleRequest>((stripe, request) =>
-  stripe.subscriptionSchedules.retrieve(request.id, request.params)
+  stripe.subscriptionSchedules.retrieve(request.id, request.params),
 );
 
 /**
@@ -81,19 +79,18 @@ interface UpdateSubscriptionScheduleRequest extends Request.Request<
 > {
   readonly _tag: "UpdateSubscriptionScheduleRequest";
   readonly id: string;
-  readonly params?: Stripe.SubscriptionScheduleUpdateParams;
+  readonly params?: Stripe.SubscriptionScheduleUpdateParams | undefined;
 }
 
-const UpdateSubscriptionScheduleRequest =
-  Request.tagged<UpdateSubscriptionScheduleRequest>(
-    "UpdateSubscriptionScheduleRequest"
-  );
+const UpdateSubscriptionScheduleRequest = Request.tagged<UpdateSubscriptionScheduleRequest>(
+  "UpdateSubscriptionScheduleRequest",
+);
 
 const UpdateSubscriptionScheduleResolver: RequestResolver.RequestResolver<
   UpdateSubscriptionScheduleRequest,
   StripeService
 > = makeStripeResolver<UpdateSubscriptionScheduleRequest>((stripe, request) =>
-  stripe.subscriptionSchedules.update(request.id, request.params)
+  stripe.subscriptionSchedules.update(request.id, request.params),
 );
 
 /**
@@ -105,19 +102,18 @@ interface CancelSubscriptionScheduleRequest extends Request.Request<
 > {
   readonly _tag: "CancelSubscriptionScheduleRequest";
   readonly id: string;
-  readonly params?: Stripe.SubscriptionScheduleCancelParams;
+  readonly params?: Stripe.SubscriptionScheduleCancelParams | undefined;
 }
 
-const CancelSubscriptionScheduleRequest =
-  Request.tagged<CancelSubscriptionScheduleRequest>(
-    "CancelSubscriptionScheduleRequest"
-  );
+const CancelSubscriptionScheduleRequest = Request.tagged<CancelSubscriptionScheduleRequest>(
+  "CancelSubscriptionScheduleRequest",
+);
 
 const CancelSubscriptionScheduleResolver: RequestResolver.RequestResolver<
   CancelSubscriptionScheduleRequest,
   StripeService
 > = makeStripeResolver<CancelSubscriptionScheduleRequest>((stripe, request) =>
-  stripe.subscriptionSchedules.cancel(request.id, request.params)
+  stripe.subscriptionSchedules.cancel(request.id, request.params),
 );
 
 /**
@@ -129,19 +125,18 @@ interface ReleaseSubscriptionScheduleRequest extends Request.Request<
 > {
   readonly _tag: "ReleaseSubscriptionScheduleRequest";
   readonly id: string;
-  readonly params?: Stripe.SubscriptionScheduleReleaseParams;
+  readonly params?: Stripe.SubscriptionScheduleReleaseParams | undefined;
 }
 
-const ReleaseSubscriptionScheduleRequest =
-  Request.tagged<ReleaseSubscriptionScheduleRequest>(
-    "ReleaseSubscriptionScheduleRequest"
-  );
+const ReleaseSubscriptionScheduleRequest = Request.tagged<ReleaseSubscriptionScheduleRequest>(
+  "ReleaseSubscriptionScheduleRequest",
+);
 
 const ReleaseSubscriptionScheduleResolver: RequestResolver.RequestResolver<
   ReleaseSubscriptionScheduleRequest,
   StripeService
 > = makeStripeResolver<ReleaseSubscriptionScheduleRequest>((stripe, request) =>
-  stripe.subscriptionSchedules.release(request.id, request.params)
+  stripe.subscriptionSchedules.release(request.id, request.params),
 );
 
 /**
@@ -152,30 +147,29 @@ interface ListSubscriptionSchedulesRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListSubscriptionSchedulesRequest";
-  readonly params?: Stripe.SubscriptionScheduleListParams;
+  readonly params?: Stripe.SubscriptionScheduleListParams | undefined;
 }
 
-const ListSubscriptionSchedulesRequest =
-  Request.tagged<ListSubscriptionSchedulesRequest>(
-    "ListSubscriptionSchedulesRequest"
-  );
+const ListSubscriptionSchedulesRequest = Request.tagged<ListSubscriptionSchedulesRequest>(
+  "ListSubscriptionSchedulesRequest",
+);
 
 const ListSubscriptionSchedulesResolver: RequestResolver.RequestResolver<
   ListSubscriptionSchedulesRequest,
   StripeService
 > = makeStripeResolver<ListSubscriptionSchedulesRequest>((stripe, request) =>
-  stripe.subscriptionSchedules.list(request.params)
+  stripe.subscriptionSchedules.list(request.params),
 );
 
 /**
  * Create a subscription schedule
  */
 export const create = (
-  params?: Stripe.SubscriptionScheduleCreateParams
+  params?: Stripe.SubscriptionScheduleCreateParams,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeService> =>
   Effect.request(
     CreateSubscriptionScheduleRequest({ params }),
-    RequestResolver.contextFromEffect(CreateSubscriptionScheduleResolver)
+    RequestResolver.contextFromEffect(CreateSubscriptionScheduleResolver),
   );
 
 /**
@@ -183,11 +177,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.SubscriptionScheduleRetrieveParams
+  params?: Stripe.SubscriptionScheduleRetrieveParams,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeService> =>
   Effect.request(
     RetrieveSubscriptionScheduleRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveSubscriptionScheduleResolver)
+    RequestResolver.contextFromEffect(RetrieveSubscriptionScheduleResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -195,11 +189,11 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.SubscriptionScheduleUpdateParams
+  params?: Stripe.SubscriptionScheduleUpdateParams,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeService> =>
   Effect.request(
     UpdateSubscriptionScheduleRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateSubscriptionScheduleResolver)
+    RequestResolver.contextFromEffect(UpdateSubscriptionScheduleResolver),
   );
 
 /**
@@ -207,11 +201,11 @@ export const update = (
  */
 export const cancel = (
   id: string,
-  params?: Stripe.SubscriptionScheduleCancelParams
+  params?: Stripe.SubscriptionScheduleCancelParams,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeService> =>
   Effect.request(
     CancelSubscriptionScheduleRequest({ id, params }),
-    RequestResolver.contextFromEffect(CancelSubscriptionScheduleResolver)
+    RequestResolver.contextFromEffect(CancelSubscriptionScheduleResolver),
   );
 
 /**
@@ -219,24 +213,20 @@ export const cancel = (
  */
 export const release = (
   id: string,
-  params?: Stripe.SubscriptionScheduleReleaseParams
+  params?: Stripe.SubscriptionScheduleReleaseParams,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeService> =>
   Effect.request(
     ReleaseSubscriptionScheduleRequest({ id, params }),
-    RequestResolver.contextFromEffect(ReleaseSubscriptionScheduleResolver)
+    RequestResolver.contextFromEffect(ReleaseSubscriptionScheduleResolver),
   );
 
 /**
  * List subscription schedules
  */
 export const list = (
-  params?: Stripe.SubscriptionScheduleListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.SubscriptionSchedule>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.SubscriptionScheduleListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.SubscriptionSchedule>, StripeError, StripeService> =>
   Effect.request(
     ListSubscriptionSchedulesRequest({ params }),
-    RequestResolver.contextFromEffect(ListSubscriptionSchedulesResolver)
+    RequestResolver.contextFromEffect(ListSubscriptionSchedulesResolver),
   ).pipe(Effect.withRequestCaching(true));

@@ -1,0 +1,40 @@
+name: Feature / enhancement
+description: A new capability, provider or resource, or an improvement to an existing one.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Scope this as a vertical slice an agent can finish end-to-end (core capability → provider implementation → tests → README), not a timid increment. Where the behaviour already exists in an application (gardeneria's `packages/billing`), that copy is the spec and the test corpus, not code to transplant.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / outcome
+      description: What should be true for consumers that isn't today, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed slice
+      description: The change you have in mind. Name the packages it touches (core, stripe, paypal, airwallex) and any exported signature it adds or changes.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Done when
+      description: Concrete, checkable statements.
+      placeholder: |
+        - [ ] …
+        - [ ] …
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & links
+      description: Parent epic, the consuming application's issue, vendor API docs.
+    validations:
+      required: false

@@ -41,14 +41,15 @@ interface CreateCheckoutSessionRequest extends Request.Request<
   readonly params: Stripe.Checkout.SessionCreateParams;
 }
 
-const CreateCheckoutSessionRequest =
-  Request.tagged<CreateCheckoutSessionRequest>("CreateCheckoutSessionRequest");
+const CreateCheckoutSessionRequest = Request.tagged<CreateCheckoutSessionRequest>(
+  "CreateCheckoutSessionRequest",
+);
 
 const CreateCheckoutSessionResolver: RequestResolver.RequestResolver<
   CreateCheckoutSessionRequest,
   StripeService
 > = makeStripeResolver<CreateCheckoutSessionRequest>((stripe, request) =>
-  stripe.checkout.sessions.create(request.params)
+  stripe.checkout.sessions.create(request.params),
 );
 
 /**
@@ -60,19 +61,18 @@ interface RetrieveCheckoutSessionRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveCheckoutSessionRequest";
   readonly id: string;
-  readonly params?: Stripe.Checkout.SessionRetrieveParams;
+  readonly params?: Stripe.Checkout.SessionRetrieveParams | undefined;
 }
 
-const RetrieveCheckoutSessionRequest =
-  Request.tagged<RetrieveCheckoutSessionRequest>(
-    "RetrieveCheckoutSessionRequest"
-  );
+const RetrieveCheckoutSessionRequest = Request.tagged<RetrieveCheckoutSessionRequest>(
+  "RetrieveCheckoutSessionRequest",
+);
 
 const RetrieveCheckoutSessionResolver: RequestResolver.RequestResolver<
   RetrieveCheckoutSessionRequest,
   StripeService
 > = makeStripeResolver<RetrieveCheckoutSessionRequest>((stripe, request) =>
-  stripe.checkout.sessions.retrieve(request.id, request.params)
+  stripe.checkout.sessions.retrieve(request.id, request.params),
 );
 
 /**
@@ -84,17 +84,18 @@ interface ExpireCheckoutSessionRequest extends Request.Request<
 > {
   readonly _tag: "ExpireCheckoutSessionRequest";
   readonly id: string;
-  readonly params?: Stripe.Checkout.SessionExpireParams;
+  readonly params?: Stripe.Checkout.SessionExpireParams | undefined;
 }
 
-const ExpireCheckoutSessionRequest =
-  Request.tagged<ExpireCheckoutSessionRequest>("ExpireCheckoutSessionRequest");
+const ExpireCheckoutSessionRequest = Request.tagged<ExpireCheckoutSessionRequest>(
+  "ExpireCheckoutSessionRequest",
+);
 
 const ExpireCheckoutSessionResolver: RequestResolver.RequestResolver<
   ExpireCheckoutSessionRequest,
   StripeService
 > = makeStripeResolver<ExpireCheckoutSessionRequest>((stripe, request) =>
-  stripe.checkout.sessions.expire(request.id, request.params)
+  stripe.checkout.sessions.expire(request.id, request.params),
 );
 
 /**
@@ -105,29 +106,29 @@ interface ListCheckoutSessionsRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListCheckoutSessionsRequest";
-  readonly params?: Stripe.Checkout.SessionListParams;
+  readonly params?: Stripe.Checkout.SessionListParams | undefined;
 }
 
 const ListCheckoutSessionsRequest = Request.tagged<ListCheckoutSessionsRequest>(
-  "ListCheckoutSessionsRequest"
+  "ListCheckoutSessionsRequest",
 );
 
 const ListCheckoutSessionsResolver: RequestResolver.RequestResolver<
   ListCheckoutSessionsRequest,
   StripeService
 > = makeStripeResolver<ListCheckoutSessionsRequest>((stripe, request) =>
-  stripe.checkout.sessions.list(request.params)
+  stripe.checkout.sessions.list(request.params),
 );
 
 /**
  * Create a checkout session
  */
 export const create = (
-  params: Stripe.Checkout.SessionCreateParams
+  params: Stripe.Checkout.SessionCreateParams,
 ): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeService> =>
   Effect.request(
     CreateCheckoutSessionRequest({ params }),
-    RequestResolver.contextFromEffect(CreateCheckoutSessionResolver)
+    RequestResolver.contextFromEffect(CreateCheckoutSessionResolver),
   );
 
 /**
@@ -135,11 +136,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.Checkout.SessionRetrieveParams
+  params?: Stripe.Checkout.SessionRetrieveParams,
 ): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeService> =>
   Effect.request(
     RetrieveCheckoutSessionRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveCheckoutSessionResolver)
+    RequestResolver.contextFromEffect(RetrieveCheckoutSessionResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -147,24 +148,20 @@ export const retrieve = (
  */
 export const expire = (
   id: string,
-  params?: Stripe.Checkout.SessionExpireParams
+  params?: Stripe.Checkout.SessionExpireParams,
 ): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeService> =>
   Effect.request(
     ExpireCheckoutSessionRequest({ id, params }),
-    RequestResolver.contextFromEffect(ExpireCheckoutSessionResolver)
+    RequestResolver.contextFromEffect(ExpireCheckoutSessionResolver),
   );
 
 /**
  * List checkout sessions
  */
 export const list = (
-  params?: Stripe.Checkout.SessionListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.Checkout.Session>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Checkout.SessionListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.Checkout.Session>, StripeError, StripeService> =>
   Effect.request(
     ListCheckoutSessionsRequest({ params }),
-    RequestResolver.contextFromEffect(ListCheckoutSessionsResolver)
+    RequestResolver.contextFromEffect(ListCheckoutSessionsResolver),
   ).pipe(Effect.withRequestCaching(true));

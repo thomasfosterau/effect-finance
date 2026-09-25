@@ -34,19 +34,18 @@ interface RetrieveBalanceTransactionRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveBalanceTransactionRequest";
   readonly id: string;
-  readonly params?: Stripe.BalanceTransactionRetrieveParams;
+  readonly params?: Stripe.BalanceTransactionRetrieveParams | undefined;
 }
 
-const RetrieveBalanceTransactionRequest =
-  Request.tagged<RetrieveBalanceTransactionRequest>(
-    "RetrieveBalanceTransactionRequest"
-  );
+const RetrieveBalanceTransactionRequest = Request.tagged<RetrieveBalanceTransactionRequest>(
+  "RetrieveBalanceTransactionRequest",
+);
 
 const RetrieveBalanceTransactionResolver: RequestResolver.RequestResolver<
   RetrieveBalanceTransactionRequest,
   StripeService
 > = makeStripeResolver<RetrieveBalanceTransactionRequest>((stripe, request) =>
-  stripe.balanceTransactions.retrieve(request.id, request.params)
+  stripe.balanceTransactions.retrieve(request.id, request.params),
 );
 
 /**
@@ -57,19 +56,18 @@ interface ListBalanceTransactionsRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListBalanceTransactionsRequest";
-  readonly params?: Stripe.BalanceTransactionListParams;
+  readonly params?: Stripe.BalanceTransactionListParams | undefined;
 }
 
-const ListBalanceTransactionsRequest =
-  Request.tagged<ListBalanceTransactionsRequest>(
-    "ListBalanceTransactionsRequest"
-  );
+const ListBalanceTransactionsRequest = Request.tagged<ListBalanceTransactionsRequest>(
+  "ListBalanceTransactionsRequest",
+);
 
 const ListBalanceTransactionsResolver: RequestResolver.RequestResolver<
   ListBalanceTransactionsRequest,
   StripeService
 > = makeStripeResolver<ListBalanceTransactionsRequest>((stripe, request) =>
-  stripe.balanceTransactions.list(request.params)
+  stripe.balanceTransactions.list(request.params),
 );
 
 /**
@@ -77,24 +75,20 @@ const ListBalanceTransactionsResolver: RequestResolver.RequestResolver<
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.BalanceTransactionRetrieveParams
+  params?: Stripe.BalanceTransactionRetrieveParams,
 ): Effect.Effect<Stripe.BalanceTransaction, StripeError, StripeService> =>
   Effect.request(
     RetrieveBalanceTransactionRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveBalanceTransactionResolver)
+    RequestResolver.contextFromEffect(RetrieveBalanceTransactionResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
  * List balance transactions
  */
 export const list = (
-  params?: Stripe.BalanceTransactionListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.BalanceTransaction>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.BalanceTransactionListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.BalanceTransaction>, StripeError, StripeService> =>
   Effect.request(
     ListBalanceTransactionsRequest({ params }),
-    RequestResolver.contextFromEffect(ListBalanceTransactionsResolver)
+    RequestResolver.contextFromEffect(ListBalanceTransactionsResolver),
   ).pipe(Effect.withRequestCaching(true));

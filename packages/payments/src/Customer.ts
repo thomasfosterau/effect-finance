@@ -28,9 +28,7 @@ import type { PaymentsError } from "./PaymentsError.js";
 /**
  * A customer of the payments platform.
  */
-export class Customer extends Schema.Class<Customer>(
-  "@effect-payments/Customer"
-)({
+export class Customer extends Schema.Class<Customer>("@effect-payments/Customer")({
   id: Schema.String,
   email: Schema.NullOr(Schema.String),
   name: Schema.NullOr(Schema.String),
@@ -45,28 +43,28 @@ export class Customer extends Schema.Class<Customer>(
 
 /** Parameters for creating a customer. */
 export interface CreateParams {
-  readonly email?: string;
-  readonly name?: string;
-  readonly phone?: string;
-  readonly description?: string;
-  readonly metadata?: Record<string, string>;
+  readonly email?: string | undefined;
+  readonly name?: string | undefined;
+  readonly phone?: string | undefined;
+  readonly description?: string | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for updating a customer. */
 export interface UpdateParams {
-  readonly email?: string;
-  readonly name?: string;
-  readonly phone?: string;
-  readonly description?: string;
-  readonly metadata?: Record<string, string>;
+  readonly email?: string | undefined;
+  readonly name?: string | undefined;
+  readonly phone?: string | undefined;
+  readonly description?: string | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for listing customers. */
 export interface ListParams {
-  readonly limit?: number;
-  readonly email?: string;
+  readonly limit?: number | undefined;
+  readonly email?: string | undefined;
   /** Cursor: return results after this customer id. */
-  readonly startingAfter?: string;
+  readonly startingAfter?: string | undefined;
 }
 
 /**
@@ -76,18 +74,11 @@ export interface ListParams {
 export class Customers extends Context.Tag("@effect-payments/Customers")<
   Customers,
   {
-    readonly create: (
-      params: CreateParams
-    ) => Effect.Effect<Customer, PaymentsError>;
+    readonly create: (params: CreateParams) => Effect.Effect<Customer, PaymentsError>;
     readonly retrieve: (id: string) => Effect.Effect<Customer, PaymentsError>;
-    readonly update: (
-      id: string,
-      params: UpdateParams
-    ) => Effect.Effect<Customer, PaymentsError>;
+    readonly update: (id: string, params: UpdateParams) => Effect.Effect<Customer, PaymentsError>;
     readonly del: (id: string) => Effect.Effect<Deleted, PaymentsError>;
-    readonly list: (
-      params?: ListParams
-    ) => Effect.Effect<Page<Customer>, PaymentsError>;
+    readonly list: (params?: ListParams) => Effect.Effect<Page<Customer>, PaymentsError>;
   }
 >() {}
 

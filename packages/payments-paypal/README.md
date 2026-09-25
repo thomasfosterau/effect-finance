@@ -1,10 +1,8 @@
 # @thomasfosterau/effect-payments-paypal
 
-A **PayPal implementation** of the vendor-neutral
-[`@thomasfosterau/effect-payments`](../payments) core.
+A **PayPal implementation** of the vendor-neutral [`@thomasfosterau/effect-payments`](../payments) core.
 
-The same neutral program runs on PayPal, Stripe or Airwallex — only the layer
-you provide changes.
+The same neutral program runs on PayPal, Stripe or Airwallex — only the layer you provide changes.
 
 ## Installation
 
@@ -33,9 +31,7 @@ const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 
 ## Supported capabilities
 
-PayPal's billing suite and checkout APIs map onto a subset of the core
-capabilities — a different subset from Airwallex, which makes it a good test of
-the abstraction:
+PayPal's billing suite and checkout APIs map onto a subset of the core capabilities — a different subset from Airwallex, which makes it a good test of the abstraction:
 
 | Capability | Maps to | Notes |
 | --- | --- | --- |
@@ -46,20 +42,12 @@ the abstraction:
 | `Refunds` | Capture refunds | refund a `charge` (capture id) or a captured `paymentIntent`; no `update` / `list` |
 | `Customers` | — | **not provided** (PayPal has no first-class customer resource) |
 
-Because each capability is an independent Effect service, a program that only
-uses the supported capabilities is fully satisfied; one that needs `Customers`
-will not type-check against the PayPal layer. Individual operations without a
-PayPal equivalent fail with a neutral `PaymentInvalidRequestError`.
+Because each capability is an independent Effect service, a program that only uses the supported capabilities is fully satisfied; one that needs `Customers` will not type-check against the PayPal layer. Individual operations without a PayPal equivalent fail with a neutral `PaymentInvalidRequestError`.
 
 ## Notes
 
-- **Money** — the core uses minor units (e.g. cents); PayPal uses major-unit
-  decimal *strings* (e.g. `"10.00"`). This provider converts in both directions,
-  currency-aware.
-- **`PayPal`** — the client service performs the OAuth client-credentials
-  handshake and caches the access token. Inject a custom `fetch` via
-  `PayPalConfig` for testing; set `baseUrl` to the sandbox host for testing
-  against PayPal sandbox.
+- **Money** — the core uses minor units (e.g. cents); PayPal uses major-unit decimal _strings_ (e.g. `"10.00"`). This provider converts in both directions, currency-aware.
+- **`PayPal`** — the client service performs the OAuth client-credentials handshake and caches the access token. Inject a custom `fetch` via `PayPalConfig` for testing; set `baseUrl` to the sandbox host for testing against PayPal sandbox.
 
 See the [repository README](../../README.md) for the full guide.
 

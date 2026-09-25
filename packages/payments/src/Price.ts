@@ -14,9 +14,7 @@ export const RecurringInterval = Schema.Literal("day", "week", "month", "year");
 export type RecurringInterval = Schema.Schema.Type<typeof RecurringInterval>;
 
 /** The recurring schedule of a price, when it is not a one-time price. */
-export class Recurring extends Schema.Class<Recurring>(
-  "@effect-payments/Recurring"
-)({
+export class Recurring extends Schema.Class<Recurring>("@effect-payments/Recurring")({
   interval: RecurringInterval,
   intervalCount: Schema.Number,
 }) {}
@@ -47,24 +45,24 @@ export interface CreateParams {
   readonly unitAmount: number;
   readonly recurring?: {
     readonly interval: RecurringInterval;
-    readonly intervalCount?: number;
+    readonly intervalCount?: number | undefined;
   };
-  readonly active?: boolean;
-  readonly metadata?: Record<string, string>;
+  readonly active?: boolean | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for updating a price. */
 export interface UpdateParams {
-  readonly active?: boolean;
-  readonly metadata?: Record<string, string>;
+  readonly active?: boolean | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for listing prices. */
 export interface ListParams {
-  readonly limit?: number;
-  readonly product?: string;
-  readonly active?: boolean;
-  readonly startingAfter?: string;
+  readonly limit?: number | undefined;
+  readonly product?: string | undefined;
+  readonly active?: boolean | undefined;
+  readonly startingAfter?: string | undefined;
 }
 
 /**
@@ -73,17 +71,10 @@ export interface ListParams {
 export class Prices extends Context.Tag("@effect-payments/Prices")<
   Prices,
   {
-    readonly create: (
-      params: CreateParams
-    ) => Effect.Effect<Price, PaymentsError>;
+    readonly create: (params: CreateParams) => Effect.Effect<Price, PaymentsError>;
     readonly retrieve: (id: string) => Effect.Effect<Price, PaymentsError>;
-    readonly update: (
-      id: string,
-      params: UpdateParams
-    ) => Effect.Effect<Price, PaymentsError>;
-    readonly list: (
-      params?: ListParams
-    ) => Effect.Effect<Page<Price>, PaymentsError>;
+    readonly update: (id: string, params: UpdateParams) => Effect.Effect<Price, PaymentsError>;
+    readonly list: (params?: ListParams) => Effect.Effect<Page<Price>, PaymentsError>;
   }
 >() {}
 

@@ -39,8 +39,7 @@ export const handleStripeError = (error: unknown): PaymentsError => {
         // Stripe returns this in the "Retry-After" header
         const rateLimitError = error as Stripe.errors.StripeRateLimitError;
         const headers = rateLimitError.headers;
-        const retryAfterHeader =
-          headers?.["Retry-After"] ?? headers?.["retry-after"];
+        const retryAfterHeader = headers?.["Retry-After"] ?? headers?.["retry-after"];
         let retryAfter: number | undefined;
         if (retryAfterHeader !== undefined) {
           const parsed = Number.parseInt(String(retryAfterHeader), 10);
@@ -82,7 +81,7 @@ export const handleStripeError = (error: unknown): PaymentsError => {
  * Wraps a Stripe API call in an Effect with the Stripe service from context
  */
 export const wrapStripeCall = <A>(
-  fn: (stripe: Stripe) => Promise<A>
+  fn: (stripe: Stripe) => Promise<A>,
 ): Effect.Effect<A, StripeError, StripeService> =>
   Effect.gen(function* () {
     const stripe = yield* StripeService;
@@ -97,7 +96,7 @@ export const wrapStripeCall = <A>(
  * The resolver accesses StripeService from context for each request.
  */
 export const makeStripeResolver = <R extends Request.Request<any, any>>(
-  execute: (stripe: Stripe, request: R) => Promise<Request.Request.Success<R>>
+  execute: (stripe: Stripe, request: R) => Promise<Request.Request.Success<R>>,
 ): RequestResolver.RequestResolver<R, StripeService> =>
   RequestResolver.fromEffect((request: R) =>
     Effect.gen(function* () {
@@ -105,10 +104,6 @@ export const makeStripeResolver = <R extends Request.Request<any, any>>(
       return yield* Effect.tryPromise({
         try: () => execute(stripe, request),
         catch: handleStripeError,
-      }) as Effect.Effect<
-        Request.Request.Success<R>,
-        Request.Request.Error<R>,
-        never
-      >;
-    })
+      }) as Effect.Effect<Request.Request.Success<R>, Request.Request.Error<R>, never>;
+    }),
   );

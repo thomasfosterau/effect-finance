@@ -22,16 +22,14 @@ export const PaymentStatus = Schema.Literal(
   "processing",
   "requires_capture",
   "canceled",
-  "succeeded"
+  "succeeded",
 );
 export type PaymentStatus = Schema.Schema.Type<typeof PaymentStatus>;
 
 /**
  * An attempt to collect a payment of a given amount and currency.
  */
-export class PaymentIntent extends Schema.Class<PaymentIntent>(
-  "@effect-payments/PaymentIntent"
-)({
+export class PaymentIntent extends Schema.Class<PaymentIntent>("@effect-payments/PaymentIntent")({
   id: Schema.String,
   /** Amount in the smallest currency unit. */
   amount: Schema.Number,
@@ -51,59 +49,49 @@ export class PaymentIntent extends Schema.Class<PaymentIntent>(
 export interface CreateParams {
   readonly amount: number;
   readonly currency: string;
-  readonly customer?: string;
-  readonly paymentMethod?: string;
-  readonly description?: string;
-  readonly metadata?: Record<string, string>;
+  readonly customer?: string | undefined;
+  readonly paymentMethod?: string | undefined;
+  readonly description?: string | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for updating a payment intent. */
 export interface UpdateParams {
-  readonly amount?: number;
-  readonly description?: string;
-  readonly metadata?: Record<string, string>;
+  readonly amount?: number | undefined;
+  readonly description?: string | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for confirming a payment intent. */
 export interface ConfirmParams {
-  readonly paymentMethod?: string;
+  readonly paymentMethod?: string | undefined;
 }
 
 /** Parameters for listing payment intents. */
 export interface ListParams {
-  readonly limit?: number;
-  readonly customer?: string;
-  readonly startingAfter?: string;
+  readonly limit?: number | undefined;
+  readonly customer?: string | undefined;
+  readonly startingAfter?: string | undefined;
 }
 
 /**
  * The payment intent capability.
  */
-export class PaymentIntents extends Context.Tag(
-  "@effect-payments/PaymentIntents"
-)<
+export class PaymentIntents extends Context.Tag("@effect-payments/PaymentIntents")<
   PaymentIntents,
   {
-    readonly create: (
-      params: CreateParams
-    ) => Effect.Effect<PaymentIntent, PaymentsError>;
-    readonly retrieve: (
-      id: string
-    ) => Effect.Effect<PaymentIntent, PaymentsError>;
+    readonly create: (params: CreateParams) => Effect.Effect<PaymentIntent, PaymentsError>;
+    readonly retrieve: (id: string) => Effect.Effect<PaymentIntent, PaymentsError>;
     readonly update: (
       id: string,
-      params: UpdateParams
+      params: UpdateParams,
     ) => Effect.Effect<PaymentIntent, PaymentsError>;
     readonly confirm: (
       id: string,
-      params?: ConfirmParams
+      params?: ConfirmParams,
     ) => Effect.Effect<PaymentIntent, PaymentsError>;
-    readonly cancel: (
-      id: string
-    ) => Effect.Effect<PaymentIntent, PaymentsError>;
-    readonly list: (
-      params?: ListParams
-    ) => Effect.Effect<Page<PaymentIntent>, PaymentsError>;
+    readonly cancel: (id: string) => Effect.Effect<PaymentIntent, PaymentsError>;
+    readonly list: (params?: ListParams) => Effect.Effect<Page<PaymentIntent>, PaymentsError>;
   }
 >() {}
 

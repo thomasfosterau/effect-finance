@@ -28,124 +28,90 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a payout
  */
-interface CreatePayoutRequest extends Request.Request<
-  Stripe.Payout,
-  StripeError
-> {
+interface CreatePayoutRequest extends Request.Request<Stripe.Payout, StripeError> {
   readonly _tag: "CreatePayoutRequest";
   readonly params: Stripe.PayoutCreateParams;
 }
 
-const CreatePayoutRequest = Request.tagged<CreatePayoutRequest>(
-  "CreatePayoutRequest"
-);
+const CreatePayoutRequest = Request.tagged<CreatePayoutRequest>("CreatePayoutRequest");
 
-const CreatePayoutResolver: RequestResolver.RequestResolver<
-  CreatePayoutRequest,
-  StripeService
-> = makeStripeResolver<CreatePayoutRequest>((stripe, request) =>
-  stripe.payouts.create(request.params)
-);
+const CreatePayoutResolver: RequestResolver.RequestResolver<CreatePayoutRequest, StripeService> =
+  makeStripeResolver<CreatePayoutRequest>((stripe, request) =>
+    stripe.payouts.create(request.params),
+  );
 
 /**
  * Request to retrieve a payout
  */
-interface RetrievePayoutRequest extends Request.Request<
-  Stripe.Payout,
-  StripeError
-> {
+interface RetrievePayoutRequest extends Request.Request<Stripe.Payout, StripeError> {
   readonly _tag: "RetrievePayoutRequest";
   readonly id: string;
-  readonly params?: Stripe.PayoutRetrieveParams;
+  readonly params?: Stripe.PayoutRetrieveParams | undefined;
 }
 
-const RetrievePayoutRequest = Request.tagged<RetrievePayoutRequest>(
-  "RetrievePayoutRequest"
-);
+const RetrievePayoutRequest = Request.tagged<RetrievePayoutRequest>("RetrievePayoutRequest");
 
 const RetrievePayoutResolver: RequestResolver.RequestResolver<
   RetrievePayoutRequest,
   StripeService
 > = makeStripeResolver<RetrievePayoutRequest>((stripe, request) =>
-  stripe.payouts.retrieve(request.id, request.params)
+  stripe.payouts.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update a payout
  */
-interface UpdatePayoutRequest extends Request.Request<
-  Stripe.Payout,
-  StripeError
-> {
+interface UpdatePayoutRequest extends Request.Request<Stripe.Payout, StripeError> {
   readonly _tag: "UpdatePayoutRequest";
   readonly id: string;
-  readonly params?: Stripe.PayoutUpdateParams;
+  readonly params?: Stripe.PayoutUpdateParams | undefined;
 }
 
-const UpdatePayoutRequest = Request.tagged<UpdatePayoutRequest>(
-  "UpdatePayoutRequest"
-);
+const UpdatePayoutRequest = Request.tagged<UpdatePayoutRequest>("UpdatePayoutRequest");
 
-const UpdatePayoutResolver: RequestResolver.RequestResolver<
-  UpdatePayoutRequest,
-  StripeService
-> = makeStripeResolver<UpdatePayoutRequest>((stripe, request) =>
-  stripe.payouts.update(request.id, request.params)
-);
+const UpdatePayoutResolver: RequestResolver.RequestResolver<UpdatePayoutRequest, StripeService> =
+  makeStripeResolver<UpdatePayoutRequest>((stripe, request) =>
+    stripe.payouts.update(request.id, request.params),
+  );
 
 /**
  * Request to cancel a payout
  */
-interface CancelPayoutRequest extends Request.Request<
-  Stripe.Payout,
-  StripeError
-> {
+interface CancelPayoutRequest extends Request.Request<Stripe.Payout, StripeError> {
   readonly _tag: "CancelPayoutRequest";
   readonly id: string;
-  readonly params?: Stripe.PayoutCancelParams;
+  readonly params?: Stripe.PayoutCancelParams | undefined;
 }
 
-const CancelPayoutRequest = Request.tagged<CancelPayoutRequest>(
-  "CancelPayoutRequest"
-);
+const CancelPayoutRequest = Request.tagged<CancelPayoutRequest>("CancelPayoutRequest");
 
-const CancelPayoutResolver: RequestResolver.RequestResolver<
-  CancelPayoutRequest,
-  StripeService
-> = makeStripeResolver<CancelPayoutRequest>((stripe, request) =>
-  stripe.payouts.cancel(request.id, request.params)
-);
+const CancelPayoutResolver: RequestResolver.RequestResolver<CancelPayoutRequest, StripeService> =
+  makeStripeResolver<CancelPayoutRequest>((stripe, request) =>
+    stripe.payouts.cancel(request.id, request.params),
+  );
 
 /**
  * Request to list payouts
  */
-interface ListPayoutsRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Payout>,
-  StripeError
-> {
+interface ListPayoutsRequest extends Request.Request<Stripe.ApiList<Stripe.Payout>, StripeError> {
   readonly _tag: "ListPayoutsRequest";
-  readonly params?: Stripe.PayoutListParams;
+  readonly params?: Stripe.PayoutListParams | undefined;
 }
 
-const ListPayoutsRequest =
-  Request.tagged<ListPayoutsRequest>("ListPayoutsRequest");
+const ListPayoutsRequest = Request.tagged<ListPayoutsRequest>("ListPayoutsRequest");
 
-const ListPayoutsResolver: RequestResolver.RequestResolver<
-  ListPayoutsRequest,
-  StripeService
-> = makeStripeResolver<ListPayoutsRequest>((stripe, request) =>
-  stripe.payouts.list(request.params)
-);
+const ListPayoutsResolver: RequestResolver.RequestResolver<ListPayoutsRequest, StripeService> =
+  makeStripeResolver<ListPayoutsRequest>((stripe, request) => stripe.payouts.list(request.params));
 
 /**
  * Create a payout
  */
 export const create = (
-  params: Stripe.PayoutCreateParams
+  params: Stripe.PayoutCreateParams,
 ): Effect.Effect<Stripe.Payout, StripeError, StripeService> =>
   Effect.request(
     CreatePayoutRequest({ params }),
-    RequestResolver.contextFromEffect(CreatePayoutResolver)
+    RequestResolver.contextFromEffect(CreatePayoutResolver),
   );
 
 /**
@@ -153,11 +119,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.PayoutRetrieveParams
+  params?: Stripe.PayoutRetrieveParams,
 ): Effect.Effect<Stripe.Payout, StripeError, StripeService> =>
   Effect.request(
     RetrievePayoutRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrievePayoutResolver)
+    RequestResolver.contextFromEffect(RetrievePayoutResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -165,11 +131,11 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.PayoutUpdateParams
+  params?: Stripe.PayoutUpdateParams,
 ): Effect.Effect<Stripe.Payout, StripeError, StripeService> =>
   Effect.request(
     UpdatePayoutRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdatePayoutResolver)
+    RequestResolver.contextFromEffect(UpdatePayoutResolver),
   );
 
 /**
@@ -177,20 +143,20 @@ export const update = (
  */
 export const cancel = (
   id: string,
-  params?: Stripe.PayoutCancelParams
+  params?: Stripe.PayoutCancelParams,
 ): Effect.Effect<Stripe.Payout, StripeError, StripeService> =>
   Effect.request(
     CancelPayoutRequest({ id, params }),
-    RequestResolver.contextFromEffect(CancelPayoutResolver)
+    RequestResolver.contextFromEffect(CancelPayoutResolver),
   );
 
 /**
  * List payouts
  */
 export const list = (
-  params?: Stripe.PayoutListParams
+  params?: Stripe.PayoutListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Payout>, StripeError, StripeService> =>
   Effect.request(
     ListPayoutsRequest({ params }),
-    RequestResolver.contextFromEffect(ListPayoutsResolver)
+    RequestResolver.contextFromEffect(ListPayoutsResolver),
   ).pipe(Effect.withRequestCaching(true));

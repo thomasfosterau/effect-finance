@@ -37,40 +37,30 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a terminal location
  */
-interface CreateLocationRequest extends Request.Request<
-  Stripe.Terminal.Location,
-  StripeError
-> {
+interface CreateLocationRequest extends Request.Request<Stripe.Terminal.Location, StripeError> {
   readonly _tag: "CreateLocationRequest";
   readonly params: Stripe.Terminal.LocationCreateParams;
 }
 
-const CreateLocationRequest = Request.tagged<CreateLocationRequest>(
-  "CreateLocationRequest"
-);
+const CreateLocationRequest = Request.tagged<CreateLocationRequest>("CreateLocationRequest");
 
 const CreateLocationResolver: RequestResolver.RequestResolver<
   CreateLocationRequest,
   StripeService
 > = makeStripeResolver<CreateLocationRequest>((stripe, request) =>
-  stripe.terminal.locations.create(request.params)
+  stripe.terminal.locations.create(request.params),
 );
 
 /**
  * Request to retrieve a terminal location
  */
-interface RetrieveLocationRequest extends Request.Request<
-  Stripe.Terminal.Location,
-  StripeError
-> {
+interface RetrieveLocationRequest extends Request.Request<Stripe.Terminal.Location, StripeError> {
   readonly _tag: "RetrieveLocationRequest";
   readonly id: string;
-  readonly params?: Stripe.Terminal.LocationRetrieveParams;
+  readonly params?: Stripe.Terminal.LocationRetrieveParams | undefined;
 }
 
-const RetrieveLocationRequest = Request.tagged<RetrieveLocationRequest>(
-  "RetrieveLocationRequest"
-);
+const RetrieveLocationRequest = Request.tagged<RetrieveLocationRequest>("RetrieveLocationRequest");
 
 const RetrieveLocationResolver: RequestResolver.RequestResolver<
   RetrieveLocationRequest,
@@ -79,25 +69,20 @@ const RetrieveLocationResolver: RequestResolver.RequestResolver<
   (stripe, request) =>
     stripe.terminal.locations.retrieve(
       request.id,
-      request.params
-    ) as Promise<Stripe.Terminal.Location>
+      request.params,
+    ) as Promise<Stripe.Terminal.Location>,
 );
 
 /**
  * Request to update a terminal location
  */
-interface UpdateLocationRequest extends Request.Request<
-  Stripe.Terminal.Location,
-  StripeError
-> {
+interface UpdateLocationRequest extends Request.Request<Stripe.Terminal.Location, StripeError> {
   readonly _tag: "UpdateLocationRequest";
   readonly id: string;
-  readonly params?: Stripe.Terminal.LocationUpdateParams;
+  readonly params?: Stripe.Terminal.LocationUpdateParams | undefined;
 }
 
-const UpdateLocationRequest = Request.tagged<UpdateLocationRequest>(
-  "UpdateLocationRequest"
-);
+const UpdateLocationRequest = Request.tagged<UpdateLocationRequest>("UpdateLocationRequest");
 
 const UpdateLocationResolver: RequestResolver.RequestResolver<
   UpdateLocationRequest,
@@ -106,8 +91,8 @@ const UpdateLocationResolver: RequestResolver.RequestResolver<
   (stripe, request) =>
     stripe.terminal.locations.update(
       request.id,
-      request.params
-    ) as Promise<Stripe.Terminal.Location>
+      request.params,
+    ) as Promise<Stripe.Terminal.Location>,
 );
 
 /**
@@ -121,15 +106,13 @@ interface DeleteLocationRequest extends Request.Request<
   readonly id: string;
 }
 
-const DeleteLocationRequest = Request.tagged<DeleteLocationRequest>(
-  "DeleteLocationRequest"
-);
+const DeleteLocationRequest = Request.tagged<DeleteLocationRequest>("DeleteLocationRequest");
 
 const DeleteLocationResolver: RequestResolver.RequestResolver<
   DeleteLocationRequest,
   StripeService
 > = makeStripeResolver<DeleteLocationRequest>((stripe, request) =>
-  stripe.terminal.locations.del(request.id)
+  stripe.terminal.locations.del(request.id),
 );
 
 /**
@@ -140,29 +123,25 @@ interface ListLocationsRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListLocationsRequest";
-  readonly params?: Stripe.Terminal.LocationListParams;
+  readonly params?: Stripe.Terminal.LocationListParams | undefined;
 }
 
-const ListLocationsRequest = Request.tagged<ListLocationsRequest>(
-  "ListLocationsRequest"
-);
+const ListLocationsRequest = Request.tagged<ListLocationsRequest>("ListLocationsRequest");
 
-const ListLocationsResolver: RequestResolver.RequestResolver<
-  ListLocationsRequest,
-  StripeService
-> = makeStripeResolver<ListLocationsRequest>((stripe, request) =>
-  stripe.terminal.locations.list(request.params)
-);
+const ListLocationsResolver: RequestResolver.RequestResolver<ListLocationsRequest, StripeService> =
+  makeStripeResolver<ListLocationsRequest>((stripe, request) =>
+    stripe.terminal.locations.list(request.params),
+  );
 
 /**
  * Create a terminal location
  */
 export const create = (
-  params: Stripe.Terminal.LocationCreateParams
+  params: Stripe.Terminal.LocationCreateParams,
 ): Effect.Effect<Stripe.Terminal.Location, StripeError, StripeService> =>
   Effect.request(
     CreateLocationRequest({ params }),
-    RequestResolver.contextFromEffect(CreateLocationResolver)
+    RequestResolver.contextFromEffect(CreateLocationResolver),
   );
 
 /**
@@ -170,11 +149,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.Terminal.LocationRetrieveParams
+  params?: Stripe.Terminal.LocationRetrieveParams,
 ): Effect.Effect<Stripe.Terminal.Location, StripeError, StripeService> =>
   Effect.request(
     RetrieveLocationRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveLocationResolver)
+    RequestResolver.contextFromEffect(RetrieveLocationResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -182,35 +161,31 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.Terminal.LocationUpdateParams
+  params?: Stripe.Terminal.LocationUpdateParams,
 ): Effect.Effect<Stripe.Terminal.Location, StripeError, StripeService> =>
   Effect.request(
     UpdateLocationRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateLocationResolver)
+    RequestResolver.contextFromEffect(UpdateLocationResolver),
   );
 
 /**
  * Delete a terminal location
  */
 export const del = (
-  id: string
+  id: string,
 ): Effect.Effect<Stripe.Terminal.DeletedLocation, StripeError, StripeService> =>
   Effect.request(
     DeleteLocationRequest({ id }),
-    RequestResolver.contextFromEffect(DeleteLocationResolver)
+    RequestResolver.contextFromEffect(DeleteLocationResolver),
   );
 
 /**
  * List terminal locations
  */
 export const list = (
-  params?: Stripe.Terminal.LocationListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.Terminal.Location>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Terminal.LocationListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.Terminal.Location>, StripeError, StripeService> =>
   Effect.request(
     ListLocationsRequest({ params }),
-    RequestResolver.contextFromEffect(ListLocationsResolver)
+    RequestResolver.contextFromEffect(ListLocationsResolver),
   ).pipe(Effect.withRequestCaching(true));

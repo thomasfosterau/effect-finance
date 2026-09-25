@@ -16,64 +16,54 @@ import { Data } from "effect";
  * Raised when the payment provider rejects a request for a reason that does
  * not map onto a more specific variant (the catch-all API error).
  */
-export class PaymentProviderError extends Data.TaggedError(
-  "PaymentProviderError"
-)<{
+export class PaymentProviderError extends Data.TaggedError("PaymentProviderError")<{
   readonly message: string;
   /** The provider that produced the error, e.g. `"stripe"`. */
   readonly provider: string;
   /** Provider-specific error code, when available. */
-  readonly code?: string;
+  readonly code?: string | undefined;
   /** HTTP status code returned by the provider, when available. */
-  readonly statusCode?: number;
+  readonly statusCode?: number | undefined;
   /** The original, provider-specific error object. */
-  readonly cause?: unknown;
+  readonly cause?: unknown | undefined;
 }> {}
 
 /**
  * Raised when the provider could not authenticate the request (e.g. an
  * invalid or revoked API key).
  */
-export class PaymentAuthenticationError extends Data.TaggedError(
-  "PaymentAuthenticationError"
-)<{
+export class PaymentAuthenticationError extends Data.TaggedError("PaymentAuthenticationError")<{
   readonly message: string;
-  readonly statusCode?: number;
+  readonly statusCode?: number | undefined;
 }> {}
 
 /**
  * Raised when the provider rejects a request because too many requests have
  * been made in a short window.
  */
-export class PaymentRateLimitError extends Data.TaggedError(
-  "PaymentRateLimitError"
-)<{
+export class PaymentRateLimitError extends Data.TaggedError("PaymentRateLimitError")<{
   readonly message: string;
   /** Seconds to wait before retrying, when the provider advertises it. */
-  readonly retryAfter?: number;
+  readonly retryAfter?: number | undefined;
 }> {}
 
 /**
  * Raised when the request parameters are invalid.
  */
-export class PaymentInvalidRequestError extends Data.TaggedError(
-  "PaymentInvalidRequestError"
-)<{
+export class PaymentInvalidRequestError extends Data.TaggedError("PaymentInvalidRequestError")<{
   readonly message: string;
   /** The offending parameter, when the provider identifies one. */
-  readonly param?: string;
-  readonly statusCode?: number;
+  readonly param?: string | undefined;
+  readonly statusCode?: number | undefined;
 }> {}
 
 /**
  * Raised when a transport-level/network failure occurs while talking to the
  * provider.
  */
-export class PaymentNetworkError extends Data.TaggedError(
-  "PaymentNetworkError"
-)<{
+export class PaymentNetworkError extends Data.TaggedError("PaymentNetworkError")<{
   readonly message: string;
-  readonly cause?: unknown;
+  readonly cause?: unknown | undefined;
 }> {}
 
 /**
@@ -88,12 +78,10 @@ export class PaymentConfigError extends Data.TaggedError("PaymentConfigError")<{
 /**
  * Raised when verifying the signature of an incoming webhook fails.
  */
-export class SignatureVerificationError extends Data.TaggedError(
-  "SignatureVerificationError"
-)<{
+export class SignatureVerificationError extends Data.TaggedError("SignatureVerificationError")<{
   readonly message: string;
-  readonly header?: string;
-  readonly payload?: string;
+  readonly header?: string | undefined;
+  readonly payload?: string | undefined;
 }> {}
 
 /**

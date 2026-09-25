@@ -28,101 +28,74 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a charge
  */
-interface CreateChargeRequest extends Request.Request<
-  Stripe.Charge,
-  StripeError
-> {
+interface CreateChargeRequest extends Request.Request<Stripe.Charge, StripeError> {
   readonly _tag: "CreateChargeRequest";
   readonly params: Stripe.ChargeCreateParams;
 }
 
-const CreateChargeRequest = Request.tagged<CreateChargeRequest>(
-  "CreateChargeRequest"
-);
+const CreateChargeRequest = Request.tagged<CreateChargeRequest>("CreateChargeRequest");
 
-const CreateChargeResolver: RequestResolver.RequestResolver<
-  CreateChargeRequest,
-  StripeService
-> = makeStripeResolver<CreateChargeRequest>((stripe, request) =>
-  stripe.charges.create(request.params)
-);
+const CreateChargeResolver: RequestResolver.RequestResolver<CreateChargeRequest, StripeService> =
+  makeStripeResolver<CreateChargeRequest>((stripe, request) =>
+    stripe.charges.create(request.params),
+  );
 
 /**
  * Request to retrieve a charge
  */
-interface RetrieveChargeRequest extends Request.Request<
-  Stripe.Charge,
-  StripeError
-> {
+interface RetrieveChargeRequest extends Request.Request<Stripe.Charge, StripeError> {
   readonly _tag: "RetrieveChargeRequest";
   readonly id: string;
-  readonly params?: Stripe.ChargeRetrieveParams;
+  readonly params?: Stripe.ChargeRetrieveParams | undefined;
 }
 
-const RetrieveChargeRequest = Request.tagged<RetrieveChargeRequest>(
-  "RetrieveChargeRequest"
-);
+const RetrieveChargeRequest = Request.tagged<RetrieveChargeRequest>("RetrieveChargeRequest");
 
 const RetrieveChargeResolver: RequestResolver.RequestResolver<
   RetrieveChargeRequest,
   StripeService
 > = makeStripeResolver<RetrieveChargeRequest>((stripe, request) =>
-  stripe.charges.retrieve(request.id, request.params)
+  stripe.charges.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update a charge
  */
-interface UpdateChargeRequest extends Request.Request<
-  Stripe.Charge,
-  StripeError
-> {
+interface UpdateChargeRequest extends Request.Request<Stripe.Charge, StripeError> {
   readonly _tag: "UpdateChargeRequest";
   readonly id: string;
-  readonly params?: Stripe.ChargeUpdateParams;
+  readonly params?: Stripe.ChargeUpdateParams | undefined;
 }
 
-const UpdateChargeRequest = Request.tagged<UpdateChargeRequest>(
-  "UpdateChargeRequest"
-);
+const UpdateChargeRequest = Request.tagged<UpdateChargeRequest>("UpdateChargeRequest");
 
-const UpdateChargeResolver: RequestResolver.RequestResolver<
-  UpdateChargeRequest,
-  StripeService
-> = makeStripeResolver<UpdateChargeRequest>((stripe, request) =>
-  stripe.charges.update(request.id, request.params)
-);
+const UpdateChargeResolver: RequestResolver.RequestResolver<UpdateChargeRequest, StripeService> =
+  makeStripeResolver<UpdateChargeRequest>((stripe, request) =>
+    stripe.charges.update(request.id, request.params),
+  );
 
 /**
  * Request to list charges
  */
-interface ListChargesRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Charge>,
-  StripeError
-> {
+interface ListChargesRequest extends Request.Request<Stripe.ApiList<Stripe.Charge>, StripeError> {
   readonly _tag: "ListChargesRequest";
-  readonly params?: Stripe.ChargeListParams;
+  readonly params?: Stripe.ChargeListParams | undefined;
 }
 
-const ListChargesRequest =
-  Request.tagged<ListChargesRequest>("ListChargesRequest");
+const ListChargesRequest = Request.tagged<ListChargesRequest>("ListChargesRequest");
 
-const ListChargesResolver: RequestResolver.RequestResolver<
-  ListChargesRequest,
-  StripeService
-> = makeStripeResolver<ListChargesRequest>((stripe, request) =>
-  stripe.charges.list(request.params)
-);
+const ListChargesResolver: RequestResolver.RequestResolver<ListChargesRequest, StripeService> =
+  makeStripeResolver<ListChargesRequest>((stripe, request) => stripe.charges.list(request.params));
 
 /**
  * Create a charge
  */
 export const create = (
-  params: Stripe.ChargeCreateParams
+  params: Stripe.ChargeCreateParams,
 ): Effect.Effect<Stripe.Charge, StripeError, StripeService> =>
   Effect.request(
     CreateChargeRequest({ params }),
-    RequestResolver.contextFromEffect(CreateChargeResolver)
+    RequestResolver.contextFromEffect(CreateChargeResolver),
   );
 
 /**
@@ -130,11 +103,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.ChargeRetrieveParams
+  params?: Stripe.ChargeRetrieveParams,
 ): Effect.Effect<Stripe.Charge, StripeError, StripeService> =>
   Effect.request(
     RetrieveChargeRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveChargeResolver)
+    RequestResolver.contextFromEffect(RetrieveChargeResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -142,20 +115,20 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.ChargeUpdateParams
+  params?: Stripe.ChargeUpdateParams,
 ): Effect.Effect<Stripe.Charge, StripeError, StripeService> =>
   Effect.request(
     UpdateChargeRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateChargeResolver)
+    RequestResolver.contextFromEffect(UpdateChargeResolver),
   );
 
 /**
  * List charges
  */
 export const list = (
-  params?: Stripe.ChargeListParams
+  params?: Stripe.ChargeListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Charge>, StripeError, StripeService> =>
   Effect.request(
     ListChargesRequest({ params }),
-    RequestResolver.contextFromEffect(ListChargesResolver)
+    RequestResolver.contextFromEffect(ListChargesResolver),
   ).pipe(Effect.withRequestCaching(true));

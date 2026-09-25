@@ -49,7 +49,7 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
   Effect.fail(
     new PaymentInvalidRequestError({
       message: `Airwallex does not support ${operation}`,
-    })
+    }),
   );
 
 // ---------------------------------------------------------------------------
@@ -57,61 +57,58 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
 // ---------------------------------------------------------------------------
 
 /** Airwallex implementation of the {@link CustomerNS.Customers} capability. */
-export const customersLayer: Layer.Layer<
-  CustomerNS.Customers,
-  never,
-  AirwallexClient
-> = Layer.effect(
-  CustomerNS.Customers,
-  Effect.map(AirwallexClient, (client) =>
-    CustomerNS.Customers.of({
-      create: (params) =>
-        client
-          .request<AirwallexCustomer>({
-            method: "POST",
-            path: "/api/v1/pa/customers",
-            body: {
-              request_id: requestId(),
-              email: params.email,
-              first_name: params.name,
-              phone_number: params.phone,
-              metadata: params.metadata,
-            },
-          })
-          .pipe(Effect.map(toCustomer)),
-      retrieve: (id) =>
-        client
-          .request<AirwallexCustomer>({
-            method: "GET",
-            path: `/api/v1/pa/customers/${id}`,
-          })
-          .pipe(Effect.map(toCustomer)),
-      update: (id, params) =>
-        client
-          .request<AirwallexCustomer>({
-            method: "POST",
-            path: `/api/v1/pa/customers/${id}/update`,
-            body: {
-              request_id: requestId(),
-              email: params.email,
-              first_name: params.name,
-              phone_number: params.phone,
-              metadata: params.metadata,
-            },
-          })
-          .pipe(Effect.map(toCustomer)),
-      del: () => notSupported("deleting customers"),
-      list: (params) =>
-        client
-          .request<AirwallexList<AirwallexCustomer>>({
-            method: "GET",
-            path: "/api/v1/pa/customers",
-            query: { page_size: params?.limit },
-          })
-          .pipe(Effect.map((list) => toPage(list, toCustomer))),
-    })
-  )
-);
+export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexClient> =
+  Layer.effect(
+    CustomerNS.Customers,
+    Effect.map(AirwallexClient, (client) =>
+      CustomerNS.Customers.of({
+        create: (params) =>
+          client
+            .request<AirwallexCustomer>({
+              method: "POST",
+              path: "/api/v1/pa/customers",
+              body: {
+                request_id: requestId(),
+                email: params.email,
+                first_name: params.name,
+                phone_number: params.phone,
+                metadata: params.metadata,
+              },
+            })
+            .pipe(Effect.map(toCustomer)),
+        retrieve: (id) =>
+          client
+            .request<AirwallexCustomer>({
+              method: "GET",
+              path: `/api/v1/pa/customers/${id}`,
+            })
+            .pipe(Effect.map(toCustomer)),
+        update: (id, params) =>
+          client
+            .request<AirwallexCustomer>({
+              method: "POST",
+              path: `/api/v1/pa/customers/${id}/update`,
+              body: {
+                request_id: requestId(),
+                email: params.email,
+                first_name: params.name,
+                phone_number: params.phone,
+                metadata: params.metadata,
+              },
+            })
+            .pipe(Effect.map(toCustomer)),
+        del: () => notSupported("deleting customers"),
+        list: (params) =>
+          client
+            .request<AirwallexList<AirwallexCustomer>>({
+              method: "GET",
+              path: "/api/v1/pa/customers",
+              query: { page_size: params?.limit },
+            })
+            .pipe(Effect.map((list) => toPage(list, toCustomer))),
+      }),
+    ),
+  );
 
 // ---------------------------------------------------------------------------
 // PaymentIntents
@@ -156,9 +153,7 @@ export const paymentIntentsLayer: Layer.Layer<
             path: `/api/v1/pa/payment_intents/${id}/confirm`,
             body: {
               request_id: requestId(),
-              ...(params?.paymentMethod
-                ? { payment_method: { id: params.paymentMethod } }
-                : {}),
+              ...(params?.paymentMethod ? { payment_method: { id: params.paymentMethod } } : {}),
             },
           })
           .pipe(Effect.map(toPaymentIntent)),
@@ -178,8 +173,8 @@ export const paymentIntentsLayer: Layer.Layer<
             query: { page_size: params?.limit, customer_id: params?.customer },
           })
           .pipe(Effect.map((list) => toPage(list, toPaymentIntent))),
-    })
-  )
+    }),
+  ),
 );
 
 // ---------------------------------------------------------------------------
@@ -187,11 +182,7 @@ export const paymentIntentsLayer: Layer.Layer<
 // ---------------------------------------------------------------------------
 
 /** Airwallex implementation of the {@link RefundNS.Refunds} capability. */
-export const refundsLayer: Layer.Layer<
-  RefundNS.Refunds,
-  never,
-  AirwallexClient
-> = Layer.effect(
+export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient> = Layer.effect(
   RefundNS.Refunds,
   Effect.map(AirwallexClient, (client) =>
     RefundNS.Refunds.of({
@@ -199,7 +190,7 @@ export const refundsLayer: Layer.Layer<
         Effect.gen(function* () {
           if (!params.paymentIntent) {
             return yield* notSupported(
-              "refunds without a payment intent (charges are not supported)"
+              "refunds without a payment intent (charges are not supported)",
             );
           }
           // The neutral amount is in minor units; Airwallex needs major units,
@@ -245,8 +236,8 @@ export const refundsLayer: Layer.Layer<
             },
           })
           .pipe(Effect.map((list) => toPage(list, toRefund))),
-    })
-  )
+    }),
+  ),
 );
 
 // ---------------------------------------------------------------------------
@@ -267,8 +258,7 @@ export const capabilities: Layer.Layer<
  * A self-contained layer providing the Airwallex client and its capabilities,
  * built from configuration.
  */
-export const layer = (config: AirwallexConfig) =>
-  Layer.provide(capabilities, clientLayer(config));
+export const layer = (config: AirwallexConfig) => Layer.provide(capabilities, clientLayer(config));
 
 /**
  * A self-contained layer providing the Airwallex client and its capabilities,

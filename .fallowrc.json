@@ -1,0 +1,68 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "packages/*/src/*.ts",
+    "packages/*/tests/**/*.test.ts",
+    "packages/payments-stripe/examples/*.ts",
+    "tests/dist-consumer/src/*.ts",
+    "**/vite.config.ts",
+    "vite.package.ts"
+  ],
+  "ignorePatterns": ["**/dist/**", "**/coverage/**"],
+  "ignoreDependencies": [
+    "@thomasfosterau/effect-payments",
+    "@thomasfosterau/effect-payments-airwallex",
+    "@thomasfosterau/effect-payments-paypal",
+    "@thomasfosterau/effect-payments-stripe",
+    "@types/node",
+    "effect-solutions",
+    "@effect/tsgo",
+    "@effect/language-service",
+    "@typescript/native",
+    "typescript",
+    "vite",
+    "vitest",
+    "vite-plus",
+    "@changesets/cli",
+    "@changesets/changelog-github",
+    "@vitest/coverage-istanbul",
+    "fallow"
+  ],
+  "rules": {
+    "unused-files": "error",
+    "unused-exports": "error",
+    "unused-types": "error",
+    "unused-dependencies": "error",
+    "unused-dev-dependencies": "warn",
+    "unused-enum-members": "error",
+    "unused-class-members": "warn",
+    "unresolved-imports": "error",
+    "unlisted-dependencies": "error",
+    "duplicate-exports": "error",
+    "circular-dependencies": "error",
+    "boundary-violation": "error",
+    "stale-suppressions": "warn"
+  },
+  "boundaries": {
+    "zones": [
+      { "name": "core", "patterns": ["packages/payments/**"] },
+      { "name": "stripe", "patterns": ["packages/payments-stripe/**"] },
+      { "name": "paypal", "patterns": ["packages/payments-paypal/**"] },
+      { "name": "airwallex", "patterns": ["packages/payments-airwallex/**"] },
+      { "name": "dist-consumer", "patterns": ["tests/dist-consumer/**"] }
+    ],
+    "rules": [
+      { "from": "core", "allow": [] },
+      { "from": "stripe", "allow": ["core"] },
+      { "from": "paypal", "allow": ["core"] },
+      { "from": "airwallex", "allow": ["core"] },
+      { "from": "dist-consumer", "allow": ["core", "stripe", "paypal", "airwallex"] }
+    ]
+  },
+  "health": {
+    "maxCyclomatic": 20,
+    "maxCognitive": 15,
+    "maxCrap": 30,
+    "coverage": "coverage/coverage-final.json"
+  }
+}

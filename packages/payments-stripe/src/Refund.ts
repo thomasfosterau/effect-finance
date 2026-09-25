@@ -28,101 +28,74 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a refund
  */
-interface CreateRefundRequest extends Request.Request<
-  Stripe.Refund,
-  StripeError
-> {
+interface CreateRefundRequest extends Request.Request<Stripe.Refund, StripeError> {
   readonly _tag: "CreateRefundRequest";
   readonly params: Stripe.RefundCreateParams;
 }
 
-const CreateRefundRequest = Request.tagged<CreateRefundRequest>(
-  "CreateRefundRequest"
-);
+const CreateRefundRequest = Request.tagged<CreateRefundRequest>("CreateRefundRequest");
 
-const CreateRefundResolver: RequestResolver.RequestResolver<
-  CreateRefundRequest,
-  StripeService
-> = makeStripeResolver<CreateRefundRequest>((stripe, request) =>
-  stripe.refunds.create(request.params)
-);
+const CreateRefundResolver: RequestResolver.RequestResolver<CreateRefundRequest, StripeService> =
+  makeStripeResolver<CreateRefundRequest>((stripe, request) =>
+    stripe.refunds.create(request.params),
+  );
 
 /**
  * Request to retrieve a refund
  */
-interface RetrieveRefundRequest extends Request.Request<
-  Stripe.Refund,
-  StripeError
-> {
+interface RetrieveRefundRequest extends Request.Request<Stripe.Refund, StripeError> {
   readonly _tag: "RetrieveRefundRequest";
   readonly id: string;
-  readonly params?: Stripe.RefundRetrieveParams;
+  readonly params?: Stripe.RefundRetrieveParams | undefined;
 }
 
-const RetrieveRefundRequest = Request.tagged<RetrieveRefundRequest>(
-  "RetrieveRefundRequest"
-);
+const RetrieveRefundRequest = Request.tagged<RetrieveRefundRequest>("RetrieveRefundRequest");
 
 const RetrieveRefundResolver: RequestResolver.RequestResolver<
   RetrieveRefundRequest,
   StripeService
 > = makeStripeResolver<RetrieveRefundRequest>((stripe, request) =>
-  stripe.refunds.retrieve(request.id, request.params)
+  stripe.refunds.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update a refund
  */
-interface UpdateRefundRequest extends Request.Request<
-  Stripe.Refund,
-  StripeError
-> {
+interface UpdateRefundRequest extends Request.Request<Stripe.Refund, StripeError> {
   readonly _tag: "UpdateRefundRequest";
   readonly id: string;
-  readonly params?: Stripe.RefundUpdateParams;
+  readonly params?: Stripe.RefundUpdateParams | undefined;
 }
 
-const UpdateRefundRequest = Request.tagged<UpdateRefundRequest>(
-  "UpdateRefundRequest"
-);
+const UpdateRefundRequest = Request.tagged<UpdateRefundRequest>("UpdateRefundRequest");
 
-const UpdateRefundResolver: RequestResolver.RequestResolver<
-  UpdateRefundRequest,
-  StripeService
-> = makeStripeResolver<UpdateRefundRequest>((stripe, request) =>
-  stripe.refunds.update(request.id, request.params)
-);
+const UpdateRefundResolver: RequestResolver.RequestResolver<UpdateRefundRequest, StripeService> =
+  makeStripeResolver<UpdateRefundRequest>((stripe, request) =>
+    stripe.refunds.update(request.id, request.params),
+  );
 
 /**
  * Request to list refunds
  */
-interface ListRefundsRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Refund>,
-  StripeError
-> {
+interface ListRefundsRequest extends Request.Request<Stripe.ApiList<Stripe.Refund>, StripeError> {
   readonly _tag: "ListRefundsRequest";
-  readonly params?: Stripe.RefundListParams;
+  readonly params?: Stripe.RefundListParams | undefined;
 }
 
-const ListRefundsRequest =
-  Request.tagged<ListRefundsRequest>("ListRefundsRequest");
+const ListRefundsRequest = Request.tagged<ListRefundsRequest>("ListRefundsRequest");
 
-const ListRefundsResolver: RequestResolver.RequestResolver<
-  ListRefundsRequest,
-  StripeService
-> = makeStripeResolver<ListRefundsRequest>((stripe, request) =>
-  stripe.refunds.list(request.params)
-);
+const ListRefundsResolver: RequestResolver.RequestResolver<ListRefundsRequest, StripeService> =
+  makeStripeResolver<ListRefundsRequest>((stripe, request) => stripe.refunds.list(request.params));
 
 /**
  * Create a refund
  */
 export const create = (
-  params: Stripe.RefundCreateParams
+  params: Stripe.RefundCreateParams,
 ): Effect.Effect<Stripe.Refund, StripeError, StripeService> =>
   Effect.request(
     CreateRefundRequest({ params }),
-    RequestResolver.contextFromEffect(CreateRefundResolver)
+    RequestResolver.contextFromEffect(CreateRefundResolver),
   );
 
 /**
@@ -130,11 +103,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.RefundRetrieveParams
+  params?: Stripe.RefundRetrieveParams,
 ): Effect.Effect<Stripe.Refund, StripeError, StripeService> =>
   Effect.request(
     RetrieveRefundRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveRefundResolver)
+    RequestResolver.contextFromEffect(RetrieveRefundResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -142,20 +115,20 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.RefundUpdateParams
+  params?: Stripe.RefundUpdateParams,
 ): Effect.Effect<Stripe.Refund, StripeError, StripeService> =>
   Effect.request(
     UpdateRefundRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateRefundResolver)
+    RequestResolver.contextFromEffect(UpdateRefundResolver),
   );
 
 /**
  * List refunds
  */
 export const list = (
-  params?: Stripe.RefundListParams
+  params?: Stripe.RefundListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Refund>, StripeError, StripeService> =>
   Effect.request(
     ListRefundsRequest({ params }),
-    RequestResolver.contextFromEffect(ListRefundsResolver)
+    RequestResolver.contextFromEffect(ListRefundsResolver),
   ).pipe(Effect.withRequestCaching(true));

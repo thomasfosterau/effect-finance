@@ -18,11 +18,11 @@ export const PROVIDER = "paypal";
 
 /** The shape of a PayPal API error body. */
 export interface PayPalErrorBody {
-  readonly name?: string;
-  readonly message?: string;
+  readonly name?: string | undefined;
+  readonly message?: string | undefined;
   readonly details?: ReadonlyArray<{
-    readonly field?: string;
-    readonly issue?: string;
+    readonly field?: string | undefined;
+    readonly issue?: string | undefined;
   }>;
 }
 
@@ -31,10 +31,9 @@ export interface PayPalErrorBody {
  */
 export const handlePayPalError = (
   status: number,
-  body: PayPalErrorBody | undefined
+  body: PayPalErrorBody | undefined,
 ): PaymentsError => {
-  const message =
-    body?.message ?? `PayPal request failed with status ${status}`;
+  const message = body?.message ?? `PayPal request failed with status ${status}`;
 
   if (status === 401 || status === 403) {
     return new PaymentAuthenticationError({ message, statusCode: status });

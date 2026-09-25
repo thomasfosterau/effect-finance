@@ -36,70 +36,51 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create an issuing dispute
  */
-interface CreateDisputeRequest extends Request.Request<
-  Stripe.Issuing.Dispute,
-  StripeError
-> {
+interface CreateDisputeRequest extends Request.Request<Stripe.Issuing.Dispute, StripeError> {
   readonly _tag: "CreateDisputeRequest";
   readonly params: Stripe.Issuing.DisputeCreateParams;
 }
 
-const CreateDisputeRequest = Request.tagged<CreateDisputeRequest>(
-  "CreateDisputeRequest"
-);
+const CreateDisputeRequest = Request.tagged<CreateDisputeRequest>("CreateDisputeRequest");
 
-const CreateDisputeResolver: RequestResolver.RequestResolver<
-  CreateDisputeRequest,
-  StripeService
-> = makeStripeResolver<CreateDisputeRequest>((stripe, request) =>
-  stripe.issuing.disputes.create(request.params)
-);
+const CreateDisputeResolver: RequestResolver.RequestResolver<CreateDisputeRequest, StripeService> =
+  makeStripeResolver<CreateDisputeRequest>((stripe, request) =>
+    stripe.issuing.disputes.create(request.params),
+  );
 
 /**
  * Request to retrieve an issuing dispute
  */
-interface RetrieveDisputeRequest extends Request.Request<
-  Stripe.Issuing.Dispute,
-  StripeError
-> {
+interface RetrieveDisputeRequest extends Request.Request<Stripe.Issuing.Dispute, StripeError> {
   readonly _tag: "RetrieveDisputeRequest";
   readonly id: string;
-  readonly params?: Stripe.Issuing.DisputeRetrieveParams;
+  readonly params?: Stripe.Issuing.DisputeRetrieveParams | undefined;
 }
 
-const RetrieveDisputeRequest = Request.tagged<RetrieveDisputeRequest>(
-  "RetrieveDisputeRequest"
-);
+const RetrieveDisputeRequest = Request.tagged<RetrieveDisputeRequest>("RetrieveDisputeRequest");
 
 const RetrieveDisputeResolver: RequestResolver.RequestResolver<
   RetrieveDisputeRequest,
   StripeService
 > = makeStripeResolver<RetrieveDisputeRequest>((stripe, request) =>
-  stripe.issuing.disputes.retrieve(request.id, request.params)
+  stripe.issuing.disputes.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update an issuing dispute
  */
-interface UpdateDisputeRequest extends Request.Request<
-  Stripe.Issuing.Dispute,
-  StripeError
-> {
+interface UpdateDisputeRequest extends Request.Request<Stripe.Issuing.Dispute, StripeError> {
   readonly _tag: "UpdateDisputeRequest";
   readonly id: string;
-  readonly params?: Stripe.Issuing.DisputeUpdateParams;
+  readonly params?: Stripe.Issuing.DisputeUpdateParams | undefined;
 }
 
-const UpdateDisputeRequest = Request.tagged<UpdateDisputeRequest>(
-  "UpdateDisputeRequest"
-);
+const UpdateDisputeRequest = Request.tagged<UpdateDisputeRequest>("UpdateDisputeRequest");
 
-const UpdateDisputeResolver: RequestResolver.RequestResolver<
-  UpdateDisputeRequest,
-  StripeService
-> = makeStripeResolver<UpdateDisputeRequest>((stripe, request) =>
-  stripe.issuing.disputes.update(request.id, request.params)
-);
+const UpdateDisputeResolver: RequestResolver.RequestResolver<UpdateDisputeRequest, StripeService> =
+  makeStripeResolver<UpdateDisputeRequest>((stripe, request) =>
+    stripe.issuing.disputes.update(request.id, request.params),
+  );
 
 /**
  * Request to list issuing disputes
@@ -109,29 +90,25 @@ interface ListDisputesRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListDisputesRequest";
-  readonly params?: Stripe.Issuing.DisputeListParams;
+  readonly params?: Stripe.Issuing.DisputeListParams | undefined;
 }
 
-const ListDisputesRequest = Request.tagged<ListDisputesRequest>(
-  "ListDisputesRequest"
-);
+const ListDisputesRequest = Request.tagged<ListDisputesRequest>("ListDisputesRequest");
 
-const ListDisputesResolver: RequestResolver.RequestResolver<
-  ListDisputesRequest,
-  StripeService
-> = makeStripeResolver<ListDisputesRequest>((stripe, request) =>
-  stripe.issuing.disputes.list(request.params)
-);
+const ListDisputesResolver: RequestResolver.RequestResolver<ListDisputesRequest, StripeService> =
+  makeStripeResolver<ListDisputesRequest>((stripe, request) =>
+    stripe.issuing.disputes.list(request.params),
+  );
 
 /**
  * Create an issuing dispute
  */
 export const create = (
-  params: Stripe.Issuing.DisputeCreateParams
+  params: Stripe.Issuing.DisputeCreateParams,
 ): Effect.Effect<Stripe.Issuing.Dispute, StripeError, StripeService> =>
   Effect.request(
     CreateDisputeRequest({ params }),
-    RequestResolver.contextFromEffect(CreateDisputeResolver)
+    RequestResolver.contextFromEffect(CreateDisputeResolver),
   );
 
 /**
@@ -139,11 +116,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.Issuing.DisputeRetrieveParams
+  params?: Stripe.Issuing.DisputeRetrieveParams,
 ): Effect.Effect<Stripe.Issuing.Dispute, StripeError, StripeService> =>
   Effect.request(
     RetrieveDisputeRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveDisputeResolver)
+    RequestResolver.contextFromEffect(RetrieveDisputeResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -151,24 +128,20 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.Issuing.DisputeUpdateParams
+  params?: Stripe.Issuing.DisputeUpdateParams,
 ): Effect.Effect<Stripe.Issuing.Dispute, StripeError, StripeService> =>
   Effect.request(
     UpdateDisputeRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateDisputeResolver)
+    RequestResolver.contextFromEffect(UpdateDisputeResolver),
   );
 
 /**
  * List issuing disputes
  */
 export const list = (
-  params?: Stripe.Issuing.DisputeListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.Issuing.Dispute>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Issuing.DisputeListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Dispute>, StripeError, StripeService> =>
   Effect.request(
     ListDisputesRequest({ params }),
-    RequestResolver.contextFromEffect(ListDisputesResolver)
+    RequestResolver.contextFromEffect(ListDisputesResolver),
   ).pipe(Effect.withRequestCaching(true));

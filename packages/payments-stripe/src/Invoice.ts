@@ -28,124 +28,89 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create an invoice
  */
-interface CreateInvoiceRequest extends Request.Request<
-  Stripe.Invoice,
-  StripeError
-> {
+interface CreateInvoiceRequest extends Request.Request<Stripe.Invoice, StripeError> {
   readonly _tag: "CreateInvoiceRequest";
   readonly params: Stripe.InvoiceCreateParams;
 }
 
-const CreateInvoiceRequest = Request.tagged<CreateInvoiceRequest>(
-  "CreateInvoiceRequest"
-);
+const CreateInvoiceRequest = Request.tagged<CreateInvoiceRequest>("CreateInvoiceRequest");
 
-const CreateInvoiceResolver: RequestResolver.RequestResolver<
-  CreateInvoiceRequest,
-  StripeService
-> = makeStripeResolver<CreateInvoiceRequest>((stripe, request) =>
-  stripe.invoices.create(request.params)
-);
+const CreateInvoiceResolver: RequestResolver.RequestResolver<CreateInvoiceRequest, StripeService> =
+  makeStripeResolver<CreateInvoiceRequest>((stripe, request) =>
+    stripe.invoices.create(request.params),
+  );
 
 /**
  * Request to retrieve an invoice
  */
-interface RetrieveInvoiceRequest extends Request.Request<
-  Stripe.Invoice,
-  StripeError
-> {
+interface RetrieveInvoiceRequest extends Request.Request<Stripe.Invoice, StripeError> {
   readonly _tag: "RetrieveInvoiceRequest";
   readonly id: string;
-  readonly params?: Stripe.InvoiceRetrieveParams;
+  readonly params?: Stripe.InvoiceRetrieveParams | undefined;
 }
 
-const RetrieveInvoiceRequest = Request.tagged<RetrieveInvoiceRequest>(
-  "RetrieveInvoiceRequest"
-);
+const RetrieveInvoiceRequest = Request.tagged<RetrieveInvoiceRequest>("RetrieveInvoiceRequest");
 
 const RetrieveInvoiceResolver: RequestResolver.RequestResolver<
   RetrieveInvoiceRequest,
   StripeService
 > = makeStripeResolver<RetrieveInvoiceRequest>((stripe, request) =>
-  stripe.invoices.retrieve(request.id, request.params)
+  stripe.invoices.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update an invoice
  */
-interface UpdateInvoiceRequest extends Request.Request<
-  Stripe.Invoice,
-  StripeError
-> {
+interface UpdateInvoiceRequest extends Request.Request<Stripe.Invoice, StripeError> {
   readonly _tag: "UpdateInvoiceRequest";
   readonly id: string;
-  readonly params?: Stripe.InvoiceUpdateParams;
+  readonly params?: Stripe.InvoiceUpdateParams | undefined;
 }
 
-const UpdateInvoiceRequest = Request.tagged<UpdateInvoiceRequest>(
-  "UpdateInvoiceRequest"
-);
+const UpdateInvoiceRequest = Request.tagged<UpdateInvoiceRequest>("UpdateInvoiceRequest");
 
-const UpdateInvoiceResolver: RequestResolver.RequestResolver<
-  UpdateInvoiceRequest,
-  StripeService
-> = makeStripeResolver<UpdateInvoiceRequest>((stripe, request) =>
-  stripe.invoices.update(request.id, request.params)
-);
+const UpdateInvoiceResolver: RequestResolver.RequestResolver<UpdateInvoiceRequest, StripeService> =
+  makeStripeResolver<UpdateInvoiceRequest>((stripe, request) =>
+    stripe.invoices.update(request.id, request.params),
+  );
 
 /**
  * Request to delete an invoice
  */
-interface DeleteInvoiceRequest extends Request.Request<
-  Stripe.DeletedInvoice,
-  StripeError
-> {
+interface DeleteInvoiceRequest extends Request.Request<Stripe.DeletedInvoice, StripeError> {
   readonly _tag: "DeleteInvoiceRequest";
   readonly id: string;
 }
 
-const DeleteInvoiceRequest = Request.tagged<DeleteInvoiceRequest>(
-  "DeleteInvoiceRequest"
-);
+const DeleteInvoiceRequest = Request.tagged<DeleteInvoiceRequest>("DeleteInvoiceRequest");
 
-const DeleteInvoiceResolver: RequestResolver.RequestResolver<
-  DeleteInvoiceRequest,
-  StripeService
-> = makeStripeResolver<DeleteInvoiceRequest>((stripe, request) =>
-  stripe.invoices.del(request.id)
-);
+const DeleteInvoiceResolver: RequestResolver.RequestResolver<DeleteInvoiceRequest, StripeService> =
+  makeStripeResolver<DeleteInvoiceRequest>((stripe, request) => stripe.invoices.del(request.id));
 
 /**
  * Request to list invoices
  */
-interface ListInvoicesRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Invoice>,
-  StripeError
-> {
+interface ListInvoicesRequest extends Request.Request<Stripe.ApiList<Stripe.Invoice>, StripeError> {
   readonly _tag: "ListInvoicesRequest";
-  readonly params?: Stripe.InvoiceListParams;
+  readonly params?: Stripe.InvoiceListParams | undefined;
 }
 
-const ListInvoicesRequest = Request.tagged<ListInvoicesRequest>(
-  "ListInvoicesRequest"
-);
+const ListInvoicesRequest = Request.tagged<ListInvoicesRequest>("ListInvoicesRequest");
 
-const ListInvoicesResolver: RequestResolver.RequestResolver<
-  ListInvoicesRequest,
-  StripeService
-> = makeStripeResolver<ListInvoicesRequest>((stripe, request) =>
-  stripe.invoices.list(request.params)
-);
+const ListInvoicesResolver: RequestResolver.RequestResolver<ListInvoicesRequest, StripeService> =
+  makeStripeResolver<ListInvoicesRequest>((stripe, request) =>
+    stripe.invoices.list(request.params),
+  );
 
 /**
  * Create an invoice
  */
 export const create = (
-  params: Stripe.InvoiceCreateParams
+  params: Stripe.InvoiceCreateParams,
 ): Effect.Effect<Stripe.Invoice, StripeError, StripeService> =>
   Effect.request(
     CreateInvoiceRequest({ params }),
-    RequestResolver.contextFromEffect(CreateInvoiceResolver)
+    RequestResolver.contextFromEffect(CreateInvoiceResolver),
   );
 
 /**
@@ -153,11 +118,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.InvoiceRetrieveParams
+  params?: Stripe.InvoiceRetrieveParams,
 ): Effect.Effect<Stripe.Invoice, StripeError, StripeService> =>
   Effect.request(
     RetrieveInvoiceRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveInvoiceResolver)
+    RequestResolver.contextFromEffect(RetrieveInvoiceResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -165,31 +130,29 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.InvoiceUpdateParams
+  params?: Stripe.InvoiceUpdateParams,
 ): Effect.Effect<Stripe.Invoice, StripeError, StripeService> =>
   Effect.request(
     UpdateInvoiceRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateInvoiceResolver)
+    RequestResolver.contextFromEffect(UpdateInvoiceResolver),
   );
 
 /**
  * Delete an invoice
  */
-export const del = (
-  id: string
-): Effect.Effect<Stripe.DeletedInvoice, StripeError, StripeService> =>
+export const del = (id: string): Effect.Effect<Stripe.DeletedInvoice, StripeError, StripeService> =>
   Effect.request(
     DeleteInvoiceRequest({ id }),
-    RequestResolver.contextFromEffect(DeleteInvoiceResolver)
+    RequestResolver.contextFromEffect(DeleteInvoiceResolver),
   );
 
 /**
  * List invoices
  */
 export const list = (
-  params?: Stripe.InvoiceListParams
+  params?: Stripe.InvoiceListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Invoice>, StripeError, StripeService> =>
   Effect.request(
     ListInvoicesRequest({ params }),
-    RequestResolver.contextFromEffect(ListInvoicesResolver)
+    RequestResolver.contextFromEffect(ListInvoicesResolver),
   ).pipe(Effect.withRequestCaching(true));

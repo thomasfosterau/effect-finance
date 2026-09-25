@@ -23,20 +23,17 @@ import {
 const TRUSTED = true;
 
 /** Extract the id of a possibly-expanded Stripe reference. */
-const idOf = (
-  value: string | { readonly id: string } | null | undefined
-): string | null => {
+const idOf = (value: string | { readonly id: string } | null | undefined): string | null => {
   if (value == null) return null;
   return typeof value === "string" ? value : value.id;
 };
 
-const metadataOf = (
-  metadata: Stripe.Metadata | null | undefined
-): Record<string, string> => metadata ?? {};
+const metadataOf = (metadata: Stripe.Metadata | null | undefined): Record<string, string> =>
+  metadata ?? {};
 
 /** Map a Stripe customer (or deleted customer) to the neutral entity. */
 export const toCustomer = (
-  customer: Stripe.Customer | Stripe.DeletedCustomer
+  customer: Stripe.Customer | Stripe.DeletedCustomer,
 ): CustomerNS.Customer => {
   if ("deleted" in customer && customer.deleted) {
     return new CustomerNS.Customer(
@@ -50,7 +47,7 @@ export const toCustomer = (
         created: 0,
         livemode: false,
       },
-      TRUSTED
+      TRUSTED,
     );
   }
   return new CustomerNS.Customer(
@@ -64,7 +61,7 @@ export const toCustomer = (
       created: customer.created,
       livemode: customer.livemode,
     },
-    TRUSTED
+    TRUSTED,
   );
 };
 
@@ -79,7 +76,7 @@ export const toProduct = (product: Stripe.Product): ProductNS.Product =>
       metadata: metadataOf(product.metadata),
       created: product.created,
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map a Stripe price to the neutral entity. */
@@ -98,19 +95,17 @@ export const toPrice = (price: Stripe.Price): PriceNS.Price =>
               interval: price.recurring.interval,
               intervalCount: price.recurring.interval_count,
             },
-            TRUSTED
+            TRUSTED,
           )
         : null,
       metadata: metadataOf(price.metadata),
       created: price.created,
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map a Stripe payment intent to the neutral entity. */
-export const toPaymentIntent = (
-  intent: Stripe.PaymentIntent
-): PaymentIntentNS.PaymentIntent =>
+export const toPaymentIntent = (intent: Stripe.PaymentIntent): PaymentIntentNS.PaymentIntent =>
   new PaymentIntentNS.PaymentIntent(
     {
       id: intent.id,
@@ -124,13 +119,11 @@ export const toPaymentIntent = (
       metadata: metadataOf(intent.metadata),
       created: intent.created,
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map a Stripe subscription to the neutral entity. */
-export const toSubscription = (
-  subscription: Stripe.Subscription
-): SubscriptionNS.Subscription =>
+export const toSubscription = (subscription: Stripe.Subscription): SubscriptionNS.Subscription =>
   new SubscriptionNS.Subscription(
     {
       id: subscription.id,
@@ -144,8 +137,8 @@ export const toSubscription = (
               priceId: item.price.id,
               quantity: item.quantity ?? null,
             },
-            TRUSTED
-          )
+            TRUSTED,
+          ),
       ),
       currentPeriodStart: subscription.current_period_start,
       currentPeriodEnd: subscription.current_period_end,
@@ -153,7 +146,7 @@ export const toSubscription = (
       metadata: metadataOf(subscription.metadata),
       created: subscription.created,
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map a Stripe refund to the neutral entity. */
@@ -170,14 +163,11 @@ export const toRefund = (refund: Stripe.Refund): RefundNS.Refund =>
       metadata: metadataOf(refund.metadata),
       created: refund.created,
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map a Stripe list response into a neutral page. */
-export const toPage = <S, A>(
-  list: Stripe.ApiList<S>,
-  map: (value: S) => A
-): Page<A> => ({
+export const toPage = <S, A>(list: Stripe.ApiList<S>, map: (value: S) => A): Page<A> => ({
   data: list.data.map(map),
   hasMore: list.has_more,
 });

@@ -41,14 +41,15 @@ interface CreateInboundTransferRequest extends Request.Request<
   readonly params: Stripe.Treasury.InboundTransferCreateParams;
 }
 
-const CreateInboundTransferRequest =
-  Request.tagged<CreateInboundTransferRequest>("CreateInboundTransferRequest");
+const CreateInboundTransferRequest = Request.tagged<CreateInboundTransferRequest>(
+  "CreateInboundTransferRequest",
+);
 
 const CreateInboundTransferResolver: RequestResolver.RequestResolver<
   CreateInboundTransferRequest,
   StripeService
 > = makeStripeResolver<CreateInboundTransferRequest>((stripe, request) =>
-  stripe.treasury.inboundTransfers.create(request.params)
+  stripe.treasury.inboundTransfers.create(request.params),
 );
 
 /**
@@ -60,19 +61,18 @@ interface RetrieveInboundTransferRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveInboundTransferRequest";
   readonly id: string;
-  readonly params?: Stripe.Treasury.InboundTransferRetrieveParams;
+  readonly params?: Stripe.Treasury.InboundTransferRetrieveParams | undefined;
 }
 
-const RetrieveInboundTransferRequest =
-  Request.tagged<RetrieveInboundTransferRequest>(
-    "RetrieveInboundTransferRequest"
-  );
+const RetrieveInboundTransferRequest = Request.tagged<RetrieveInboundTransferRequest>(
+  "RetrieveInboundTransferRequest",
+);
 
 const RetrieveInboundTransferResolver: RequestResolver.RequestResolver<
   RetrieveInboundTransferRequest,
   StripeService
 > = makeStripeResolver<RetrieveInboundTransferRequest>((stripe, request) =>
-  stripe.treasury.inboundTransfers.retrieve(request.id, request.params)
+  stripe.treasury.inboundTransfers.retrieve(request.id, request.params),
 );
 
 /**
@@ -87,14 +87,14 @@ interface ListInboundTransfersRequest extends Request.Request<
 }
 
 const ListInboundTransfersRequest = Request.tagged<ListInboundTransfersRequest>(
-  "ListInboundTransfersRequest"
+  "ListInboundTransfersRequest",
 );
 
 const ListInboundTransfersResolver: RequestResolver.RequestResolver<
   ListInboundTransfersRequest,
   StripeService
 > = makeStripeResolver<ListInboundTransfersRequest>((stripe, request) =>
-  stripe.treasury.inboundTransfers.list(request.params)
+  stripe.treasury.inboundTransfers.list(request.params),
 );
 
 /**
@@ -108,25 +108,26 @@ interface CancelInboundTransferRequest extends Request.Request<
   readonly id: string;
 }
 
-const CancelInboundTransferRequest =
-  Request.tagged<CancelInboundTransferRequest>("CancelInboundTransferRequest");
+const CancelInboundTransferRequest = Request.tagged<CancelInboundTransferRequest>(
+  "CancelInboundTransferRequest",
+);
 
 const CancelInboundTransferResolver: RequestResolver.RequestResolver<
   CancelInboundTransferRequest,
   StripeService
 > = makeStripeResolver<CancelInboundTransferRequest>((stripe, request) =>
-  stripe.treasury.inboundTransfers.cancel(request.id)
+  stripe.treasury.inboundTransfers.cancel(request.id),
 );
 
 /**
  * Create an inbound transfer
  */
 export const create = (
-  params: Stripe.Treasury.InboundTransferCreateParams
+  params: Stripe.Treasury.InboundTransferCreateParams,
 ): Effect.Effect<Stripe.Treasury.InboundTransfer, StripeError, StripeService> =>
   Effect.request(
     CreateInboundTransferRequest({ params }),
-    RequestResolver.contextFromEffect(CreateInboundTransferResolver)
+    RequestResolver.contextFromEffect(CreateInboundTransferResolver),
   );
 
 /**
@@ -134,35 +135,31 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.Treasury.InboundTransferRetrieveParams
+  params?: Stripe.Treasury.InboundTransferRetrieveParams,
 ): Effect.Effect<Stripe.Treasury.InboundTransfer, StripeError, StripeService> =>
   Effect.request(
     RetrieveInboundTransferRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveInboundTransferResolver)
+    RequestResolver.contextFromEffect(RetrieveInboundTransferResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
  * List inbound transfers
  */
 export const list = (
-  params: Stripe.Treasury.InboundTransferListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.Treasury.InboundTransfer>,
-  StripeError,
-  StripeService
-> =>
+  params: Stripe.Treasury.InboundTransferListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.Treasury.InboundTransfer>, StripeError, StripeService> =>
   Effect.request(
     ListInboundTransfersRequest({ params }),
-    RequestResolver.contextFromEffect(ListInboundTransfersResolver)
+    RequestResolver.contextFromEffect(ListInboundTransfersResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
  * Cancel an inbound transfer
  */
 export const cancel = (
-  id: string
+  id: string,
 ): Effect.Effect<Stripe.Treasury.InboundTransfer, StripeError, StripeService> =>
   Effect.request(
     CancelInboundTransferRequest({ id }),
-    RequestResolver.contextFromEffect(CancelInboundTransferResolver)
+    RequestResolver.contextFromEffect(CancelInboundTransferResolver),
   );

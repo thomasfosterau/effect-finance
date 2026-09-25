@@ -35,6 +35,7 @@
 import { Effect } from "effect";
 import type Stripe from "stripe";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
+import { omitUndefined } from "./internal/omitUndefined.js";
 import { StripeService } from "./Stripe.js";
 
 /**
@@ -49,7 +50,7 @@ export interface WebhookConfig {
   /**
    * Tolerance in seconds for timestamp verification (default: 300)
    */
-  readonly tolerance?: number;
+  readonly tolerance?: number | undefined;
 }
 
 /**
@@ -88,18 +89,16 @@ export const constructEvent = (
   payload: string | Buffer,
   signature: string,
   secret: string,
-  tolerance: number = DEFAULT_TOLERANCE
+  tolerance: number = DEFAULT_TOLERANCE,
 ): Effect.Effect<Stripe.Event, SignatureVerificationError, StripeService> =>
   Effect.gen(function* () {
     const stripe = yield* StripeService;
 
     return yield* Effect.try({
-      try: () =>
-        stripe.webhooks.constructEvent(payload, signature, secret, tolerance),
+      try: () => stripe.webhooks.constructEvent(payload, signature, secret, tolerance),
       catch: (error) => {
         const message = error instanceof Error ? error.message : String(error);
-        const payloadString =
-          typeof payload === "string" ? payload : payload.toString("utf8");
+        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
         return new SignatureVerificationError({
           message,
           header: signature,
@@ -147,24 +146,17 @@ export const constructEventAsync = (
   signature: string,
   secret: string,
   tolerance: number = DEFAULT_TOLERANCE,
-  cryptoProvider?: Stripe.CryptoProvider
+  cryptoProvider?: Stripe.CryptoProvider,
 ): Effect.Effect<Stripe.Event, SignatureVerificationError, StripeService> =>
   Effect.gen(function* () {
     const stripe = yield* StripeService;
 
     return yield* Effect.tryPromise({
       try: () =>
-        stripe.webhooks.constructEventAsync(
-          payload,
-          signature,
-          secret,
-          tolerance,
-          cryptoProvider
-        ),
+        stripe.webhooks.constructEventAsync(payload, signature, secret, tolerance, cryptoProvider),
       catch: (error) => {
         const message = error instanceof Error ? error.message : String(error);
-        const payloadString =
-          typeof payload === "string" ? payload : payload.toString("utf8");
+        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
         return new SignatureVerificationError({
           message,
           header: signature,
@@ -208,22 +200,22 @@ export const constructEventAsync = (
 export const generateTestHeaderString = (
   payload: string | Buffer,
   secret: string,
-  timestamp?: number
+  timestamp?: number,
 ): Effect.Effect<string, SignatureVerificationError, StripeService> =>
   Effect.gen(function* () {
     const stripe = yield* StripeService;
     return yield* Effect.try({
       try: () =>
-        stripe.webhooks.generateTestHeaderString({
-          payload:
-            typeof payload === "string" ? payload : payload.toString("utf8"),
-          secret,
-          timestamp,
-        }),
+        stripe.webhooks.generateTestHeaderString(
+          omitUndefined({
+            payload: typeof payload === "string" ? payload : payload.toString("utf8"),
+            secret,
+            timestamp,
+          }),
+        ),
       catch: (error) => {
         const message = error instanceof Error ? error.message : String(error);
-        const payloadString =
-          typeof payload === "string" ? payload : payload.toString("utf8");
+        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
         return new SignatureVerificationError({
           message,
           header: undefined,
@@ -276,23 +268,23 @@ export const generateTestHeaderStringAsync = (
   payload: string | Buffer,
   secret: string,
   timestamp?: number,
-  cryptoProvider?: Stripe.CryptoProvider
+  cryptoProvider?: Stripe.CryptoProvider,
 ): Effect.Effect<string, SignatureVerificationError, StripeService> =>
   Effect.gen(function* () {
     const stripe = yield* StripeService;
     return yield* Effect.tryPromise({
       try: () =>
-        stripe.webhooks.generateTestHeaderStringAsync({
-          payload:
-            typeof payload === "string" ? payload : payload.toString("utf8"),
-          secret,
-          timestamp,
-          cryptoProvider,
-        }),
+        stripe.webhooks.generateTestHeaderStringAsync(
+          omitUndefined({
+            payload: typeof payload === "string" ? payload : payload.toString("utf8"),
+            secret,
+            timestamp,
+            cryptoProvider,
+          }),
+        ),
       catch: (error) => {
         const message = error instanceof Error ? error.message : String(error);
-        const payloadString =
-          typeof payload === "string" ? payload : payload.toString("utf8");
+        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
         return new SignatureVerificationError({
           message,
           header: undefined,

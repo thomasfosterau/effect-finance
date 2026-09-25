@@ -39,14 +39,15 @@ interface CreateWebhookEndpointRequest extends Request.Request<
   readonly params: Stripe.WebhookEndpointCreateParams;
 }
 
-const CreateWebhookEndpointRequest =
-  Request.tagged<CreateWebhookEndpointRequest>("CreateWebhookEndpointRequest");
+const CreateWebhookEndpointRequest = Request.tagged<CreateWebhookEndpointRequest>(
+  "CreateWebhookEndpointRequest",
+);
 
 const CreateWebhookEndpointResolver: RequestResolver.RequestResolver<
   CreateWebhookEndpointRequest,
   StripeService
 > = makeStripeResolver<CreateWebhookEndpointRequest>((stripe, request) =>
-  stripe.webhookEndpoints.create(request.params)
+  stripe.webhookEndpoints.create(request.params),
 );
 
 /**
@@ -58,19 +59,18 @@ interface RetrieveWebhookEndpointRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveWebhookEndpointRequest";
   readonly id: string;
-  readonly params?: Stripe.WebhookEndpointRetrieveParams;
+  readonly params?: Stripe.WebhookEndpointRetrieveParams | undefined;
 }
 
-const RetrieveWebhookEndpointRequest =
-  Request.tagged<RetrieveWebhookEndpointRequest>(
-    "RetrieveWebhookEndpointRequest"
-  );
+const RetrieveWebhookEndpointRequest = Request.tagged<RetrieveWebhookEndpointRequest>(
+  "RetrieveWebhookEndpointRequest",
+);
 
 const RetrieveWebhookEndpointResolver: RequestResolver.RequestResolver<
   RetrieveWebhookEndpointRequest,
   StripeService
 > = makeStripeResolver<RetrieveWebhookEndpointRequest>((stripe, request) =>
-  stripe.webhookEndpoints.retrieve(request.id, request.params)
+  stripe.webhookEndpoints.retrieve(request.id, request.params),
 );
 
 /**
@@ -82,17 +82,18 @@ interface UpdateWebhookEndpointRequest extends Request.Request<
 > {
   readonly _tag: "UpdateWebhookEndpointRequest";
   readonly id: string;
-  readonly params?: Stripe.WebhookEndpointUpdateParams;
+  readonly params?: Stripe.WebhookEndpointUpdateParams | undefined;
 }
 
-const UpdateWebhookEndpointRequest =
-  Request.tagged<UpdateWebhookEndpointRequest>("UpdateWebhookEndpointRequest");
+const UpdateWebhookEndpointRequest = Request.tagged<UpdateWebhookEndpointRequest>(
+  "UpdateWebhookEndpointRequest",
+);
 
 const UpdateWebhookEndpointResolver: RequestResolver.RequestResolver<
   UpdateWebhookEndpointRequest,
   StripeService
 > = makeStripeResolver<UpdateWebhookEndpointRequest>((stripe, request) =>
-  stripe.webhookEndpoints.update(request.id, request.params)
+  stripe.webhookEndpoints.update(request.id, request.params),
 );
 
 /**
@@ -106,14 +107,15 @@ interface DeleteWebhookEndpointRequest extends Request.Request<
   readonly id: string;
 }
 
-const DeleteWebhookEndpointRequest =
-  Request.tagged<DeleteWebhookEndpointRequest>("DeleteWebhookEndpointRequest");
+const DeleteWebhookEndpointRequest = Request.tagged<DeleteWebhookEndpointRequest>(
+  "DeleteWebhookEndpointRequest",
+);
 
 const DeleteWebhookEndpointResolver: RequestResolver.RequestResolver<
   DeleteWebhookEndpointRequest,
   StripeService
 > = makeStripeResolver<DeleteWebhookEndpointRequest>((stripe, request) =>
-  stripe.webhookEndpoints.del(request.id)
+  stripe.webhookEndpoints.del(request.id),
 );
 
 /**
@@ -124,29 +126,29 @@ interface ListWebhookEndpointsRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListWebhookEndpointsRequest";
-  readonly params?: Stripe.WebhookEndpointListParams;
+  readonly params?: Stripe.WebhookEndpointListParams | undefined;
 }
 
 const ListWebhookEndpointsRequest = Request.tagged<ListWebhookEndpointsRequest>(
-  "ListWebhookEndpointsRequest"
+  "ListWebhookEndpointsRequest",
 );
 
 const ListWebhookEndpointsResolver: RequestResolver.RequestResolver<
   ListWebhookEndpointsRequest,
   StripeService
 > = makeStripeResolver<ListWebhookEndpointsRequest>((stripe, request) =>
-  stripe.webhookEndpoints.list(request.params)
+  stripe.webhookEndpoints.list(request.params),
 );
 
 /**
  * Create a webhook endpoint
  */
 export const create = (
-  params: Stripe.WebhookEndpointCreateParams
+  params: Stripe.WebhookEndpointCreateParams,
 ): Effect.Effect<Stripe.WebhookEndpoint, StripeError, StripeService> =>
   Effect.request(
     CreateWebhookEndpointRequest({ params }),
-    RequestResolver.contextFromEffect(CreateWebhookEndpointResolver)
+    RequestResolver.contextFromEffect(CreateWebhookEndpointResolver),
   );
 
 /**
@@ -154,11 +156,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.WebhookEndpointRetrieveParams
+  params?: Stripe.WebhookEndpointRetrieveParams,
 ): Effect.Effect<Stripe.WebhookEndpoint, StripeError, StripeService> =>
   Effect.request(
     RetrieveWebhookEndpointRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveWebhookEndpointResolver)
+    RequestResolver.contextFromEffect(RetrieveWebhookEndpointResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -166,35 +168,31 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.WebhookEndpointUpdateParams
+  params?: Stripe.WebhookEndpointUpdateParams,
 ): Effect.Effect<Stripe.WebhookEndpoint, StripeError, StripeService> =>
   Effect.request(
     UpdateWebhookEndpointRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateWebhookEndpointResolver)
+    RequestResolver.contextFromEffect(UpdateWebhookEndpointResolver),
   );
 
 /**
  * Delete a webhook endpoint
  */
 export const del = (
-  id: string
+  id: string,
 ): Effect.Effect<Stripe.DeletedWebhookEndpoint, StripeError, StripeService> =>
   Effect.request(
     DeleteWebhookEndpointRequest({ id }),
-    RequestResolver.contextFromEffect(DeleteWebhookEndpointResolver)
+    RequestResolver.contextFromEffect(DeleteWebhookEndpointResolver),
   );
 
 /**
  * List webhook endpoints
  */
 export const list = (
-  params?: Stripe.WebhookEndpointListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.WebhookEndpoint>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.WebhookEndpointListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.WebhookEndpoint>, StripeError, StripeService> =>
   Effect.request(
     ListWebhookEndpointsRequest({ params }),
-    RequestResolver.contextFromEffect(ListWebhookEndpointsResolver)
+    RequestResolver.contextFromEffect(ListWebhookEndpointsResolver),
   ).pipe(Effect.withRequestCaching(true));

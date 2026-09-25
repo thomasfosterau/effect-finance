@@ -32,69 +32,54 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a transfer
  */
-interface CreateTransferRequest extends Request.Request<
-  Stripe.Transfer,
-  StripeError
-> {
+interface CreateTransferRequest extends Request.Request<Stripe.Transfer, StripeError> {
   readonly _tag: "CreateTransferRequest";
   readonly params: Stripe.TransferCreateParams;
 }
 
-const CreateTransferRequest = Request.tagged<CreateTransferRequest>(
-  "CreateTransferRequest"
-);
+const CreateTransferRequest = Request.tagged<CreateTransferRequest>("CreateTransferRequest");
 
 const CreateTransferResolver: RequestResolver.RequestResolver<
   CreateTransferRequest,
   StripeService
 > = makeStripeResolver<CreateTransferRequest>((stripe, request) =>
-  stripe.transfers.create(request.params)
+  stripe.transfers.create(request.params),
 );
 
 /**
  * Request to retrieve a transfer
  */
-interface RetrieveTransferRequest extends Request.Request<
-  Stripe.Transfer,
-  StripeError
-> {
+interface RetrieveTransferRequest extends Request.Request<Stripe.Transfer, StripeError> {
   readonly _tag: "RetrieveTransferRequest";
   readonly id: string;
-  readonly params?: Stripe.TransferRetrieveParams;
+  readonly params?: Stripe.TransferRetrieveParams | undefined;
 }
 
-const RetrieveTransferRequest = Request.tagged<RetrieveTransferRequest>(
-  "RetrieveTransferRequest"
-);
+const RetrieveTransferRequest = Request.tagged<RetrieveTransferRequest>("RetrieveTransferRequest");
 
 const RetrieveTransferResolver: RequestResolver.RequestResolver<
   RetrieveTransferRequest,
   StripeService
 > = makeStripeResolver<RetrieveTransferRequest>((stripe, request) =>
-  stripe.transfers.retrieve(request.id, request.params)
+  stripe.transfers.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update a transfer
  */
-interface UpdateTransferRequest extends Request.Request<
-  Stripe.Transfer,
-  StripeError
-> {
+interface UpdateTransferRequest extends Request.Request<Stripe.Transfer, StripeError> {
   readonly _tag: "UpdateTransferRequest";
   readonly id: string;
-  readonly params?: Stripe.TransferUpdateParams;
+  readonly params?: Stripe.TransferUpdateParams | undefined;
 }
 
-const UpdateTransferRequest = Request.tagged<UpdateTransferRequest>(
-  "UpdateTransferRequest"
-);
+const UpdateTransferRequest = Request.tagged<UpdateTransferRequest>("UpdateTransferRequest");
 
 const UpdateTransferResolver: RequestResolver.RequestResolver<
   UpdateTransferRequest,
   StripeService
 > = makeStripeResolver<UpdateTransferRequest>((stripe, request) =>
-  stripe.transfers.update(request.id, request.params)
+  stripe.transfers.update(request.id, request.params),
 );
 
 /**
@@ -105,29 +90,25 @@ interface ListTransfersRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListTransfersRequest";
-  readonly params?: Stripe.TransferListParams;
+  readonly params?: Stripe.TransferListParams | undefined;
 }
 
-const ListTransfersRequest = Request.tagged<ListTransfersRequest>(
-  "ListTransfersRequest"
-);
+const ListTransfersRequest = Request.tagged<ListTransfersRequest>("ListTransfersRequest");
 
-const ListTransfersResolver: RequestResolver.RequestResolver<
-  ListTransfersRequest,
-  StripeService
-> = makeStripeResolver<ListTransfersRequest>((stripe, request) =>
-  stripe.transfers.list(request.params)
-);
+const ListTransfersResolver: RequestResolver.RequestResolver<ListTransfersRequest, StripeService> =
+  makeStripeResolver<ListTransfersRequest>((stripe, request) =>
+    stripe.transfers.list(request.params),
+  );
 
 /**
  * Create a transfer
  */
 export const create = (
-  params: Stripe.TransferCreateParams
+  params: Stripe.TransferCreateParams,
 ): Effect.Effect<Stripe.Transfer, StripeError, StripeService> =>
   Effect.request(
     CreateTransferRequest({ params }),
-    RequestResolver.contextFromEffect(CreateTransferResolver)
+    RequestResolver.contextFromEffect(CreateTransferResolver),
   );
 
 /**
@@ -135,11 +116,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.TransferRetrieveParams
+  params?: Stripe.TransferRetrieveParams,
 ): Effect.Effect<Stripe.Transfer, StripeError, StripeService> =>
   Effect.request(
     RetrieveTransferRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveTransferResolver)
+    RequestResolver.contextFromEffect(RetrieveTransferResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -147,20 +128,20 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.TransferUpdateParams
+  params?: Stripe.TransferUpdateParams,
 ): Effect.Effect<Stripe.Transfer, StripeError, StripeService> =>
   Effect.request(
     UpdateTransferRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateTransferResolver)
+    RequestResolver.contextFromEffect(UpdateTransferResolver),
   );
 
 /**
  * List transfers
  */
 export const list = (
-  params?: Stripe.TransferListParams
+  params?: Stripe.TransferListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Transfer>, StripeError, StripeService> =>
   Effect.request(
     ListTransfersRequest({ params }),
-    RequestResolver.contextFromEffect(ListTransfersResolver)
+    RequestResolver.contextFromEffect(ListTransfersResolver),
   ).pipe(Effect.withRequestCaching(true));

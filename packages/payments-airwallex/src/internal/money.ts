@@ -30,15 +30,7 @@ const ZERO_DECIMAL = new Set([
 ]);
 
 // Currencies with three decimal places.
-const THREE_DECIMAL = new Set([
-  "bhd",
-  "iqd",
-  "jod",
-  "kwd",
-  "lyd",
-  "omr",
-  "tnd",
-]);
+const THREE_DECIMAL = new Set(["bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd"]);
 
 const factor = (currency: string): number => {
   const code = currency.toLowerCase();
@@ -52,5 +44,4 @@ export const toMinorUnits = (major: number, currency: string): number =>
   Math.round(major * factor(currency));
 
 /** Convert neutral minor units to a major-unit amount (Airwallex). */
-export const toMajorUnits = (minor: number, currency: string): number =>
-  minor / factor(currency);
+export const toMajorUnits = (minor: number, currency: string): number => minor / factor(currency);
