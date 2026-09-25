@@ -15,7 +15,7 @@ import type { PaymentsError } from "./PaymentsError.js";
 /**
  * The lifecycle status of a payment intent, normalized across providers.
  */
-export const PaymentStatus = Schema.Literal(
+export const PaymentStatus = Schema.Literals([
   "requires_payment_method",
   "requires_confirmation",
   "requires_action",
@@ -23,8 +23,8 @@ export const PaymentStatus = Schema.Literal(
   "requires_capture",
   "canceled",
   "succeeded",
-);
-export type PaymentStatus = Schema.Schema.Type<typeof PaymentStatus>;
+]);
+export type PaymentStatus = typeof PaymentStatus.Type;
 
 /**
  * An attempt to collect a payment of a given amount and currency.
@@ -77,7 +77,7 @@ export interface ListParams {
 /**
  * The payment intent capability.
  */
-export class PaymentIntents extends Context.Tag("@effect-payments/PaymentIntents")<
+export class PaymentIntents extends Context.Service<
   PaymentIntents,
   {
     readonly create: (params: CreateParams) => Effect.Effect<PaymentIntent, PaymentsError>;
@@ -93,19 +93,33 @@ export class PaymentIntents extends Context.Tag("@effect-payments/PaymentIntents
     readonly cancel: (id: string) => Effect.Effect<PaymentIntent, PaymentsError>;
     readonly list: (params?: ListParams) => Effect.Effect<Page<PaymentIntent>, PaymentsError>;
   }
->() {}
-
-const accessors = Effect.serviceFunctions(PaymentIntents);
+>()("@effect-payments/PaymentIntents") {}
 
 /** Create a payment intent. */
-export const create = accessors.create;
+export const create = (
+  params: CreateParams,
+): Effect.Effect<PaymentIntent, PaymentsError, PaymentIntents> =>
+  Effect.flatMap(PaymentIntents, (service) => service.create(params));
 /** Retrieve a payment intent by id. */
-export const retrieve = accessors.retrieve;
+export const retrieve = (id: string): Effect.Effect<PaymentIntent, PaymentsError, PaymentIntents> =>
+  Effect.flatMap(PaymentIntents, (service) => service.retrieve(id));
 /** Update a payment intent. */
-export const update = accessors.update;
+export const update = (
+  id: string,
+  params: UpdateParams,
+): Effect.Effect<PaymentIntent, PaymentsError, PaymentIntents> =>
+  Effect.flatMap(PaymentIntents, (service) => service.update(id, params));
 /** Confirm a payment intent. */
-export const confirm = accessors.confirm;
+export const confirm = (
+  id: string,
+  params?: ConfirmParams,
+): Effect.Effect<PaymentIntent, PaymentsError, PaymentIntents> =>
+  Effect.flatMap(PaymentIntents, (service) => service.confirm(id, params));
 /** Cancel a payment intent. */
-export const cancel = accessors.cancel;
+export const cancel = (id: string): Effect.Effect<PaymentIntent, PaymentsError, PaymentIntents> =>
+  Effect.flatMap(PaymentIntents, (service) => service.cancel(id));
 /** List payment intents. */
-export const list = accessors.list;
+export const list = (
+  params?: ListParams,
+): Effect.Effect<Page<PaymentIntent>, PaymentsError, PaymentIntents> =>
+  Effect.flatMap(PaymentIntents, (service) => service.list(params));

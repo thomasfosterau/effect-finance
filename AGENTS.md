@@ -16,7 +16,8 @@ A new package adds a row here, a `CLAUDE.md` of its own, its `#check` edge in th
 ## Common pitfalls
 
 - **Never edit a version in a `package.json`.** Every external version lives in [`pnpm-workspace.yaml`](pnpm-workspace.yaml) under `catalog:` (peer ranges under `catalogs.peers`); package.json files carry only `catalog:`, `catalog:peers` or `workspace:`, and `catalogMode: strict` rejects anything else at install. After editing the catalog, run `pnpm install` and commit the regenerated `pnpm-lock.yaml` — a stale lockfile fails CI at once with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. `@effect/tsgo`, `@typescript/native` and `vite-plus` move together (the tsgo patch hard-errors at install on an unsupported `tsc` or `oxlint`); read the comments on those entries before bumping any of the three.
-- **Still Effect 3.** The workspace pins the newest Effect 3.x until #38 moves it to `4.0.0-rc.115`. Do not mix in Effect 4 APIs (`Context.Service`, `effect/unstable/*`, `Schema.TaggedErrorClass`) before that migration, and do not add `@mpsuesser/oxlint-plugin-effect` back until then — it imports Effect 4 at load and breaks `vp lint` (see the comment in `vite.config.ts`).
+- **Effect 4 release candidate, pinned.** The catalog pins `effect` at `4.0.0-rc.115` (in lockstep with the consuming applications and the sibling libraries) and the published peer range is `>=4.0.0-rc.115`. rc.115 spells the schema-backed error class `Schema.TaggedError<Self>()(tag, fields)`; guides that say `Schema.TaggedErrorClass` describe a later spelling. The weekly `Effect Canary` workflow runs the gates against `effect@rc` and files an issue when the next prerelease breaks them.
+- **HTTP goes through `effect/unstable/http`.** The PayPal and Airwallex clients require `HttpClient.HttpClient` and never touch `globalThis.fetch`; tests stub `FetchHttpClient.Fetch`. The Stripe provider still runs on the official SDK until the fetch-only transport (#39).
 - **`dist/` is the product.** Each package is a `vp pack` (tsdown) library with one ESM bundle + `.d.ts` per subpath; `exports` points at `dist/` and is also the list `vite.package.ts` derives the pack entries from. A provider consumes the core the way a consumer does — through its `dist/` — so every provider task carries a `{ task: "build", from: "dependencies" }` edge, and `tests/dist-consumer` type-checks a consumer fixture against the emitted declarations.
 - **One flat module per subpath.** `src/<Name>.ts` is published as `./<Name>` (`src/Treasury.FinancialAccount.ts` → `./Treasury.FinancialAccount`). A new public module is a new `exports` entry; `src/internal/**` is never exported.
 - **`"sideEffects": false` is a claim about `dist/`.** Every emitted `.js` must be pure declarations: no top-level statements with effects.
@@ -28,6 +29,7 @@ Everything else that must be visible when touching a package is in that package'
 
 ## Conventions
 
+- **Effect 4 idioms.** Services are `Context.Service` classes with explicit accessor functions (`Effect.flatMap(Customers, (service) => service.create(params))`); errors are `Schema.TaggedError` classes, yielded directly (`return yield* new PaymentConfigError({ … })`); configuration is read through `Config`; vendor JSON is decoded with `Schema` at the boundary.
 - **Resource-centric API.** Programs import a resource module and call it (`Customer.create(params)`), never reach through a client service. Each resource module exposes `create` / `retrieve` / `update` / `del` / `list` as applicable (`del` because `delete` is reserved).
 - **Optional members are declared `?: T | undefined`, never bare `?: T`.** The workspace compiles with `exactOptionalPropertyTypes`, and a consumer forwarding an optional of its own must still compile. An options object bound for the Stripe SDK (whose types declare bare `?: T`) goes through `omitUndefined` (`packages/payments-stripe/src/internal/omitUndefined.ts`).
 - **Tests import from `vite-plus/test`**, never `vitest`, live in `packages/<name>/tests/`, and import the module under test as `../src/<Module>.ts`. Every vendor seam is stubbed (a fake SDK client, a stubbed `fetch`); no test reaches a live account.
@@ -80,7 +82,7 @@ These are standing instructions and approvals; they override any default "don't 
 
 ## Effect best practices
 
-**IMPORTANT:** Always consult effect-solutions before writing Effect code: `vp exec effect-solutions list`, then `vp exec effect-solutions show <topic>...` (basics, services-and-layers, data-modeling, error-handling, config, testing). Never guess at Effect patterns. The guides describe Effect 4; until #38 lands, check that an API exists in Effect 3 before using it.
+**IMPORTANT:** Always consult effect-solutions before writing Effect code: `vp exec effect-solutions list`, then `vp exec effect-solutions show <topic>...` (basics, services-and-layers, data-modeling, error-handling, config, testing). Never guess at Effect patterns. The guides track Effect 4 as a whole; check an API exists in the pinned `4.0.0-rc.115` (`node_modules/effect/dist/*.d.ts`) before relying on it.
 
 ## Agent sessions
 

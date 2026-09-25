@@ -26,10 +26,7 @@ export class Money extends Schema.Class<Money>("@effect-payments/Money")({
 export const make = (amount: number, currency: string): Money => Money.make({ amount, currency });
 
 /** Shared shape for metadata bags accepted/returned across resources. */
-export const Metadata = Schema.Record({
-  key: Schema.String,
-  value: Schema.String,
-});
+export const Metadata = Schema.Record(Schema.String, Schema.String);
 
 /** A bag of arbitrary string key/value pairs attached to a resource. */
-export type Metadata = Schema.Schema.Type<typeof Metadata>;
+export type Metadata = typeof Metadata.Type;

@@ -13,10 +13,9 @@
 # lockfile fails CI at once with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
 #
 # The toolchain entries (vite-plus, the TypeScript 6/7 pair, @effect/tsgo,
-# fallow, changesets) are copied from the effect-web library, the newest
-# sibling on the owner's Vite+ library standard. `effect` is the exception: this
-# workspace is still on Effect 3 until the v4 migration (#38), so it pins the
-# newest 3.x rather than the siblings' 4.0.0-rc.115.
+# fallow, changesets) and the Effect pin are copied from the effect-web
+# library, the newest sibling on the owner's Vite+ library standard, and kept
+# in lockstep with the consuming applications' catalogs (effect 4.0.0-rc.115).
 packages:
   - packages/*
   - tests/*
@@ -38,10 +37,10 @@ catalog:
   # `components` table in node_modules/@effect/tsgo/dist/effect-tsgo.cjs
   # before bumping any of the three.
   "@effect/tsgo": 0.45.0
+  "@mpsuesser/oxlint-plugin-effect": ^0.5.0
   "@types/node": ^26.4.1
   "@vitest/coverage-istanbul": 4.1.11
-  # Effect 3 until #38 (slice 2 of #36) moves the workspace to 4.0.0-rc.115.
-  effect: 3.22.2
+  effect: 4.0.0-rc.115
   effect-solutions: ^0.5.3
   fallow: 3.28.0
   # The official Stripe SDK. A runtime dependency of
@@ -69,13 +68,15 @@ catalog:
   vitest: 4.1.11
 
 # Peer ranges the PUBLISHED packages declare. Kept as a named catalog so the
-# strict catalog mode still governs them while they stay ranges. `pnpm publish`
+# strict catalog mode still governs them while they stay ranges (an exact
+# `4.0.0-rc.115` peer would reject a consumer on rc.116). `pnpm publish`
 # replaces `catalog:peers` with these ranges in the published manifest.
 catalogs:
   peers:
-    # Unchanged from the pre-migration manifests; #38 raises it to
-    # ">=4.0.0-rc.115" with the v4 migration.
-    effect: ^3.10.0
+    # rc.115 renamed `Config.string` → `Config.String` (and the other
+    # primitives); everything here is built and tested against rc.115, the
+    # version the consuming applications and the sibling libraries pin.
+    effect: ">=4.0.0-rc.115"
 
 overrides:
   vite: "catalog:"

@@ -19,87 +19,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create a product
- */
-interface CreateProductRequest extends Request.Request<Stripe.Product, StripeError> {
-  readonly _tag: "CreateProductRequest";
-  readonly params: Stripe.ProductCreateParams;
-}
-
-const CreateProductRequest = Request.tagged<CreateProductRequest>("CreateProductRequest");
-
-const CreateProductResolver: RequestResolver.RequestResolver<CreateProductRequest, StripeService> =
-  makeStripeResolver<CreateProductRequest>((stripe, request) =>
-    stripe.products.create(request.params),
-  );
-
-/**
- * Request to retrieve a product
- */
-interface RetrieveProductRequest extends Request.Request<Stripe.Product, StripeError> {
-  readonly _tag: "RetrieveProductRequest";
-  readonly id: string;
-  readonly params?: Stripe.ProductRetrieveParams | undefined;
-}
-
-const RetrieveProductRequest = Request.tagged<RetrieveProductRequest>("RetrieveProductRequest");
-
-const RetrieveProductResolver: RequestResolver.RequestResolver<
-  RetrieveProductRequest,
-  StripeService
-> = makeStripeResolver<RetrieveProductRequest>((stripe, request) =>
-  stripe.products.retrieve(request.id, request.params),
-);
-
-/**
- * Request to update a product
- */
-interface UpdateProductRequest extends Request.Request<Stripe.Product, StripeError> {
-  readonly _tag: "UpdateProductRequest";
-  readonly id: string;
-  readonly params?: Stripe.ProductUpdateParams | undefined;
-}
-
-const UpdateProductRequest = Request.tagged<UpdateProductRequest>("UpdateProductRequest");
-
-const UpdateProductResolver: RequestResolver.RequestResolver<UpdateProductRequest, StripeService> =
-  makeStripeResolver<UpdateProductRequest>((stripe, request) =>
-    stripe.products.update(request.id, request.params),
-  );
-
-/**
- * Request to delete a product
- */
-interface DeleteProductRequest extends Request.Request<Stripe.DeletedProduct, StripeError> {
-  readonly _tag: "DeleteProductRequest";
-  readonly id: string;
-}
-
-const DeleteProductRequest = Request.tagged<DeleteProductRequest>("DeleteProductRequest");
-
-const DeleteProductResolver: RequestResolver.RequestResolver<DeleteProductRequest, StripeService> =
-  makeStripeResolver<DeleteProductRequest>((stripe, request) => stripe.products.del(request.id));
-
-/**
- * Request to list products
- */
-interface ListProductsRequest extends Request.Request<Stripe.ApiList<Stripe.Product>, StripeError> {
-  readonly _tag: "ListProductsRequest";
-  readonly params?: Stripe.ProductListParams | undefined;
-}
-
-const ListProductsRequest = Request.tagged<ListProductsRequest>("ListProductsRequest");
-
-const ListProductsResolver: RequestResolver.RequestResolver<ListProductsRequest, StripeService> =
-  makeStripeResolver<ListProductsRequest>((stripe, request) =>
-    stripe.products.list(request.params),
-  );
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create a product
@@ -107,10 +30,7 @@ const ListProductsResolver: RequestResolver.RequestResolver<ListProductsRequest,
 export const create = (
   params: Stripe.ProductCreateParams,
 ): Effect.Effect<Stripe.Product, StripeError, StripeService> =>
-  Effect.request(
-    CreateProductRequest({ params }),
-    RequestResolver.contextFromEffect(CreateProductResolver),
-  );
+  wrapStripeCall((stripe) => stripe.products.create(params));
 
 /**
  * Retrieve a product
@@ -119,10 +39,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.ProductRetrieveParams,
 ): Effect.Effect<Stripe.Product, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveProductRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveProductResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.products.retrieve(id, params));
 
 /**
  * Update a product
@@ -131,19 +48,13 @@ export const update = (
   id: string,
   params?: Stripe.ProductUpdateParams,
 ): Effect.Effect<Stripe.Product, StripeError, StripeService> =>
-  Effect.request(
-    UpdateProductRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateProductResolver),
-  );
+  wrapStripeCall((stripe) => stripe.products.update(id, params));
 
 /**
  * Delete a product
  */
 export const del = (id: string): Effect.Effect<Stripe.DeletedProduct, StripeError, StripeService> =>
-  Effect.request(
-    DeleteProductRequest({ id }),
-    RequestResolver.contextFromEffect(DeleteProductResolver),
-  );
+  wrapStripeCall((stripe) => stripe.products.del(id));
 
 /**
  * List products
@@ -151,7 +62,4 @@ export const del = (id: string): Effect.Effect<Stripe.DeletedProduct, StripeErro
 export const list = (
   params?: Stripe.ProductListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Product>, StripeError, StripeService> =>
-  Effect.request(
-    ListProductsRequest({ params }),
-    RequestResolver.contextFromEffect(ListProductsResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.products.list(params));

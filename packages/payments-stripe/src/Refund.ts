@@ -20,72 +20,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create a refund
- */
-interface CreateRefundRequest extends Request.Request<Stripe.Refund, StripeError> {
-  readonly _tag: "CreateRefundRequest";
-  readonly params: Stripe.RefundCreateParams;
-}
-
-const CreateRefundRequest = Request.tagged<CreateRefundRequest>("CreateRefundRequest");
-
-const CreateRefundResolver: RequestResolver.RequestResolver<CreateRefundRequest, StripeService> =
-  makeStripeResolver<CreateRefundRequest>((stripe, request) =>
-    stripe.refunds.create(request.params),
-  );
-
-/**
- * Request to retrieve a refund
- */
-interface RetrieveRefundRequest extends Request.Request<Stripe.Refund, StripeError> {
-  readonly _tag: "RetrieveRefundRequest";
-  readonly id: string;
-  readonly params?: Stripe.RefundRetrieveParams | undefined;
-}
-
-const RetrieveRefundRequest = Request.tagged<RetrieveRefundRequest>("RetrieveRefundRequest");
-
-const RetrieveRefundResolver: RequestResolver.RequestResolver<
-  RetrieveRefundRequest,
-  StripeService
-> = makeStripeResolver<RetrieveRefundRequest>((stripe, request) =>
-  stripe.refunds.retrieve(request.id, request.params),
-);
-
-/**
- * Request to update a refund
- */
-interface UpdateRefundRequest extends Request.Request<Stripe.Refund, StripeError> {
-  readonly _tag: "UpdateRefundRequest";
-  readonly id: string;
-  readonly params?: Stripe.RefundUpdateParams | undefined;
-}
-
-const UpdateRefundRequest = Request.tagged<UpdateRefundRequest>("UpdateRefundRequest");
-
-const UpdateRefundResolver: RequestResolver.RequestResolver<UpdateRefundRequest, StripeService> =
-  makeStripeResolver<UpdateRefundRequest>((stripe, request) =>
-    stripe.refunds.update(request.id, request.params),
-  );
-
-/**
- * Request to list refunds
- */
-interface ListRefundsRequest extends Request.Request<Stripe.ApiList<Stripe.Refund>, StripeError> {
-  readonly _tag: "ListRefundsRequest";
-  readonly params?: Stripe.RefundListParams | undefined;
-}
-
-const ListRefundsRequest = Request.tagged<ListRefundsRequest>("ListRefundsRequest");
-
-const ListRefundsResolver: RequestResolver.RequestResolver<ListRefundsRequest, StripeService> =
-  makeStripeResolver<ListRefundsRequest>((stripe, request) => stripe.refunds.list(request.params));
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create a refund
@@ -93,10 +31,7 @@ const ListRefundsResolver: RequestResolver.RequestResolver<ListRefundsRequest, S
 export const create = (
   params: Stripe.RefundCreateParams,
 ): Effect.Effect<Stripe.Refund, StripeError, StripeService> =>
-  Effect.request(
-    CreateRefundRequest({ params }),
-    RequestResolver.contextFromEffect(CreateRefundResolver),
-  );
+  wrapStripeCall((stripe) => stripe.refunds.create(params));
 
 /**
  * Retrieve a refund
@@ -105,10 +40,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.RefundRetrieveParams,
 ): Effect.Effect<Stripe.Refund, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveRefundRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveRefundResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.refunds.retrieve(id, params));
 
 /**
  * Update a refund
@@ -117,10 +49,7 @@ export const update = (
   id: string,
   params?: Stripe.RefundUpdateParams,
 ): Effect.Effect<Stripe.Refund, StripeError, StripeService> =>
-  Effect.request(
-    UpdateRefundRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateRefundResolver),
-  );
+  wrapStripeCall((stripe) => stripe.refunds.update(id, params));
 
 /**
  * List refunds
@@ -128,7 +57,4 @@ export const update = (
 export const list = (
   params?: Stripe.RefundListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Refund>, StripeError, StripeService> =>
-  Effect.request(
-    ListRefundsRequest({ params }),
-    RequestResolver.contextFromEffect(ListRefundsResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.refunds.list(params));

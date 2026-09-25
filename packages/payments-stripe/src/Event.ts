@@ -18,39 +18,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to retrieve an event
- */
-interface RetrieveEventRequest extends Request.Request<Stripe.Event, StripeError> {
-  readonly _tag: "RetrieveEventRequest";
-  readonly id: string;
-  readonly params?: Stripe.EventRetrieveParams | undefined;
-}
-
-const RetrieveEventRequest = Request.tagged<RetrieveEventRequest>("RetrieveEventRequest");
-
-const RetrieveEventResolver: RequestResolver.RequestResolver<RetrieveEventRequest, StripeService> =
-  makeStripeResolver<RetrieveEventRequest>((stripe, request) =>
-    stripe.events.retrieve(request.id, request.params),
-  );
-
-/**
- * Request to list events
- */
-interface ListEventsRequest extends Request.Request<Stripe.ApiList<Stripe.Event>, StripeError> {
-  readonly _tag: "ListEventsRequest";
-  readonly params?: Stripe.EventListParams | undefined;
-}
-
-const ListEventsRequest = Request.tagged<ListEventsRequest>("ListEventsRequest");
-
-const ListEventsResolver: RequestResolver.RequestResolver<ListEventsRequest, StripeService> =
-  makeStripeResolver<ListEventsRequest>((stripe, request) => stripe.events.list(request.params));
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Retrieve an event
@@ -59,10 +30,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.EventRetrieveParams,
 ): Effect.Effect<Stripe.Event, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveEventRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveEventResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.events.retrieve(id, params));
 
 /**
  * List events
@@ -70,7 +38,4 @@ export const retrieve = (
 export const list = (
   params?: Stripe.EventListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Event>, StripeError, StripeService> =>
-  Effect.request(
-    ListEventsRequest({ params }),
-    RequestResolver.contextFromEffect(ListEventsResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.events.list(params));

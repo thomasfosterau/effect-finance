@@ -12,14 +12,14 @@ import type { PaymentsError } from "./PaymentsError.js";
 /**
  * The status of a refund, normalized across providers.
  */
-export const RefundStatus = Schema.Literal(
+export const RefundStatus = Schema.Literals([
   "pending",
   "requires_action",
   "succeeded",
   "failed",
   "canceled",
-);
-export type RefundStatus = Schema.Schema.Type<typeof RefundStatus>;
+]);
+export type RefundStatus = typeof RefundStatus.Type;
 
 /**
  * A refund of a previously captured payment.
@@ -66,7 +66,7 @@ export interface ListParams {
 /**
  * The refund capability.
  */
-export class Refunds extends Context.Tag("@effect-payments/Refunds")<
+export class Refunds extends Context.Service<
   Refunds,
   {
     readonly create: (params: CreateParams) => Effect.Effect<Refund, PaymentsError>;
@@ -74,15 +74,20 @@ export class Refunds extends Context.Tag("@effect-payments/Refunds")<
     readonly update: (id: string, params: UpdateParams) => Effect.Effect<Refund, PaymentsError>;
     readonly list: (params?: ListParams) => Effect.Effect<Page<Refund>, PaymentsError>;
   }
->() {}
-
-const accessors = Effect.serviceFunctions(Refunds);
+>()("@effect-payments/Refunds") {}
 
 /** Create a refund. */
-export const create = accessors.create;
+export const create = (params: CreateParams): Effect.Effect<Refund, PaymentsError, Refunds> =>
+  Effect.flatMap(Refunds, (service) => service.create(params));
 /** Retrieve a refund by id. */
-export const retrieve = accessors.retrieve;
+export const retrieve = (id: string): Effect.Effect<Refund, PaymentsError, Refunds> =>
+  Effect.flatMap(Refunds, (service) => service.retrieve(id));
 /** Update a refund. */
-export const update = accessors.update;
+export const update = (
+  id: string,
+  params: UpdateParams,
+): Effect.Effect<Refund, PaymentsError, Refunds> =>
+  Effect.flatMap(Refunds, (service) => service.update(id, params));
 /** List refunds. */
-export const list = accessors.list;
+export const list = (params?: ListParams): Effect.Effect<Page<Refund>, PaymentsError, Refunds> =>
+  Effect.flatMap(Refunds, (service) => service.list(params));

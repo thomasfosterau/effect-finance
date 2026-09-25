@@ -8,6 +8,7 @@
  * @module
  */
 
+import type { Schema } from "effect";
 import type Stripe from "stripe";
 import {
   Customer as CustomerNS,
@@ -19,8 +20,11 @@ import {
   type Page,
 } from "@thomasfosterau/effect-payments";
 
-/** Construct entities from trusted Stripe data without re-validating. */
-const TRUSTED = true;
+/**
+ * Construct entities from trusted Stripe data without re-running the schema
+ * checks (the provider's own response is the source of truth).
+ */
+const TRUSTED: Schema.MakeOptions = { disableChecks: true };
 
 /** Extract the id of a possibly-expanded Stripe reference. */
 const idOf = (value: string | { readonly id: string } | null | undefined): string | null => {
@@ -156,6 +160,8 @@ export const toRefund = (refund: Stripe.Refund): RefundNS.Refund =>
       id: refund.id,
       amount: refund.amount,
       currency: refund.currency,
+      // SAFETY: Stripe's refund statuses are exactly the neutral set
+      // (`pending`, `requires_action`, `succeeded`, `failed`, `canceled`).
       status: (refund.status ?? "pending") as RefundNS.RefundStatus,
       paymentIntentId: idOf(refund.payment_intent),
       chargeId: idOf(refund.charge),

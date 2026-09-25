@@ -20,129 +20,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create a setup intent
- */
-interface CreateSetupIntentRequest extends Request.Request<Stripe.SetupIntent, StripeError> {
-  readonly _tag: "CreateSetupIntentRequest";
-  readonly params?: Stripe.SetupIntentCreateParams | undefined;
-}
-
-const CreateSetupIntentRequest = Request.tagged<CreateSetupIntentRequest>(
-  "CreateSetupIntentRequest",
-);
-
-const CreateSetupIntentResolver: RequestResolver.RequestResolver<
-  CreateSetupIntentRequest,
-  StripeService
-> = makeStripeResolver<CreateSetupIntentRequest>((stripe, request) =>
-  stripe.setupIntents.create(request.params),
-);
-
-/**
- * Request to retrieve a setup intent
- */
-interface RetrieveSetupIntentRequest extends Request.Request<Stripe.SetupIntent, StripeError> {
-  readonly _tag: "RetrieveSetupIntentRequest";
-  readonly id: string;
-  readonly params?: Stripe.SetupIntentRetrieveParams | undefined;
-}
-
-const RetrieveSetupIntentRequest = Request.tagged<RetrieveSetupIntentRequest>(
-  "RetrieveSetupIntentRequest",
-);
-
-const RetrieveSetupIntentResolver: RequestResolver.RequestResolver<
-  RetrieveSetupIntentRequest,
-  StripeService
-> = makeStripeResolver<RetrieveSetupIntentRequest>((stripe, request) =>
-  stripe.setupIntents.retrieve(request.id, request.params),
-);
-
-/**
- * Request to update a setup intent
- */
-interface UpdateSetupIntentRequest extends Request.Request<Stripe.SetupIntent, StripeError> {
-  readonly _tag: "UpdateSetupIntentRequest";
-  readonly id: string;
-  readonly params?: Stripe.SetupIntentUpdateParams | undefined;
-}
-
-const UpdateSetupIntentRequest = Request.tagged<UpdateSetupIntentRequest>(
-  "UpdateSetupIntentRequest",
-);
-
-const UpdateSetupIntentResolver: RequestResolver.RequestResolver<
-  UpdateSetupIntentRequest,
-  StripeService
-> = makeStripeResolver<UpdateSetupIntentRequest>((stripe, request) =>
-  stripe.setupIntents.update(request.id, request.params),
-);
-
-/**
- * Request to confirm a setup intent
- */
-interface ConfirmSetupIntentRequest extends Request.Request<Stripe.SetupIntent, StripeError> {
-  readonly _tag: "ConfirmSetupIntentRequest";
-  readonly id: string;
-  readonly params?: Stripe.SetupIntentConfirmParams | undefined;
-}
-
-const ConfirmSetupIntentRequest = Request.tagged<ConfirmSetupIntentRequest>(
-  "ConfirmSetupIntentRequest",
-);
-
-const ConfirmSetupIntentResolver: RequestResolver.RequestResolver<
-  ConfirmSetupIntentRequest,
-  StripeService
-> = makeStripeResolver<ConfirmSetupIntentRequest>((stripe, request) =>
-  stripe.setupIntents.confirm(request.id, request.params),
-);
-
-/**
- * Request to cancel a setup intent
- */
-interface CancelSetupIntentRequest extends Request.Request<Stripe.SetupIntent, StripeError> {
-  readonly _tag: "CancelSetupIntentRequest";
-  readonly id: string;
-  readonly params?: Stripe.SetupIntentCancelParams | undefined;
-}
-
-const CancelSetupIntentRequest = Request.tagged<CancelSetupIntentRequest>(
-  "CancelSetupIntentRequest",
-);
-
-const CancelSetupIntentResolver: RequestResolver.RequestResolver<
-  CancelSetupIntentRequest,
-  StripeService
-> = makeStripeResolver<CancelSetupIntentRequest>((stripe, request) =>
-  stripe.setupIntents.cancel(request.id, request.params),
-);
-
-/**
- * Request to list setup intents
- */
-interface ListSetupIntentsRequest extends Request.Request<
-  Stripe.ApiList<Stripe.SetupIntent>,
-  StripeError
-> {
-  readonly _tag: "ListSetupIntentsRequest";
-  readonly params?: Stripe.SetupIntentListParams | undefined;
-}
-
-const ListSetupIntentsRequest = Request.tagged<ListSetupIntentsRequest>("ListSetupIntentsRequest");
-
-const ListSetupIntentsResolver: RequestResolver.RequestResolver<
-  ListSetupIntentsRequest,
-  StripeService
-> = makeStripeResolver<ListSetupIntentsRequest>((stripe, request) =>
-  stripe.setupIntents.list(request.params),
-);
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create a setup intent
@@ -150,10 +31,7 @@ const ListSetupIntentsResolver: RequestResolver.RequestResolver<
 export const create = (
   params?: Stripe.SetupIntentCreateParams,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeService> =>
-  Effect.request(
-    CreateSetupIntentRequest({ params }),
-    RequestResolver.contextFromEffect(CreateSetupIntentResolver),
-  );
+  wrapStripeCall((stripe) => stripe.setupIntents.create(params));
 
 /**
  * Retrieve a setup intent
@@ -162,10 +40,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.SetupIntentRetrieveParams,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveSetupIntentRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveSetupIntentResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.setupIntents.retrieve(id, params));
 
 /**
  * Update a setup intent
@@ -174,10 +49,7 @@ export const update = (
   id: string,
   params?: Stripe.SetupIntentUpdateParams,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeService> =>
-  Effect.request(
-    UpdateSetupIntentRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateSetupIntentResolver),
-  );
+  wrapStripeCall((stripe) => stripe.setupIntents.update(id, params));
 
 /**
  * Confirm a setup intent
@@ -186,10 +58,7 @@ export const confirm = (
   id: string,
   params?: Stripe.SetupIntentConfirmParams,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeService> =>
-  Effect.request(
-    ConfirmSetupIntentRequest({ id, params }),
-    RequestResolver.contextFromEffect(ConfirmSetupIntentResolver),
-  );
+  wrapStripeCall((stripe) => stripe.setupIntents.confirm(id, params));
 
 /**
  * Cancel a setup intent
@@ -198,10 +67,7 @@ export const cancel = (
   id: string,
   params?: Stripe.SetupIntentCancelParams,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeService> =>
-  Effect.request(
-    CancelSetupIntentRequest({ id, params }),
-    RequestResolver.contextFromEffect(CancelSetupIntentResolver),
-  );
+  wrapStripeCall((stripe) => stripe.setupIntents.cancel(id, params));
 
 /**
  * List setup intents
@@ -209,7 +75,4 @@ export const cancel = (
 export const list = (
   params?: Stripe.SetupIntentListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.SetupIntent>, StripeError, StripeService> =>
-  Effect.request(
-    ListSetupIntentsRequest({ params }),
-    RequestResolver.contextFromEffect(ListSetupIntentsResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.setupIntents.list(params));

@@ -17,27 +17,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to retrieve the balance
- */
-interface RetrieveBalanceRequest extends Request.Request<Stripe.Balance, StripeError> {
-  readonly _tag: "RetrieveBalanceRequest";
-  readonly params?: Stripe.BalanceRetrieveParams | undefined;
-}
-
-const RetrieveBalanceRequest = Request.tagged<RetrieveBalanceRequest>("RetrieveBalanceRequest");
-
-const RetrieveBalanceResolver: RequestResolver.RequestResolver<
-  RetrieveBalanceRequest,
-  StripeService
-> = makeStripeResolver<RetrieveBalanceRequest>((stripe, request) =>
-  stripe.balance.retrieve(request.params),
-);
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Retrieve the balance
@@ -45,7 +28,4 @@ const RetrieveBalanceResolver: RequestResolver.RequestResolver<
 export const retrieve = (
   params?: Stripe.BalanceRetrieveParams,
 ): Effect.Effect<Stripe.Balance, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveBalanceRequest({ params }),
-    RequestResolver.contextFromEffect(RetrieveBalanceResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.balance.retrieve(params));

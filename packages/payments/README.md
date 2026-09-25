@@ -24,7 +24,7 @@ The program above depends only on the `Customers` capability — it does not imp
 
 ## What's included
 
-- **Capabilities** (`Context.Tag` services): `Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`. Each module also exports accessor functions (`create`, `retrieve`, `update`, `del`, `list`, …).
+- **Capabilities** (`Context.Service` services): `Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`. Each module also exports accessor functions (`create`, `retrieve`, `update`, `del`, `list`, …).
 - **Domain types** (`effect/Schema` classes): `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, `Money`, plus `Page` / `Deleted`.
 - **Errors**: the neutral `PaymentsError` union and friends (`PaymentProviderError`, `PaymentAuthenticationError`, `PaymentRateLimitError`, `PaymentInvalidRequestError`, `PaymentNetworkError`, `PaymentConfigError`, `SignatureVerificationError`).
 

@@ -24,68 +24,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create a topup
- */
-interface CreateTopupRequest extends Request.Request<Stripe.Topup, StripeError> {
-  readonly _tag: "CreateTopupRequest";
-  readonly params: Stripe.TopupCreateParams;
-}
-
-const CreateTopupRequest = Request.tagged<CreateTopupRequest>("CreateTopupRequest");
-
-const CreateTopupResolver: RequestResolver.RequestResolver<CreateTopupRequest, StripeService> =
-  makeStripeResolver<CreateTopupRequest>((stripe, request) => stripe.topups.create(request.params));
-
-/**
- * Request to retrieve a topup
- */
-interface RetrieveTopupRequest extends Request.Request<Stripe.Topup, StripeError> {
-  readonly _tag: "RetrieveTopupRequest";
-  readonly id: string;
-  readonly params?: Stripe.TopupRetrieveParams | undefined;
-}
-
-const RetrieveTopupRequest = Request.tagged<RetrieveTopupRequest>("RetrieveTopupRequest");
-
-const RetrieveTopupResolver: RequestResolver.RequestResolver<RetrieveTopupRequest, StripeService> =
-  makeStripeResolver<RetrieveTopupRequest>((stripe, request) =>
-    stripe.topups.retrieve(request.id, request.params),
-  );
-
-/**
- * Request to update a topup
- */
-interface UpdateTopupRequest extends Request.Request<Stripe.Topup, StripeError> {
-  readonly _tag: "UpdateTopupRequest";
-  readonly id: string;
-  readonly params?: Stripe.TopupUpdateParams | undefined;
-}
-
-const UpdateTopupRequest = Request.tagged<UpdateTopupRequest>("UpdateTopupRequest");
-
-const UpdateTopupResolver: RequestResolver.RequestResolver<UpdateTopupRequest, StripeService> =
-  makeStripeResolver<UpdateTopupRequest>((stripe, request) =>
-    stripe.topups.update(request.id, request.params),
-  );
-
-/**
- * Request to list topups
- */
-interface ListTopupsRequest extends Request.Request<Stripe.ApiList<Stripe.Topup>, StripeError> {
-  readonly _tag: "ListTopupsRequest";
-  readonly params?: Stripe.TopupListParams | undefined;
-}
-
-const ListTopupsRequest = Request.tagged<ListTopupsRequest>("ListTopupsRequest");
-
-const ListTopupsResolver: RequestResolver.RequestResolver<ListTopupsRequest, StripeService> =
-  makeStripeResolver<ListTopupsRequest>((stripe, request) => stripe.topups.list(request.params));
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create a topup
@@ -93,10 +35,7 @@ const ListTopupsResolver: RequestResolver.RequestResolver<ListTopupsRequest, Str
 export const create = (
   params: Stripe.TopupCreateParams,
 ): Effect.Effect<Stripe.Topup, StripeError, StripeService> =>
-  Effect.request(
-    CreateTopupRequest({ params }),
-    RequestResolver.contextFromEffect(CreateTopupResolver),
-  );
+  wrapStripeCall((stripe) => stripe.topups.create(params));
 
 /**
  * Retrieve a topup
@@ -105,10 +44,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.TopupRetrieveParams,
 ): Effect.Effect<Stripe.Topup, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveTopupRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveTopupResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.topups.retrieve(id, params));
 
 /**
  * Update a topup
@@ -117,10 +53,7 @@ export const update = (
   id: string,
   params?: Stripe.TopupUpdateParams,
 ): Effect.Effect<Stripe.Topup, StripeError, StripeService> =>
-  Effect.request(
-    UpdateTopupRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateTopupResolver),
-  );
+  wrapStripeCall((stripe) => stripe.topups.update(id, params));
 
 /**
  * List topups
@@ -128,7 +61,4 @@ export const update = (
 export const list = (
   params?: Stripe.TopupListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Topup>, StripeError, StripeService> =>
-  Effect.request(
-    ListTopupsRequest({ params }),
-    RequestResolver.contextFromEffect(ListTopupsResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.topups.list(params));

@@ -4,8 +4,8 @@ Stripe: the neutral capabilities as `Layer`s (`StripePayments`) plus one resourc
 
 ## Terms
 
-- **Client** — `StripeService` (`Stripe.ts`), holding an SDK instance built by `Stripe.make` / `Stripe.layer` / `Stripe.layerFromEnv` (`STRIPE_API_KEY` by default), with the API version pinned (`DEFAULT_API_VERSION`) unless the config overrides it.
-- **Resource module** — `Customer.ts`, `Treasury.FinancialAccount.ts`, …: `Request` classes plus a `RequestResolver` built by `makeStripeResolver` (`internal/index.ts`), exposing `create` / `retrieve` / `update` / `del` / `list` as the resource supports. Results are the SDK's own types.
+- **Client** — `StripeService` (`Stripe.ts`, a `Context.Service`), holding an SDK instance built by `Stripe.make` / `Stripe.layer` / `Stripe.layerFromEnv` (`STRIPE_API_KEY` by default, read through `Config`), with the API version pinned (`DEFAULT_API_VERSION`) unless the config overrides it.
+- **Resource module** — `Customer.ts`, `Treasury.FinancialAccount.ts`, …: `create` / `retrieve` / `update` / `del` / `list` as the resource supports, each one `wrapStripeCall((stripe) => stripe.<resource>.<method>(…))` (`internal/index.ts`). Results are the SDK's own types. (Before Effect 4 each operation went through a `Request` + `RequestResolver` pair with request caching on reads; Effect 4 dropped request caching, and a per-call resolver batched nothing, so #38 removed them.)
 - **Capability layers** — `StripePayments.customersLayer` … `refundsLayer`, `capabilities` (all of them over an existing client), `layer` / `layerFromEnv` (client + capabilities). They map neutral params onto SDK params and SDK objects onto neutral entities (`internal/mapping.ts`).
 - **Webhook** — `Webhook.constructEvent` / `constructEventAsync` wrap the SDK verifier today; a WebCrypto verifier becomes the default in #41.
 

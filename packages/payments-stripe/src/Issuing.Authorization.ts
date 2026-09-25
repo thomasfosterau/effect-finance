@@ -18,124 +18,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to retrieve an issuing authorization
- */
-interface RetrieveAuthorizationRequest extends Request.Request<
-  Stripe.Issuing.Authorization,
-  StripeError
-> {
-  readonly _tag: "RetrieveAuthorizationRequest";
-  readonly id: string;
-  readonly params?: Stripe.Issuing.AuthorizationRetrieveParams | undefined;
-}
-
-const RetrieveAuthorizationRequest = Request.tagged<RetrieveAuthorizationRequest>(
-  "RetrieveAuthorizationRequest",
-);
-
-const RetrieveAuthorizationResolver: RequestResolver.RequestResolver<
-  RetrieveAuthorizationRequest,
-  StripeService
-> = makeStripeResolver<RetrieveAuthorizationRequest>((stripe, request) =>
-  stripe.issuing.authorizations.retrieve(request.id, request.params),
-);
-
-/**
- * Request to update an issuing authorization
- */
-interface UpdateAuthorizationRequest extends Request.Request<
-  Stripe.Issuing.Authorization,
-  StripeError
-> {
-  readonly _tag: "UpdateAuthorizationRequest";
-  readonly id: string;
-  readonly params?: Stripe.Issuing.AuthorizationUpdateParams | undefined;
-}
-
-const UpdateAuthorizationRequest = Request.tagged<UpdateAuthorizationRequest>(
-  "UpdateAuthorizationRequest",
-);
-
-const UpdateAuthorizationResolver: RequestResolver.RequestResolver<
-  UpdateAuthorizationRequest,
-  StripeService
-> = makeStripeResolver<UpdateAuthorizationRequest>((stripe, request) =>
-  stripe.issuing.authorizations.update(request.id, request.params),
-);
-
-/**
- * Request to list issuing authorizations
- */
-interface ListAuthorizationsRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Issuing.Authorization>,
-  StripeError
-> {
-  readonly _tag: "ListAuthorizationsRequest";
-  readonly params?: Stripe.Issuing.AuthorizationListParams | undefined;
-}
-
-const ListAuthorizationsRequest = Request.tagged<ListAuthorizationsRequest>(
-  "ListAuthorizationsRequest",
-);
-
-const ListAuthorizationsResolver: RequestResolver.RequestResolver<
-  ListAuthorizationsRequest,
-  StripeService
-> = makeStripeResolver<ListAuthorizationsRequest>((stripe, request) =>
-  stripe.issuing.authorizations.list(request.params),
-);
-
-/**
- * Request to approve an issuing authorization
- */
-interface ApproveAuthorizationRequest extends Request.Request<
-  Stripe.Issuing.Authorization,
-  StripeError
-> {
-  readonly _tag: "ApproveAuthorizationRequest";
-  readonly id: string;
-  readonly params?: Stripe.Issuing.AuthorizationApproveParams | undefined;
-}
-
-const ApproveAuthorizationRequest = Request.tagged<ApproveAuthorizationRequest>(
-  "ApproveAuthorizationRequest",
-);
-
-const ApproveAuthorizationResolver: RequestResolver.RequestResolver<
-  ApproveAuthorizationRequest,
-  StripeService
-> = makeStripeResolver<ApproveAuthorizationRequest>((stripe, request) =>
-  stripe.issuing.authorizations.approve(request.id, request.params),
-);
-
-/**
- * Request to decline an issuing authorization
- */
-interface DeclineAuthorizationRequest extends Request.Request<
-  Stripe.Issuing.Authorization,
-  StripeError
-> {
-  readonly _tag: "DeclineAuthorizationRequest";
-  readonly id: string;
-  readonly params?: Stripe.Issuing.AuthorizationDeclineParams | undefined;
-}
-
-const DeclineAuthorizationRequest = Request.tagged<DeclineAuthorizationRequest>(
-  "DeclineAuthorizationRequest",
-);
-
-const DeclineAuthorizationResolver: RequestResolver.RequestResolver<
-  DeclineAuthorizationRequest,
-  StripeService
-> = makeStripeResolver<DeclineAuthorizationRequest>((stripe, request) =>
-  stripe.issuing.authorizations.decline(request.id, request.params),
-);
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Retrieve an issuing authorization
@@ -144,10 +30,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.Issuing.AuthorizationRetrieveParams,
 ): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveAuthorizationRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveAuthorizationResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.issuing.authorizations.retrieve(id, params));
 
 /**
  * Update an issuing authorization
@@ -156,10 +39,7 @@ export const update = (
   id: string,
   params?: Stripe.Issuing.AuthorizationUpdateParams,
 ): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeService> =>
-  Effect.request(
-    UpdateAuthorizationRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateAuthorizationResolver),
-  );
+  wrapStripeCall((stripe) => stripe.issuing.authorizations.update(id, params));
 
 /**
  * List issuing authorizations
@@ -167,10 +47,7 @@ export const update = (
 export const list = (
   params?: Stripe.Issuing.AuthorizationListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Authorization>, StripeError, StripeService> =>
-  Effect.request(
-    ListAuthorizationsRequest({ params }),
-    RequestResolver.contextFromEffect(ListAuthorizationsResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.issuing.authorizations.list(params));
 
 /**
  * Approve an issuing authorization
@@ -179,10 +56,7 @@ export const approve = (
   id: string,
   params?: Stripe.Issuing.AuthorizationApproveParams,
 ): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeService> =>
-  Effect.request(
-    ApproveAuthorizationRequest({ id, params }),
-    RequestResolver.contextFromEffect(ApproveAuthorizationResolver),
-  );
+  wrapStripeCall((stripe) => stripe.issuing.authorizations.approve(id, params));
 
 /**
  * Decline an issuing authorization
@@ -191,7 +65,4 @@ export const decline = (
   id: string,
   params?: Stripe.Issuing.AuthorizationDeclineParams,
 ): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeService> =>
-  Effect.request(
-    DeclineAuthorizationRequest({ id, params }),
-    RequestResolver.contextFromEffect(DeclineAuthorizationResolver),
-  );
+  wrapStripeCall((stripe) => stripe.issuing.authorizations.decline(id, params));

@@ -20,6 +20,7 @@
     "@changesets/cli": "catalog:",
     "@effect/language-service": "catalog:",
     "@effect/tsgo": "catalog:",
+    "@mpsuesser/oxlint-plugin-effect": "catalog:",
     "@thomasfosterau/effect-payments": "workspace:*",
     "@thomasfosterau/effect-payments-airwallex": "workspace:*",
     "@thomasfosterau/effect-payments-paypal": "workspace:*",

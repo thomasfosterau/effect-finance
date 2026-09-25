@@ -25,99 +25,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create an inbound transfer
- */
-interface CreateInboundTransferRequest extends Request.Request<
-  Stripe.Treasury.InboundTransfer,
-  StripeError
-> {
-  readonly _tag: "CreateInboundTransferRequest";
-  readonly params: Stripe.Treasury.InboundTransferCreateParams;
-}
-
-const CreateInboundTransferRequest = Request.tagged<CreateInboundTransferRequest>(
-  "CreateInboundTransferRequest",
-);
-
-const CreateInboundTransferResolver: RequestResolver.RequestResolver<
-  CreateInboundTransferRequest,
-  StripeService
-> = makeStripeResolver<CreateInboundTransferRequest>((stripe, request) =>
-  stripe.treasury.inboundTransfers.create(request.params),
-);
-
-/**
- * Request to retrieve an inbound transfer
- */
-interface RetrieveInboundTransferRequest extends Request.Request<
-  Stripe.Treasury.InboundTransfer,
-  StripeError
-> {
-  readonly _tag: "RetrieveInboundTransferRequest";
-  readonly id: string;
-  readonly params?: Stripe.Treasury.InboundTransferRetrieveParams | undefined;
-}
-
-const RetrieveInboundTransferRequest = Request.tagged<RetrieveInboundTransferRequest>(
-  "RetrieveInboundTransferRequest",
-);
-
-const RetrieveInboundTransferResolver: RequestResolver.RequestResolver<
-  RetrieveInboundTransferRequest,
-  StripeService
-> = makeStripeResolver<RetrieveInboundTransferRequest>((stripe, request) =>
-  stripe.treasury.inboundTransfers.retrieve(request.id, request.params),
-);
-
-/**
- * Request to list inbound transfers
- */
-interface ListInboundTransfersRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Treasury.InboundTransfer>,
-  StripeError
-> {
-  readonly _tag: "ListInboundTransfersRequest";
-  readonly params: Stripe.Treasury.InboundTransferListParams;
-}
-
-const ListInboundTransfersRequest = Request.tagged<ListInboundTransfersRequest>(
-  "ListInboundTransfersRequest",
-);
-
-const ListInboundTransfersResolver: RequestResolver.RequestResolver<
-  ListInboundTransfersRequest,
-  StripeService
-> = makeStripeResolver<ListInboundTransfersRequest>((stripe, request) =>
-  stripe.treasury.inboundTransfers.list(request.params),
-);
-
-/**
- * Request to cancel an inbound transfer
- */
-interface CancelInboundTransferRequest extends Request.Request<
-  Stripe.Treasury.InboundTransfer,
-  StripeError
-> {
-  readonly _tag: "CancelInboundTransferRequest";
-  readonly id: string;
-}
-
-const CancelInboundTransferRequest = Request.tagged<CancelInboundTransferRequest>(
-  "CancelInboundTransferRequest",
-);
-
-const CancelInboundTransferResolver: RequestResolver.RequestResolver<
-  CancelInboundTransferRequest,
-  StripeService
-> = makeStripeResolver<CancelInboundTransferRequest>((stripe, request) =>
-  stripe.treasury.inboundTransfers.cancel(request.id),
-);
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create an inbound transfer
@@ -125,10 +36,7 @@ const CancelInboundTransferResolver: RequestResolver.RequestResolver<
 export const create = (
   params: Stripe.Treasury.InboundTransferCreateParams,
 ): Effect.Effect<Stripe.Treasury.InboundTransfer, StripeError, StripeService> =>
-  Effect.request(
-    CreateInboundTransferRequest({ params }),
-    RequestResolver.contextFromEffect(CreateInboundTransferResolver),
-  );
+  wrapStripeCall((stripe) => stripe.treasury.inboundTransfers.create(params));
 
 /**
  * Retrieve an inbound transfer
@@ -137,10 +45,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.Treasury.InboundTransferRetrieveParams,
 ): Effect.Effect<Stripe.Treasury.InboundTransfer, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveInboundTransferRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveInboundTransferResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.treasury.inboundTransfers.retrieve(id, params));
 
 /**
  * List inbound transfers
@@ -148,10 +53,7 @@ export const retrieve = (
 export const list = (
   params: Stripe.Treasury.InboundTransferListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Treasury.InboundTransfer>, StripeError, StripeService> =>
-  Effect.request(
-    ListInboundTransfersRequest({ params }),
-    RequestResolver.contextFromEffect(ListInboundTransfersResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.treasury.inboundTransfers.list(params));
 
 /**
  * Cancel an inbound transfer
@@ -159,7 +61,4 @@ export const list = (
 export const cancel = (
   id: string,
 ): Effect.Effect<Stripe.Treasury.InboundTransfer, StripeError, StripeService> =>
-  Effect.request(
-    CancelInboundTransferRequest({ id }),
-    RequestResolver.contextFromEffect(CancelInboundTransferResolver),
-  );
+  wrapStripeCall((stripe) => stripe.treasury.inboundTransfers.cancel(id));

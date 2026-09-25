@@ -13,18 +13,21 @@ npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-payp
 ## Usage
 
 ```typescript
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import * as Product from "@thomasfosterau/effect-payments/Product";
 import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
 
 const program = Product.create({ name: "Premium" });
 
+// The PayPal layer speaks `effect/unstable/http`: it requires an `HttpClient`,
+// which `FetchHttpClient.layer` supplies on Node, Bun, Deno and Workers alike.
 const layer = PayPalPayments.layer({
   clientId: process.env.PAYPAL_CLIENT_ID!,
   clientSecret: process.env.PAYPAL_CLIENT_SECRET!,
   // baseUrl: "https://api-m.sandbox.paypal.com", // for sandbox
-});
-// const layer = PayPalPayments.layerFromEnv();
+}).pipe(Layer.provide(FetchHttpClient.layer));
+// const layer = PayPalPayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 
 const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 ```
@@ -47,7 +50,7 @@ Because each capability is an independent Effect service, a program that only us
 ## Notes
 
 - **Money** — the core uses minor units (e.g. cents); PayPal uses major-unit decimal _strings_ (e.g. `"10.00"`). This provider converts in both directions, currency-aware.
-- **`PayPal`** — the client service performs the OAuth client-credentials handshake and caches the access token. Inject a custom `fetch` via `PayPalConfig` for testing; set `baseUrl` to the sandbox host for testing against PayPal sandbox.
+- **`PayPal`** — the client service performs the OAuth client-credentials handshake and caches the access token. Every request goes through `effect/unstable/http`'s `HttpClient`, which the layer requires — provide `FetchHttpClient.layer` in production, or a stub `HttpClient` (or a stub `FetchHttpClient.Fetch`) in tests; set `baseUrl` to the sandbox host for testing against PayPal sandbox.
 
 See the [repository README](../../README.md) for the full guide.
 

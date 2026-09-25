@@ -28,77 +28,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create an issuing dispute
- */
-interface CreateDisputeRequest extends Request.Request<Stripe.Issuing.Dispute, StripeError> {
-  readonly _tag: "CreateDisputeRequest";
-  readonly params: Stripe.Issuing.DisputeCreateParams;
-}
-
-const CreateDisputeRequest = Request.tagged<CreateDisputeRequest>("CreateDisputeRequest");
-
-const CreateDisputeResolver: RequestResolver.RequestResolver<CreateDisputeRequest, StripeService> =
-  makeStripeResolver<CreateDisputeRequest>((stripe, request) =>
-    stripe.issuing.disputes.create(request.params),
-  );
-
-/**
- * Request to retrieve an issuing dispute
- */
-interface RetrieveDisputeRequest extends Request.Request<Stripe.Issuing.Dispute, StripeError> {
-  readonly _tag: "RetrieveDisputeRequest";
-  readonly id: string;
-  readonly params?: Stripe.Issuing.DisputeRetrieveParams | undefined;
-}
-
-const RetrieveDisputeRequest = Request.tagged<RetrieveDisputeRequest>("RetrieveDisputeRequest");
-
-const RetrieveDisputeResolver: RequestResolver.RequestResolver<
-  RetrieveDisputeRequest,
-  StripeService
-> = makeStripeResolver<RetrieveDisputeRequest>((stripe, request) =>
-  stripe.issuing.disputes.retrieve(request.id, request.params),
-);
-
-/**
- * Request to update an issuing dispute
- */
-interface UpdateDisputeRequest extends Request.Request<Stripe.Issuing.Dispute, StripeError> {
-  readonly _tag: "UpdateDisputeRequest";
-  readonly id: string;
-  readonly params?: Stripe.Issuing.DisputeUpdateParams | undefined;
-}
-
-const UpdateDisputeRequest = Request.tagged<UpdateDisputeRequest>("UpdateDisputeRequest");
-
-const UpdateDisputeResolver: RequestResolver.RequestResolver<UpdateDisputeRequest, StripeService> =
-  makeStripeResolver<UpdateDisputeRequest>((stripe, request) =>
-    stripe.issuing.disputes.update(request.id, request.params),
-  );
-
-/**
- * Request to list issuing disputes
- */
-interface ListDisputesRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Issuing.Dispute>,
-  StripeError
-> {
-  readonly _tag: "ListDisputesRequest";
-  readonly params?: Stripe.Issuing.DisputeListParams | undefined;
-}
-
-const ListDisputesRequest = Request.tagged<ListDisputesRequest>("ListDisputesRequest");
-
-const ListDisputesResolver: RequestResolver.RequestResolver<ListDisputesRequest, StripeService> =
-  makeStripeResolver<ListDisputesRequest>((stripe, request) =>
-    stripe.issuing.disputes.list(request.params),
-  );
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create an issuing dispute
@@ -106,10 +39,7 @@ const ListDisputesResolver: RequestResolver.RequestResolver<ListDisputesRequest,
 export const create = (
   params: Stripe.Issuing.DisputeCreateParams,
 ): Effect.Effect<Stripe.Issuing.Dispute, StripeError, StripeService> =>
-  Effect.request(
-    CreateDisputeRequest({ params }),
-    RequestResolver.contextFromEffect(CreateDisputeResolver),
-  );
+  wrapStripeCall((stripe) => stripe.issuing.disputes.create(params));
 
 /**
  * Retrieve an issuing dispute
@@ -118,10 +48,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.Issuing.DisputeRetrieveParams,
 ): Effect.Effect<Stripe.Issuing.Dispute, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveDisputeRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveDisputeResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.issuing.disputes.retrieve(id, params));
 
 /**
  * Update an issuing dispute
@@ -130,10 +57,7 @@ export const update = (
   id: string,
   params?: Stripe.Issuing.DisputeUpdateParams,
 ): Effect.Effect<Stripe.Issuing.Dispute, StripeError, StripeService> =>
-  Effect.request(
-    UpdateDisputeRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateDisputeResolver),
-  );
+  wrapStripeCall((stripe) => stripe.issuing.disputes.update(id, params));
 
 /**
  * List issuing disputes
@@ -141,7 +65,4 @@ export const update = (
 export const list = (
   params?: Stripe.Issuing.DisputeListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Dispute>, StripeError, StripeService> =>
-  Effect.request(
-    ListDisputesRequest({ params }),
-    RequestResolver.contextFromEffect(ListDisputesResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.issuing.disputes.list(params));

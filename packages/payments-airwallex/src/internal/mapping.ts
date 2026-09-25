@@ -8,6 +8,7 @@
  * @module
  */
 
+import type { Schema } from "effect";
 import {
   Customer as CustomerNS,
   PaymentIntent as PaymentIntentNS,
@@ -16,8 +17,11 @@ import {
 } from "@thomasfosterau/effect-payments";
 import { toMinorUnits } from "./money.js";
 
-/** Construct entities from trusted Airwallex data without re-validating. */
-const TRUSTED = true;
+/**
+ * Construct entities from trusted Airwallex data without re-running the schema
+ * checks (the provider's own response is the source of truth).
+ */
+const TRUSTED: Schema.MakeOptions = { disableChecks: true };
 
 // ---------------------------------------------------------------------------
 // Wire types (the subset of Airwallex fields the neutral mapping reads)

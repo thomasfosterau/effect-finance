@@ -17,6 +17,8 @@ export type OmitUndefined<T> = {
  * format is unchanged.
  */
 export const omitUndefined = <T extends object>(record: T): OmitUndefined<T> =>
+  // SAFETY: the filter removes exactly the `undefined`-valued keys, which is
+  // what `OmitUndefined<T>` describes.
   Object.fromEntries(
     Object.entries(record).filter(([, value]) => value !== undefined),
   ) as OmitUndefined<T>;

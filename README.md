@@ -49,9 +49,13 @@ const result = await Effect.runPromise(
 The same program runs on a different provider by changing only the layer:
 
 ```typescript
+import { Layer } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
 
-const layer = AirwallexPayments.layer({ clientId: "...", apiKey: "..." });
+const layer = AirwallexPayments.layer({ clientId: "...", apiKey: "..." }).pipe(
+  Layer.provide(FetchHttpClient.layer), // the Airwallex and PayPal layers speak effect/unstable/http
+);
 ```
 
 Providers may implement only the capabilities they support, and different providers cover different subsets — Airwallex covers customers, payment intents and refunds; PayPal covers products, prices, subscriptions, payment intents and refunds but has no customers. The type system enforces this: a program that needs a capability the provided layer doesn't supply simply won't type-check.
@@ -68,7 +72,7 @@ npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stri
 
 ### Capabilities
 
-Each resource is an abstract Effect service (a `Context.Tag`). A program that calls `Customer.create(...)` requires the `Customers` capability in its environment; nothing more.
+Each resource is an abstract Effect service (a `Context.Service`). A program that calls `Customer.create(...)` requires the `Customers` capability in its environment; nothing more.
 
 | Module          | Capability       | Operations                                                  |
 | --------------- | ---------------- | ----------------------------------------------------------- |

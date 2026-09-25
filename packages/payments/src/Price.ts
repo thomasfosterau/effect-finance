@@ -10,8 +10,8 @@ import type { Page } from "./Page.js";
 import type { PaymentsError } from "./PaymentsError.js";
 
 /** A recurring billing interval. */
-export const RecurringInterval = Schema.Literal("day", "week", "month", "year");
-export type RecurringInterval = Schema.Schema.Type<typeof RecurringInterval>;
+export const RecurringInterval = Schema.Literals(["day", "week", "month", "year"]);
+export type RecurringInterval = typeof RecurringInterval.Type;
 
 /** The recurring schedule of a price, when it is not a one-time price. */
 export class Recurring extends Schema.Class<Recurring>("@effect-payments/Recurring")({
@@ -31,7 +31,7 @@ export class Price extends Schema.Class<Price>("@effect-payments/Price")({
   currency: Schema.String,
   /** Amount in the smallest currency unit, or `null` for some price types. */
   unitAmount: Schema.NullOr(Schema.Number),
-  type: Schema.Literal("one_time", "recurring"),
+  type: Schema.Literals(["one_time", "recurring"]),
   recurring: Schema.NullOr(Recurring),
   metadata: Metadata,
   /** Creation time as a Unix timestamp in seconds. */
@@ -68,7 +68,7 @@ export interface ListParams {
 /**
  * The price capability.
  */
-export class Prices extends Context.Tag("@effect-payments/Prices")<
+export class Prices extends Context.Service<
   Prices,
   {
     readonly create: (params: CreateParams) => Effect.Effect<Price, PaymentsError>;
@@ -76,15 +76,20 @@ export class Prices extends Context.Tag("@effect-payments/Prices")<
     readonly update: (id: string, params: UpdateParams) => Effect.Effect<Price, PaymentsError>;
     readonly list: (params?: ListParams) => Effect.Effect<Page<Price>, PaymentsError>;
   }
->() {}
-
-const accessors = Effect.serviceFunctions(Prices);
+>()("@effect-payments/Prices") {}
 
 /** Create a price. */
-export const create = accessors.create;
+export const create = (params: CreateParams): Effect.Effect<Price, PaymentsError, Prices> =>
+  Effect.flatMap(Prices, (service) => service.create(params));
 /** Retrieve a price by id. */
-export const retrieve = accessors.retrieve;
+export const retrieve = (id: string): Effect.Effect<Price, PaymentsError, Prices> =>
+  Effect.flatMap(Prices, (service) => service.retrieve(id));
 /** Update a price. */
-export const update = accessors.update;
+export const update = (
+  id: string,
+  params: UpdateParams,
+): Effect.Effect<Price, PaymentsError, Prices> =>
+  Effect.flatMap(Prices, (service) => service.update(id, params));
 /** List prices. */
-export const list = accessors.list;
+export const list = (params?: ListParams): Effect.Effect<Page<Price>, PaymentsError, Prices> =>
+  Effect.flatMap(Prices, (service) => service.list(params));

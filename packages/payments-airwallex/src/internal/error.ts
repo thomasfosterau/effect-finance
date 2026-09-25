@@ -5,6 +5,7 @@
  * @module
  */
 
+import { Schema } from "effect";
 import {
   PaymentAuthenticationError,
   PaymentInvalidRequestError,
@@ -16,12 +17,13 @@ import {
 /** The provider tag attached to neutral errors raised by this implementation. */
 export const PROVIDER = "airwallex";
 
-/** The shape of an Airwallex API error body. */
-export interface AirwallexErrorBody {
-  readonly code?: string | undefined;
-  readonly message?: string | undefined;
-  readonly source?: string | undefined;
-}
+/** The shape of an Airwallex API error body (every member optional). */
+export const AirwallexErrorBody = Schema.Struct({
+  code: Schema.optional(Schema.String),
+  message: Schema.optional(Schema.String),
+  source: Schema.optional(Schema.String),
+});
+export type AirwallexErrorBody = typeof AirwallexErrorBody.Type;
 
 /**
  * Map an Airwallex HTTP status + error body onto a neutral payments error.

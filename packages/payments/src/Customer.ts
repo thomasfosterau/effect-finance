@@ -71,7 +71,7 @@ export interface ListParams {
  * The customer capability. A provider supplies a `Layer` implementing this
  * service; programs depend only on this abstract interface.
  */
-export class Customers extends Context.Tag("@effect-payments/Customers")<
+export class Customers extends Context.Service<
   Customers,
   {
     readonly create: (params: CreateParams) => Effect.Effect<Customer, PaymentsError>;
@@ -80,17 +80,25 @@ export class Customers extends Context.Tag("@effect-payments/Customers")<
     readonly del: (id: string) => Effect.Effect<Deleted, PaymentsError>;
     readonly list: (params?: ListParams) => Effect.Effect<Page<Customer>, PaymentsError>;
   }
->() {}
-
-const accessors = Effect.serviceFunctions(Customers);
+>()("@effect-payments/Customers") {}
 
 /** Create a customer. */
-export const create = accessors.create;
+export const create = (params: CreateParams): Effect.Effect<Customer, PaymentsError, Customers> =>
+  Effect.flatMap(Customers, (service) => service.create(params));
 /** Retrieve a customer by id. */
-export const retrieve = accessors.retrieve;
+export const retrieve = (id: string): Effect.Effect<Customer, PaymentsError, Customers> =>
+  Effect.flatMap(Customers, (service) => service.retrieve(id));
 /** Update a customer. */
-export const update = accessors.update;
+export const update = (
+  id: string,
+  params: UpdateParams,
+): Effect.Effect<Customer, PaymentsError, Customers> =>
+  Effect.flatMap(Customers, (service) => service.update(id, params));
 /** Delete a customer. */
-export const del = accessors.del;
+export const del = (id: string): Effect.Effect<Deleted, PaymentsError, Customers> =>
+  Effect.flatMap(Customers, (service) => service.del(id));
 /** List customers. */
-export const list = accessors.list;
+export const list = (
+  params?: ListParams,
+): Effect.Effect<Page<Customer>, PaymentsError, Customers> =>
+  Effect.flatMap(Customers, (service) => service.list(params));

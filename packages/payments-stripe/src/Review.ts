@@ -18,57 +18,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to retrieve a review
- */
-interface RetrieveReviewRequest extends Request.Request<Stripe.Review, StripeError> {
-  readonly _tag: "RetrieveReviewRequest";
-  readonly id: string;
-  readonly params?: Stripe.ReviewRetrieveParams | undefined;
-}
-
-const RetrieveReviewRequest = Request.tagged<RetrieveReviewRequest>("RetrieveReviewRequest");
-
-const RetrieveReviewResolver: RequestResolver.RequestResolver<
-  RetrieveReviewRequest,
-  StripeService
-> = makeStripeResolver<RetrieveReviewRequest>((stripe, request) =>
-  stripe.reviews.retrieve(request.id, request.params),
-);
-
-/**
- * Request to list reviews
- */
-interface ListReviewsRequest extends Request.Request<Stripe.ApiList<Stripe.Review>, StripeError> {
-  readonly _tag: "ListReviewsRequest";
-  readonly params?: Stripe.ReviewListParams | undefined;
-}
-
-const ListReviewsRequest = Request.tagged<ListReviewsRequest>("ListReviewsRequest");
-
-const ListReviewsResolver: RequestResolver.RequestResolver<ListReviewsRequest, StripeService> =
-  makeStripeResolver<ListReviewsRequest>((stripe, request) => stripe.reviews.list(request.params));
-
-/**
- * Request to approve a review
- */
-interface ApproveReviewRequest extends Request.Request<Stripe.Review, StripeError> {
-  readonly _tag: "ApproveReviewRequest";
-  readonly id: string;
-  readonly params?: Stripe.ReviewApproveParams | undefined;
-}
-
-const ApproveReviewRequest = Request.tagged<ApproveReviewRequest>("ApproveReviewRequest");
-
-const ApproveReviewResolver: RequestResolver.RequestResolver<ApproveReviewRequest, StripeService> =
-  makeStripeResolver<ApproveReviewRequest>((stripe, request) =>
-    stripe.reviews.approve(request.id, request.params),
-  );
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Retrieve a review
@@ -77,10 +30,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.ReviewRetrieveParams,
 ): Effect.Effect<Stripe.Review, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveReviewRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveReviewResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.reviews.retrieve(id, params));
 
 /**
  * List reviews
@@ -88,10 +38,7 @@ export const retrieve = (
 export const list = (
   params?: Stripe.ReviewListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Review>, StripeError, StripeService> =>
-  Effect.request(
-    ListReviewsRequest({ params }),
-    RequestResolver.contextFromEffect(ListReviewsResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.reviews.list(params));
 
 /**
  * Approve a review
@@ -100,7 +47,4 @@ export const approve = (
   id: string,
   params?: Stripe.ReviewApproveParams,
 ): Effect.Effect<Stripe.Review, StripeError, StripeService> =>
-  Effect.request(
-    ApproveReviewRequest({ id, params }),
-    RequestResolver.contextFromEffect(ApproveReviewResolver),
-  );
+  wrapStripeCall((stripe) => stripe.reviews.approve(id, params));
