@@ -36,16 +36,15 @@ interface CreateVerificationSessionRequest extends Request.Request<
   readonly params: Stripe.Identity.VerificationSessionCreateParams;
 }
 
-const CreateVerificationSessionRequest =
-  Request.tagged<CreateVerificationSessionRequest>(
-    "CreateVerificationSessionRequest"
-  );
+const CreateVerificationSessionRequest = Request.tagged<CreateVerificationSessionRequest>(
+  "CreateVerificationSessionRequest",
+);
 
 const CreateVerificationSessionResolver: RequestResolver.RequestResolver<
   CreateVerificationSessionRequest,
   StripeService
 > = makeStripeResolver<CreateVerificationSessionRequest>((stripe, request) =>
-  stripe.identity.verificationSessions.create(request.params)
+  stripe.identity.verificationSessions.create(request.params),
 );
 
 /**
@@ -57,19 +56,18 @@ interface RetrieveVerificationSessionRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveVerificationSessionRequest";
   readonly id: string;
-  readonly params?: Stripe.Identity.VerificationSessionRetrieveParams;
+  readonly params?: Stripe.Identity.VerificationSessionRetrieveParams | undefined;
 }
 
-const RetrieveVerificationSessionRequest =
-  Request.tagged<RetrieveVerificationSessionRequest>(
-    "RetrieveVerificationSessionRequest"
-  );
+const RetrieveVerificationSessionRequest = Request.tagged<RetrieveVerificationSessionRequest>(
+  "RetrieveVerificationSessionRequest",
+);
 
 const RetrieveVerificationSessionResolver: RequestResolver.RequestResolver<
   RetrieveVerificationSessionRequest,
   StripeService
 > = makeStripeResolver<RetrieveVerificationSessionRequest>((stripe, request) =>
-  stripe.identity.verificationSessions.retrieve(request.id, request.params)
+  stripe.identity.verificationSessions.retrieve(request.id, request.params),
 );
 
 /**
@@ -81,19 +79,18 @@ interface UpdateVerificationSessionRequest extends Request.Request<
 > {
   readonly _tag: "UpdateVerificationSessionRequest";
   readonly id: string;
-  readonly params?: Stripe.Identity.VerificationSessionUpdateParams;
+  readonly params?: Stripe.Identity.VerificationSessionUpdateParams | undefined;
 }
 
-const UpdateVerificationSessionRequest =
-  Request.tagged<UpdateVerificationSessionRequest>(
-    "UpdateVerificationSessionRequest"
-  );
+const UpdateVerificationSessionRequest = Request.tagged<UpdateVerificationSessionRequest>(
+  "UpdateVerificationSessionRequest",
+);
 
 const UpdateVerificationSessionResolver: RequestResolver.RequestResolver<
   UpdateVerificationSessionRequest,
   StripeService
 > = makeStripeResolver<UpdateVerificationSessionRequest>((stripe, request) =>
-  stripe.identity.verificationSessions.update(request.id, request.params)
+  stripe.identity.verificationSessions.update(request.id, request.params),
 );
 
 /**
@@ -107,16 +104,15 @@ interface CancelVerificationSessionRequest extends Request.Request<
   readonly id: string;
 }
 
-const CancelVerificationSessionRequest =
-  Request.tagged<CancelVerificationSessionRequest>(
-    "CancelVerificationSessionRequest"
-  );
+const CancelVerificationSessionRequest = Request.tagged<CancelVerificationSessionRequest>(
+  "CancelVerificationSessionRequest",
+);
 
 const CancelVerificationSessionResolver: RequestResolver.RequestResolver<
   CancelVerificationSessionRequest,
   StripeService
 > = makeStripeResolver<CancelVerificationSessionRequest>((stripe, request) =>
-  stripe.identity.verificationSessions.cancel(request.id)
+  stripe.identity.verificationSessions.cancel(request.id),
 );
 
 /**
@@ -130,16 +126,15 @@ interface RedactVerificationSessionRequest extends Request.Request<
   readonly id: string;
 }
 
-const RedactVerificationSessionRequest =
-  Request.tagged<RedactVerificationSessionRequest>(
-    "RedactVerificationSessionRequest"
-  );
+const RedactVerificationSessionRequest = Request.tagged<RedactVerificationSessionRequest>(
+  "RedactVerificationSessionRequest",
+);
 
 const RedactVerificationSessionResolver: RequestResolver.RequestResolver<
   RedactVerificationSessionRequest,
   StripeService
 > = makeStripeResolver<RedactVerificationSessionRequest>((stripe, request) =>
-  stripe.identity.verificationSessions.redact(request.id)
+  stripe.identity.verificationSessions.redact(request.id),
 );
 
 /**
@@ -150,19 +145,18 @@ interface ListVerificationSessionsRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListVerificationSessionsRequest";
-  readonly params?: Stripe.Identity.VerificationSessionListParams;
+  readonly params?: Stripe.Identity.VerificationSessionListParams | undefined;
 }
 
-const ListVerificationSessionsRequest =
-  Request.tagged<ListVerificationSessionsRequest>(
-    "ListVerificationSessionsRequest"
-  );
+const ListVerificationSessionsRequest = Request.tagged<ListVerificationSessionsRequest>(
+  "ListVerificationSessionsRequest",
+);
 
 const ListVerificationSessionsResolver: RequestResolver.RequestResolver<
   ListVerificationSessionsRequest,
   StripeService
 > = makeStripeResolver<ListVerificationSessionsRequest>((stripe, request) =>
-  stripe.identity.verificationSessions.list(request.params)
+  stripe.identity.verificationSessions.list(request.params),
 );
 
 /**
@@ -177,15 +171,11 @@ const ListVerificationSessionsResolver: RequestResolver.RequestResolver<
  * ```
  */
 export const create = (
-  params: Stripe.Identity.VerificationSessionCreateParams
-): Effect.Effect<
-  Stripe.Identity.VerificationSession,
-  StripeError,
-  StripeService
-> =>
+  params: Stripe.Identity.VerificationSessionCreateParams,
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
   Effect.request(
     CreateVerificationSessionRequest({ params }),
-    RequestResolver.contextFromEffect(CreateVerificationSessionResolver)
+    RequestResolver.contextFromEffect(CreateVerificationSessionResolver),
   );
 
 /**
@@ -198,15 +188,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.Identity.VerificationSessionRetrieveParams
-): Effect.Effect<
-  Stripe.Identity.VerificationSession,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Identity.VerificationSessionRetrieveParams,
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
   Effect.request(
     RetrieveVerificationSessionRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveVerificationSessionResolver)
+    RequestResolver.contextFromEffect(RetrieveVerificationSessionResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -221,15 +207,11 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.Identity.VerificationSessionUpdateParams
-): Effect.Effect<
-  Stripe.Identity.VerificationSession,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Identity.VerificationSessionUpdateParams,
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
   Effect.request(
     UpdateVerificationSessionRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateVerificationSessionResolver)
+    RequestResolver.contextFromEffect(UpdateVerificationSessionResolver),
   );
 
 /**
@@ -243,15 +225,11 @@ export const update = (
  * ```
  */
 export const cancel = (
-  id: string
-): Effect.Effect<
-  Stripe.Identity.VerificationSession,
-  StripeError,
-  StripeService
-> =>
+  id: string,
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
   Effect.request(
     CancelVerificationSessionRequest({ id }),
-    RequestResolver.contextFromEffect(CancelVerificationSessionResolver)
+    RequestResolver.contextFromEffect(CancelVerificationSessionResolver),
   );
 
 /**
@@ -267,15 +245,11 @@ export const cancel = (
  * ```
  */
 export const redact = (
-  id: string
-): Effect.Effect<
-  Stripe.Identity.VerificationSession,
-  StripeError,
-  StripeService
-> =>
+  id: string,
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
   Effect.request(
     RedactVerificationSessionRequest({ id }),
-    RequestResolver.contextFromEffect(RedactVerificationSessionResolver)
+    RequestResolver.contextFromEffect(RedactVerificationSessionResolver),
   );
 
 /**
@@ -290,13 +264,9 @@ export const redact = (
  * ```
  */
 export const list = (
-  params?: Stripe.Identity.VerificationSessionListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.Identity.VerificationSession>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Identity.VerificationSessionListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.Identity.VerificationSession>, StripeError, StripeService> =>
   Effect.request(
     ListVerificationSessionsRequest({ params }),
-    RequestResolver.contextFromEffect(ListVerificationSessionsResolver)
+    RequestResolver.contextFromEffect(ListVerificationSessionsResolver),
   ).pipe(Effect.withRequestCaching(true));

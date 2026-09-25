@@ -36,16 +36,15 @@ interface CreateFinancialAccountRequest extends Request.Request<
   readonly params: Stripe.Treasury.FinancialAccountCreateParams;
 }
 
-const CreateFinancialAccountRequest =
-  Request.tagged<CreateFinancialAccountRequest>(
-    "CreateFinancialAccountRequest"
-  );
+const CreateFinancialAccountRequest = Request.tagged<CreateFinancialAccountRequest>(
+  "CreateFinancialAccountRequest",
+);
 
 const CreateFinancialAccountResolver: RequestResolver.RequestResolver<
   CreateFinancialAccountRequest,
   StripeService
 > = makeStripeResolver<CreateFinancialAccountRequest>((stripe, request) =>
-  stripe.treasury.financialAccounts.create(request.params)
+  stripe.treasury.financialAccounts.create(request.params),
 );
 
 /**
@@ -57,19 +56,18 @@ interface RetrieveFinancialAccountRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveFinancialAccountRequest";
   readonly id: string;
-  readonly params?: Stripe.Treasury.FinancialAccountRetrieveParams;
+  readonly params?: Stripe.Treasury.FinancialAccountRetrieveParams | undefined;
 }
 
-const RetrieveFinancialAccountRequest =
-  Request.tagged<RetrieveFinancialAccountRequest>(
-    "RetrieveFinancialAccountRequest"
-  );
+const RetrieveFinancialAccountRequest = Request.tagged<RetrieveFinancialAccountRequest>(
+  "RetrieveFinancialAccountRequest",
+);
 
 const RetrieveFinancialAccountResolver: RequestResolver.RequestResolver<
   RetrieveFinancialAccountRequest,
   StripeService
 > = makeStripeResolver<RetrieveFinancialAccountRequest>((stripe, request) =>
-  stripe.treasury.financialAccounts.retrieve(request.id, request.params)
+  stripe.treasury.financialAccounts.retrieve(request.id, request.params),
 );
 
 /**
@@ -81,19 +79,18 @@ interface UpdateFinancialAccountRequest extends Request.Request<
 > {
   readonly _tag: "UpdateFinancialAccountRequest";
   readonly id: string;
-  readonly params?: Stripe.Treasury.FinancialAccountUpdateParams;
+  readonly params?: Stripe.Treasury.FinancialAccountUpdateParams | undefined;
 }
 
-const UpdateFinancialAccountRequest =
-  Request.tagged<UpdateFinancialAccountRequest>(
-    "UpdateFinancialAccountRequest"
-  );
+const UpdateFinancialAccountRequest = Request.tagged<UpdateFinancialAccountRequest>(
+  "UpdateFinancialAccountRequest",
+);
 
 const UpdateFinancialAccountResolver: RequestResolver.RequestResolver<
   UpdateFinancialAccountRequest,
   StripeService
 > = makeStripeResolver<UpdateFinancialAccountRequest>((stripe, request) =>
-  stripe.treasury.financialAccounts.update(request.id, request.params)
+  stripe.treasury.financialAccounts.update(request.id, request.params),
 );
 
 /**
@@ -104,17 +101,18 @@ interface ListFinancialAccountsRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListFinancialAccountsRequest";
-  readonly params?: Stripe.Treasury.FinancialAccountListParams;
+  readonly params?: Stripe.Treasury.FinancialAccountListParams | undefined;
 }
 
-const ListFinancialAccountsRequest =
-  Request.tagged<ListFinancialAccountsRequest>("ListFinancialAccountsRequest");
+const ListFinancialAccountsRequest = Request.tagged<ListFinancialAccountsRequest>(
+  "ListFinancialAccountsRequest",
+);
 
 const ListFinancialAccountsResolver: RequestResolver.RequestResolver<
   ListFinancialAccountsRequest,
   StripeService
 > = makeStripeResolver<ListFinancialAccountsRequest>((stripe, request) =>
-  stripe.treasury.financialAccounts.list(request.params)
+  stripe.treasury.financialAccounts.list(request.params),
 );
 
 /**
@@ -128,14 +126,15 @@ interface CloseFinancialAccountRequest extends Request.Request<
   readonly id: string;
 }
 
-const CloseFinancialAccountRequest =
-  Request.tagged<CloseFinancialAccountRequest>("CloseFinancialAccountRequest");
+const CloseFinancialAccountRequest = Request.tagged<CloseFinancialAccountRequest>(
+  "CloseFinancialAccountRequest",
+);
 
 const CloseFinancialAccountResolver: RequestResolver.RequestResolver<
   CloseFinancialAccountRequest,
   StripeService
 > = makeStripeResolver<CloseFinancialAccountRequest>((stripe, request) =>
-  stripe.treasury.financialAccounts.close(request.id)
+  stripe.treasury.financialAccounts.close(request.id),
 );
 
 /**
@@ -147,18 +146,16 @@ interface RetrieveFeaturesRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveFeaturesRequest";
   readonly id: string;
-  readonly params?: Stripe.Treasury.FinancialAccountRetrieveFeaturesParams;
+  readonly params?: Stripe.Treasury.FinancialAccountRetrieveFeaturesParams | undefined;
 }
 
-const RetrieveFeaturesRequest = Request.tagged<RetrieveFeaturesRequest>(
-  "RetrieveFeaturesRequest"
-);
+const RetrieveFeaturesRequest = Request.tagged<RetrieveFeaturesRequest>("RetrieveFeaturesRequest");
 
 const RetrieveFeaturesResolver: RequestResolver.RequestResolver<
   RetrieveFeaturesRequest,
   StripeService
 > = makeStripeResolver<RetrieveFeaturesRequest>((stripe, request) =>
-  stripe.treasury.financialAccounts.retrieveFeatures(request.id, request.params)
+  stripe.treasury.financialAccounts.retrieveFeatures(request.id, request.params),
 );
 
 /**
@@ -170,33 +167,27 @@ interface UpdateFeaturesRequest extends Request.Request<
 > {
   readonly _tag: "UpdateFeaturesRequest";
   readonly id: string;
-  readonly params?: Stripe.Treasury.FinancialAccountUpdateFeaturesParams;
+  readonly params?: Stripe.Treasury.FinancialAccountUpdateFeaturesParams | undefined;
 }
 
-const UpdateFeaturesRequest = Request.tagged<UpdateFeaturesRequest>(
-  "UpdateFeaturesRequest"
-);
+const UpdateFeaturesRequest = Request.tagged<UpdateFeaturesRequest>("UpdateFeaturesRequest");
 
 const UpdateFeaturesResolver: RequestResolver.RequestResolver<
   UpdateFeaturesRequest,
   StripeService
 > = makeStripeResolver<UpdateFeaturesRequest>((stripe, request) =>
-  stripe.treasury.financialAccounts.updateFeatures(request.id, request.params)
+  stripe.treasury.financialAccounts.updateFeatures(request.id, request.params),
 );
 
 /**
  * Create a financial account
  */
 export const create = (
-  params: Stripe.Treasury.FinancialAccountCreateParams
-): Effect.Effect<
-  Stripe.Treasury.FinancialAccount,
-  StripeError,
-  StripeService
-> =>
+  params: Stripe.Treasury.FinancialAccountCreateParams,
+): Effect.Effect<Stripe.Treasury.FinancialAccount, StripeError, StripeService> =>
   Effect.request(
     CreateFinancialAccountRequest({ params }),
-    RequestResolver.contextFromEffect(CreateFinancialAccountResolver)
+    RequestResolver.contextFromEffect(CreateFinancialAccountResolver),
   );
 
 /**
@@ -204,15 +195,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.Treasury.FinancialAccountRetrieveParams
-): Effect.Effect<
-  Stripe.Treasury.FinancialAccount,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Treasury.FinancialAccountRetrieveParams,
+): Effect.Effect<Stripe.Treasury.FinancialAccount, StripeError, StripeService> =>
   Effect.request(
     RetrieveFinancialAccountRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveFinancialAccountResolver)
+    RequestResolver.contextFromEffect(RetrieveFinancialAccountResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -220,45 +207,33 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.Treasury.FinancialAccountUpdateParams
-): Effect.Effect<
-  Stripe.Treasury.FinancialAccount,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Treasury.FinancialAccountUpdateParams,
+): Effect.Effect<Stripe.Treasury.FinancialAccount, StripeError, StripeService> =>
   Effect.request(
     UpdateFinancialAccountRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateFinancialAccountResolver)
+    RequestResolver.contextFromEffect(UpdateFinancialAccountResolver),
   );
 
 /**
  * List financial accounts
  */
 export const list = (
-  params?: Stripe.Treasury.FinancialAccountListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.Treasury.FinancialAccount>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Treasury.FinancialAccountListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.Treasury.FinancialAccount>, StripeError, StripeService> =>
   Effect.request(
     ListFinancialAccountsRequest({ params }),
-    RequestResolver.contextFromEffect(ListFinancialAccountsResolver)
+    RequestResolver.contextFromEffect(ListFinancialAccountsResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
  * Close a financial account
  */
 export const close = (
-  id: string
-): Effect.Effect<
-  Stripe.Treasury.FinancialAccount,
-  StripeError,
-  StripeService
-> =>
+  id: string,
+): Effect.Effect<Stripe.Treasury.FinancialAccount, StripeError, StripeService> =>
   Effect.request(
     CloseFinancialAccountRequest({ id }),
-    RequestResolver.contextFromEffect(CloseFinancialAccountResolver)
+    RequestResolver.contextFromEffect(CloseFinancialAccountResolver),
   );
 
 /**
@@ -266,15 +241,11 @@ export const close = (
  */
 export const retrieveFeatures = (
   id: string,
-  params?: Stripe.Treasury.FinancialAccountRetrieveFeaturesParams
-): Effect.Effect<
-  Stripe.Treasury.FinancialAccountFeatures,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Treasury.FinancialAccountRetrieveFeaturesParams,
+): Effect.Effect<Stripe.Treasury.FinancialAccountFeatures, StripeError, StripeService> =>
   Effect.request(
     RetrieveFeaturesRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveFeaturesResolver)
+    RequestResolver.contextFromEffect(RetrieveFeaturesResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -282,13 +253,9 @@ export const retrieveFeatures = (
  */
 export const updateFeatures = (
   id: string,
-  params?: Stripe.Treasury.FinancialAccountUpdateFeaturesParams
-): Effect.Effect<
-  Stripe.Treasury.FinancialAccountFeatures,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Treasury.FinancialAccountUpdateFeaturesParams,
+): Effect.Effect<Stripe.Treasury.FinancialAccountFeatures, StripeError, StripeService> =>
   Effect.request(
     UpdateFeaturesRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateFeaturesResolver)
+    RequestResolver.contextFromEffect(UpdateFeaturesResolver),
   );

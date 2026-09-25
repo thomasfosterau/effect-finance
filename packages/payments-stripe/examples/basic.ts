@@ -40,14 +40,11 @@ const program = Effect.gen(function* () {
   // Errors are vendor-neutral, regardless of the underlying provider. We log
   // them with `tapErrorTag` and leave the failure in the channel for the caller.
   Effect.tapErrorTag("PaymentAuthenticationError", (error) =>
-    Console.error("Authentication failed:", error.message)
+    Console.error("Authentication failed:", error.message),
   ),
   Effect.tapErrorTag("PaymentProviderError", (error) =>
-    Console.error(
-      `Provider error from ${error.provider} (${error.code ?? "?"}):`,
-      error.message
-    )
-  )
+    Console.error(`Provider error from ${error.provider} (${error.code ?? "?"}):`, error.message),
+  ),
 );
 
 // Choose the provider here. To run on Stripe from an env var instead, use

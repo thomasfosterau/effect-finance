@@ -28,114 +28,100 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a payment method
  */
-interface CreatePaymentMethodRequest extends Request.Request<
-  Stripe.PaymentMethod,
-  StripeError
-> {
+interface CreatePaymentMethodRequest extends Request.Request<Stripe.PaymentMethod, StripeError> {
   readonly _tag: "CreatePaymentMethodRequest";
   readonly params: Stripe.PaymentMethodCreateParams;
 }
 
 const CreatePaymentMethodRequest = Request.tagged<CreatePaymentMethodRequest>(
-  "CreatePaymentMethodRequest"
+  "CreatePaymentMethodRequest",
 );
 
 const CreatePaymentMethodResolver: RequestResolver.RequestResolver<
   CreatePaymentMethodRequest,
   StripeService
 > = makeStripeResolver<CreatePaymentMethodRequest>((stripe, request) =>
-  stripe.paymentMethods.create(request.params)
+  stripe.paymentMethods.create(request.params),
 );
 
 /**
  * Request to retrieve a payment method
  */
-interface RetrievePaymentMethodRequest extends Request.Request<
-  Stripe.PaymentMethod,
-  StripeError
-> {
+interface RetrievePaymentMethodRequest extends Request.Request<Stripe.PaymentMethod, StripeError> {
   readonly _tag: "RetrievePaymentMethodRequest";
   readonly id: string;
-  readonly params?: Stripe.PaymentMethodRetrieveParams;
+  readonly params?: Stripe.PaymentMethodRetrieveParams | undefined;
 }
 
-const RetrievePaymentMethodRequest =
-  Request.tagged<RetrievePaymentMethodRequest>("RetrievePaymentMethodRequest");
+const RetrievePaymentMethodRequest = Request.tagged<RetrievePaymentMethodRequest>(
+  "RetrievePaymentMethodRequest",
+);
 
 const RetrievePaymentMethodResolver: RequestResolver.RequestResolver<
   RetrievePaymentMethodRequest,
   StripeService
 > = makeStripeResolver<RetrievePaymentMethodRequest>((stripe, request) =>
-  stripe.paymentMethods.retrieve(request.id, request.params)
+  stripe.paymentMethods.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update a payment method
  */
-interface UpdatePaymentMethodRequest extends Request.Request<
-  Stripe.PaymentMethod,
-  StripeError
-> {
+interface UpdatePaymentMethodRequest extends Request.Request<Stripe.PaymentMethod, StripeError> {
   readonly _tag: "UpdatePaymentMethodRequest";
   readonly id: string;
-  readonly params?: Stripe.PaymentMethodUpdateParams;
+  readonly params?: Stripe.PaymentMethodUpdateParams | undefined;
 }
 
 const UpdatePaymentMethodRequest = Request.tagged<UpdatePaymentMethodRequest>(
-  "UpdatePaymentMethodRequest"
+  "UpdatePaymentMethodRequest",
 );
 
 const UpdatePaymentMethodResolver: RequestResolver.RequestResolver<
   UpdatePaymentMethodRequest,
   StripeService
 > = makeStripeResolver<UpdatePaymentMethodRequest>((stripe, request) =>
-  stripe.paymentMethods.update(request.id, request.params)
+  stripe.paymentMethods.update(request.id, request.params),
 );
 
 /**
  * Request to attach a payment method to a customer
  */
-interface AttachPaymentMethodRequest extends Request.Request<
-  Stripe.PaymentMethod,
-  StripeError
-> {
+interface AttachPaymentMethodRequest extends Request.Request<Stripe.PaymentMethod, StripeError> {
   readonly _tag: "AttachPaymentMethodRequest";
   readonly id: string;
   readonly params: Stripe.PaymentMethodAttachParams;
 }
 
 const AttachPaymentMethodRequest = Request.tagged<AttachPaymentMethodRequest>(
-  "AttachPaymentMethodRequest"
+  "AttachPaymentMethodRequest",
 );
 
 const AttachPaymentMethodResolver: RequestResolver.RequestResolver<
   AttachPaymentMethodRequest,
   StripeService
 > = makeStripeResolver<AttachPaymentMethodRequest>((stripe, request) =>
-  stripe.paymentMethods.attach(request.id, request.params)
+  stripe.paymentMethods.attach(request.id, request.params),
 );
 
 /**
  * Request to detach a payment method from a customer
  */
-interface DetachPaymentMethodRequest extends Request.Request<
-  Stripe.PaymentMethod,
-  StripeError
-> {
+interface DetachPaymentMethodRequest extends Request.Request<Stripe.PaymentMethod, StripeError> {
   readonly _tag: "DetachPaymentMethodRequest";
   readonly id: string;
-  readonly params?: Stripe.PaymentMethodDetachParams;
+  readonly params?: Stripe.PaymentMethodDetachParams | undefined;
 }
 
 const DetachPaymentMethodRequest = Request.tagged<DetachPaymentMethodRequest>(
-  "DetachPaymentMethodRequest"
+  "DetachPaymentMethodRequest",
 );
 
 const DetachPaymentMethodResolver: RequestResolver.RequestResolver<
   DetachPaymentMethodRequest,
   StripeService
 > = makeStripeResolver<DetachPaymentMethodRequest>((stripe, request) =>
-  stripe.paymentMethods.detach(request.id, request.params)
+  stripe.paymentMethods.detach(request.id, request.params),
 );
 
 /**
@@ -150,25 +136,25 @@ interface ListPaymentMethodsRequest extends Request.Request<
 }
 
 const ListPaymentMethodsRequest = Request.tagged<ListPaymentMethodsRequest>(
-  "ListPaymentMethodsRequest"
+  "ListPaymentMethodsRequest",
 );
 
 const ListPaymentMethodsResolver: RequestResolver.RequestResolver<
   ListPaymentMethodsRequest,
   StripeService
 > = makeStripeResolver<ListPaymentMethodsRequest>((stripe, request) =>
-  stripe.paymentMethods.list(request.params)
+  stripe.paymentMethods.list(request.params),
 );
 
 /**
  * Create a payment method
  */
 export const create = (
-  params: Stripe.PaymentMethodCreateParams
+  params: Stripe.PaymentMethodCreateParams,
 ): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
   Effect.request(
     CreatePaymentMethodRequest({ params }),
-    RequestResolver.contextFromEffect(CreatePaymentMethodResolver)
+    RequestResolver.contextFromEffect(CreatePaymentMethodResolver),
   );
 
 /**
@@ -176,11 +162,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.PaymentMethodRetrieveParams
+  params?: Stripe.PaymentMethodRetrieveParams,
 ): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
   Effect.request(
     RetrievePaymentMethodRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrievePaymentMethodResolver)
+    RequestResolver.contextFromEffect(RetrievePaymentMethodResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -188,11 +174,11 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.PaymentMethodUpdateParams
+  params?: Stripe.PaymentMethodUpdateParams,
 ): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
   Effect.request(
     UpdatePaymentMethodRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdatePaymentMethodResolver)
+    RequestResolver.contextFromEffect(UpdatePaymentMethodResolver),
   );
 
 /**
@@ -200,11 +186,11 @@ export const update = (
  */
 export const attach = (
   id: string,
-  params: Stripe.PaymentMethodAttachParams
+  params: Stripe.PaymentMethodAttachParams,
 ): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
   Effect.request(
     AttachPaymentMethodRequest({ id, params }),
-    RequestResolver.contextFromEffect(AttachPaymentMethodResolver)
+    RequestResolver.contextFromEffect(AttachPaymentMethodResolver),
   );
 
 /**
@@ -212,24 +198,20 @@ export const attach = (
  */
 export const detach = (
   id: string,
-  params?: Stripe.PaymentMethodDetachParams
+  params?: Stripe.PaymentMethodDetachParams,
 ): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
   Effect.request(
     DetachPaymentMethodRequest({ id, params }),
-    RequestResolver.contextFromEffect(DetachPaymentMethodResolver)
+    RequestResolver.contextFromEffect(DetachPaymentMethodResolver),
   );
 
 /**
  * List payment methods
  */
 export const list = (
-  params: Stripe.PaymentMethodListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.PaymentMethod>,
-  StripeError,
-  StripeService
-> =>
+  params: Stripe.PaymentMethodListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.PaymentMethod>, StripeError, StripeService> =>
   Effect.request(
     ListPaymentMethodsRequest({ params }),
-    RequestResolver.contextFromEffect(ListPaymentMethodsResolver)
+    RequestResolver.contextFromEffect(ListPaymentMethodsResolver),
   ).pipe(Effect.withRequestCaching(true));

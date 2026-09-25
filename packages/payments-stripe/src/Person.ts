@@ -31,129 +31,97 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a person
  */
-interface CreatePersonRequest extends Request.Request<
-  Stripe.Person,
-  StripeError
-> {
+interface CreatePersonRequest extends Request.Request<Stripe.Person, StripeError> {
   readonly _tag: "CreatePersonRequest";
   readonly accountId: string;
   readonly params: Stripe.PersonCreateParams;
 }
 
-const CreatePersonRequest = Request.tagged<CreatePersonRequest>(
-  "CreatePersonRequest"
-);
+const CreatePersonRequest = Request.tagged<CreatePersonRequest>("CreatePersonRequest");
 
-const CreatePersonResolver: RequestResolver.RequestResolver<
-  CreatePersonRequest,
-  StripeService
-> = makeStripeResolver<CreatePersonRequest>((stripe, request) =>
-  stripe.accounts.createPerson(request.accountId, request.params)
-);
+const CreatePersonResolver: RequestResolver.RequestResolver<CreatePersonRequest, StripeService> =
+  makeStripeResolver<CreatePersonRequest>((stripe, request) =>
+    stripe.accounts.createPerson(request.accountId, request.params),
+  );
 
 /**
  * Request to retrieve a person
  */
-interface RetrievePersonRequest extends Request.Request<
-  Stripe.Person,
-  StripeError
-> {
+interface RetrievePersonRequest extends Request.Request<Stripe.Person, StripeError> {
   readonly _tag: "RetrievePersonRequest";
   readonly accountId: string;
   readonly id: string;
-  readonly params?: Stripe.PersonRetrieveParams;
+  readonly params?: Stripe.PersonRetrieveParams | undefined;
 }
 
-const RetrievePersonRequest = Request.tagged<RetrievePersonRequest>(
-  "RetrievePersonRequest"
-);
+const RetrievePersonRequest = Request.tagged<RetrievePersonRequest>("RetrievePersonRequest");
 
 const RetrievePersonResolver: RequestResolver.RequestResolver<
   RetrievePersonRequest,
   StripeService
 > = makeStripeResolver<RetrievePersonRequest>((stripe, request) =>
-  stripe.accounts.retrievePerson(request.accountId, request.id, request.params)
+  stripe.accounts.retrievePerson(request.accountId, request.id, request.params),
 );
 
 /**
  * Request to update a person
  */
-interface UpdatePersonRequest extends Request.Request<
-  Stripe.Person,
-  StripeError
-> {
+interface UpdatePersonRequest extends Request.Request<Stripe.Person, StripeError> {
   readonly _tag: "UpdatePersonRequest";
   readonly accountId: string;
   readonly id: string;
-  readonly params?: Stripe.PersonUpdateParams;
+  readonly params?: Stripe.PersonUpdateParams | undefined;
 }
 
-const UpdatePersonRequest = Request.tagged<UpdatePersonRequest>(
-  "UpdatePersonRequest"
-);
+const UpdatePersonRequest = Request.tagged<UpdatePersonRequest>("UpdatePersonRequest");
 
-const UpdatePersonResolver: RequestResolver.RequestResolver<
-  UpdatePersonRequest,
-  StripeService
-> = makeStripeResolver<UpdatePersonRequest>((stripe, request) =>
-  stripe.accounts.updatePerson(request.accountId, request.id, request.params)
-);
+const UpdatePersonResolver: RequestResolver.RequestResolver<UpdatePersonRequest, StripeService> =
+  makeStripeResolver<UpdatePersonRequest>((stripe, request) =>
+    stripe.accounts.updatePerson(request.accountId, request.id, request.params),
+  );
 
 /**
  * Request to delete a person
  */
-interface DeletePersonRequest extends Request.Request<
-  Stripe.DeletedPerson,
-  StripeError
-> {
+interface DeletePersonRequest extends Request.Request<Stripe.DeletedPerson, StripeError> {
   readonly _tag: "DeletePersonRequest";
   readonly accountId: string;
   readonly id: string;
 }
 
-const DeletePersonRequest = Request.tagged<DeletePersonRequest>(
-  "DeletePersonRequest"
-);
+const DeletePersonRequest = Request.tagged<DeletePersonRequest>("DeletePersonRequest");
 
-const DeletePersonResolver: RequestResolver.RequestResolver<
-  DeletePersonRequest,
-  StripeService
-> = makeStripeResolver<DeletePersonRequest>((stripe, request) =>
-  stripe.accounts.deletePerson(request.accountId, request.id)
-);
+const DeletePersonResolver: RequestResolver.RequestResolver<DeletePersonRequest, StripeService> =
+  makeStripeResolver<DeletePersonRequest>((stripe, request) =>
+    stripe.accounts.deletePerson(request.accountId, request.id),
+  );
 
 /**
  * Request to list persons
  */
-interface ListPersonsRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Person>,
-  StripeError
-> {
+interface ListPersonsRequest extends Request.Request<Stripe.ApiList<Stripe.Person>, StripeError> {
   readonly _tag: "ListPersonsRequest";
   readonly accountId: string;
-  readonly params?: Stripe.PersonListParams;
+  readonly params?: Stripe.PersonListParams | undefined;
 }
 
-const ListPersonsRequest =
-  Request.tagged<ListPersonsRequest>("ListPersonsRequest");
+const ListPersonsRequest = Request.tagged<ListPersonsRequest>("ListPersonsRequest");
 
-const ListPersonsResolver: RequestResolver.RequestResolver<
-  ListPersonsRequest,
-  StripeService
-> = makeStripeResolver<ListPersonsRequest>((stripe, request) =>
-  stripe.accounts.listPersons(request.accountId, request.params)
-);
+const ListPersonsResolver: RequestResolver.RequestResolver<ListPersonsRequest, StripeService> =
+  makeStripeResolver<ListPersonsRequest>((stripe, request) =>
+    stripe.accounts.listPersons(request.accountId, request.params),
+  );
 
 /**
  * Create a person
  */
 export const create = (
   accountId: string,
-  params: Stripe.PersonCreateParams
+  params: Stripe.PersonCreateParams,
 ): Effect.Effect<Stripe.Person, StripeError, StripeService> =>
   Effect.request(
     CreatePersonRequest({ accountId, params }),
-    RequestResolver.contextFromEffect(CreatePersonResolver)
+    RequestResolver.contextFromEffect(CreatePersonResolver),
   );
 
 /**
@@ -162,11 +130,11 @@ export const create = (
 export const retrieve = (
   accountId: string,
   id: string,
-  params?: Stripe.PersonRetrieveParams
+  params?: Stripe.PersonRetrieveParams,
 ): Effect.Effect<Stripe.Person, StripeError, StripeService> =>
   Effect.request(
     RetrievePersonRequest({ accountId, id, params }),
-    RequestResolver.contextFromEffect(RetrievePersonResolver)
+    RequestResolver.contextFromEffect(RetrievePersonResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -175,11 +143,11 @@ export const retrieve = (
 export const update = (
   accountId: string,
   id: string,
-  params?: Stripe.PersonUpdateParams
+  params?: Stripe.PersonUpdateParams,
 ): Effect.Effect<Stripe.Person, StripeError, StripeService> =>
   Effect.request(
     UpdatePersonRequest({ accountId, id, params }),
-    RequestResolver.contextFromEffect(UpdatePersonResolver)
+    RequestResolver.contextFromEffect(UpdatePersonResolver),
   );
 
 /**
@@ -187,11 +155,11 @@ export const update = (
  */
 export const del = (
   accountId: string,
-  id: string
+  id: string,
 ): Effect.Effect<Stripe.DeletedPerson, StripeError, StripeService> =>
   Effect.request(
     DeletePersonRequest({ accountId, id }),
-    RequestResolver.contextFromEffect(DeletePersonResolver)
+    RequestResolver.contextFromEffect(DeletePersonResolver),
   );
 
 /**
@@ -199,9 +167,9 @@ export const del = (
  */
 export const list = (
   accountId: string,
-  params?: Stripe.PersonListParams
+  params?: Stripe.PersonListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Person>, StripeError, StripeService> =>
   Effect.request(
     ListPersonsRequest({ accountId, params }),
-    RequestResolver.contextFromEffect(ListPersonsResolver)
+    RequestResolver.contextFromEffect(ListPersonsResolver),
   ).pipe(Effect.withRequestCaching(true));

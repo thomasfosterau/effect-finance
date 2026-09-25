@@ -25,12 +25,12 @@ const TRUSTED = true;
 
 export interface AirwallexCustomer {
   readonly id: string;
-  readonly email?: string | null;
-  readonly first_name?: string | null;
-  readonly last_name?: string | null;
-  readonly phone_number?: string | null;
-  readonly metadata?: Record<string, string> | null;
-  readonly created_at?: string | null;
+  readonly email?: string | null | undefined;
+  readonly first_name?: string | null | undefined;
+  readonly last_name?: string | null | undefined;
+  readonly phone_number?: string | null | undefined;
+  readonly metadata?: Record<string, string> | null | undefined;
+  readonly created_at?: string | null | undefined;
 }
 
 export interface AirwallexPaymentIntent {
@@ -38,12 +38,12 @@ export interface AirwallexPaymentIntent {
   readonly amount: number;
   readonly currency: string;
   readonly status: string;
-  readonly customer_id?: string | null;
-  readonly payment_method_id?: string | null;
-  readonly client_secret?: string | null;
-  readonly descriptor?: string | null;
-  readonly metadata?: Record<string, string> | null;
-  readonly created_at?: string | null;
+  readonly customer_id?: string | null | undefined;
+  readonly payment_method_id?: string | null | undefined;
+  readonly client_secret?: string | null | undefined;
+  readonly descriptor?: string | null | undefined;
+  readonly metadata?: Record<string, string> | null | undefined;
+  readonly created_at?: string | null | undefined;
 }
 
 export interface AirwallexRefund {
@@ -51,10 +51,10 @@ export interface AirwallexRefund {
   readonly amount: number;
   readonly currency: string;
   readonly status: string;
-  readonly payment_intent_id?: string | null;
-  readonly reason?: string | null;
-  readonly metadata?: Record<string, string> | null;
-  readonly created_at?: string | null;
+  readonly payment_intent_id?: string | null | undefined;
+  readonly reason?: string | null | undefined;
+  readonly metadata?: Record<string, string> | null | undefined;
+  readonly created_at?: string | null | undefined;
 }
 
 /** A page of Airwallex results. */
@@ -76,20 +76,17 @@ const toEpochSeconds = (value: string | null | undefined): number => {
 
 const composeName = (
   first: string | null | undefined,
-  last: string | null | undefined
+  last: string | null | undefined,
 ): string | null => {
   const name = [first, last].filter((part) => !!part).join(" ");
   return name.length > 0 ? name : null;
 };
 
-const metadataOf = (
-  metadata: Record<string, string> | null | undefined
-): Record<string, string> => metadata ?? {};
+const metadataOf = (metadata: Record<string, string> | null | undefined): Record<string, string> =>
+  metadata ?? {};
 
 /** Normalize an Airwallex payment intent status to the neutral status. */
-export const toPaymentStatus = (
-  status: string
-): PaymentIntentNS.PaymentStatus => {
+export const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus => {
   switch (status) {
     case "REQUIRES_PAYMENT_METHOD":
       return "requires_payment_method";
@@ -142,13 +139,11 @@ export const toCustomer = (customer: AirwallexCustomer): CustomerNS.Customer =>
       created: toEpochSeconds(customer.created_at),
       livemode: false,
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map an Airwallex payment intent to the neutral entity. */
-export const toPaymentIntent = (
-  intent: AirwallexPaymentIntent
-): PaymentIntentNS.PaymentIntent =>
+export const toPaymentIntent = (intent: AirwallexPaymentIntent): PaymentIntentNS.PaymentIntent =>
   new PaymentIntentNS.PaymentIntent(
     {
       id: intent.id,
@@ -162,7 +157,7 @@ export const toPaymentIntent = (
       metadata: metadataOf(intent.metadata),
       created: toEpochSeconds(intent.created_at),
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map an Airwallex refund to the neutral entity. */
@@ -179,14 +174,11 @@ export const toRefund = (refund: AirwallexRefund): RefundNS.Refund =>
       metadata: metadataOf(refund.metadata),
       created: toEpochSeconds(refund.created_at),
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map an Airwallex list response into a neutral page. */
-export const toPage = <S, A>(
-  list: AirwallexList<S>,
-  map: (value: S) => A
-): Page<A> => ({
+export const toPage = <S, A>(list: AirwallexList<S>, map: (value: S) => A): Page<A> => ({
   data: list.items.map(map),
   hasMore: list.has_more,
 });

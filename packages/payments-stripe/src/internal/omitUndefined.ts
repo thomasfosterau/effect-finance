@@ -1,0 +1,22 @@
+/**
+ * `T` with every key whose type admits `undefined` made optional and
+ * `undefined`-free: the shape the Stripe SDK's parameter types take under
+ * `exactOptionalPropertyTypes`, which declare `key?: T`, never
+ * `key?: T | undefined`.
+ */
+export type OmitUndefined<T> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
+};
+
+/**
+ * Drop the keys whose value is `undefined`, so an options object assembled
+ * from optional inputs type-checks against the SDK's parameter types. The SDK
+ * already skips `undefined` values when it form-encodes a request, so the wire
+ * format is unchanged.
+ */
+export const omitUndefined = <T extends object>(record: T): OmitUndefined<T> =>
+  Object.fromEntries(
+    Object.entries(record).filter(([, value]) => value !== undefined),
+  ) as OmitUndefined<T>;

@@ -32,99 +32,70 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a price
  */
-interface CreatePriceRequest extends Request.Request<
-  Stripe.Price,
-  StripeError
-> {
+interface CreatePriceRequest extends Request.Request<Stripe.Price, StripeError> {
   readonly _tag: "CreatePriceRequest";
   readonly params: Stripe.PriceCreateParams;
 }
 
-const CreatePriceRequest =
-  Request.tagged<CreatePriceRequest>("CreatePriceRequest");
+const CreatePriceRequest = Request.tagged<CreatePriceRequest>("CreatePriceRequest");
 
-const CreatePriceResolver: RequestResolver.RequestResolver<
-  CreatePriceRequest,
-  StripeService
-> = makeStripeResolver<CreatePriceRequest>((stripe, request) =>
-  stripe.prices.create(request.params)
-);
+const CreatePriceResolver: RequestResolver.RequestResolver<CreatePriceRequest, StripeService> =
+  makeStripeResolver<CreatePriceRequest>((stripe, request) => stripe.prices.create(request.params));
 
 /**
  * Request to retrieve a price
  */
-interface RetrievePriceRequest extends Request.Request<
-  Stripe.Price,
-  StripeError
-> {
+interface RetrievePriceRequest extends Request.Request<Stripe.Price, StripeError> {
   readonly _tag: "RetrievePriceRequest";
   readonly id: string;
-  readonly params?: Stripe.PriceRetrieveParams;
+  readonly params?: Stripe.PriceRetrieveParams | undefined;
 }
 
-const RetrievePriceRequest = Request.tagged<RetrievePriceRequest>(
-  "RetrievePriceRequest"
-);
+const RetrievePriceRequest = Request.tagged<RetrievePriceRequest>("RetrievePriceRequest");
 
-const RetrievePriceResolver: RequestResolver.RequestResolver<
-  RetrievePriceRequest,
-  StripeService
-> = makeStripeResolver<RetrievePriceRequest>((stripe, request) =>
-  stripe.prices.retrieve(request.id, request.params)
-);
+const RetrievePriceResolver: RequestResolver.RequestResolver<RetrievePriceRequest, StripeService> =
+  makeStripeResolver<RetrievePriceRequest>((stripe, request) =>
+    stripe.prices.retrieve(request.id, request.params),
+  );
 
 /**
  * Request to update a price
  */
-interface UpdatePriceRequest extends Request.Request<
-  Stripe.Price,
-  StripeError
-> {
+interface UpdatePriceRequest extends Request.Request<Stripe.Price, StripeError> {
   readonly _tag: "UpdatePriceRequest";
   readonly id: string;
-  readonly params?: Stripe.PriceUpdateParams;
+  readonly params?: Stripe.PriceUpdateParams | undefined;
 }
 
-const UpdatePriceRequest =
-  Request.tagged<UpdatePriceRequest>("UpdatePriceRequest");
+const UpdatePriceRequest = Request.tagged<UpdatePriceRequest>("UpdatePriceRequest");
 
-const UpdatePriceResolver: RequestResolver.RequestResolver<
-  UpdatePriceRequest,
-  StripeService
-> = makeStripeResolver<UpdatePriceRequest>((stripe, request) =>
-  stripe.prices.update(request.id, request.params)
-);
+const UpdatePriceResolver: RequestResolver.RequestResolver<UpdatePriceRequest, StripeService> =
+  makeStripeResolver<UpdatePriceRequest>((stripe, request) =>
+    stripe.prices.update(request.id, request.params),
+  );
 
 /**
  * Request to list prices
  */
-interface ListPricesRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Price>,
-  StripeError
-> {
+interface ListPricesRequest extends Request.Request<Stripe.ApiList<Stripe.Price>, StripeError> {
   readonly _tag: "ListPricesRequest";
-  readonly params?: Stripe.PriceListParams;
+  readonly params?: Stripe.PriceListParams | undefined;
 }
 
-const ListPricesRequest =
-  Request.tagged<ListPricesRequest>("ListPricesRequest");
+const ListPricesRequest = Request.tagged<ListPricesRequest>("ListPricesRequest");
 
-const ListPricesResolver: RequestResolver.RequestResolver<
-  ListPricesRequest,
-  StripeService
-> = makeStripeResolver<ListPricesRequest>((stripe, request) =>
-  stripe.prices.list(request.params)
-);
+const ListPricesResolver: RequestResolver.RequestResolver<ListPricesRequest, StripeService> =
+  makeStripeResolver<ListPricesRequest>((stripe, request) => stripe.prices.list(request.params));
 
 /**
  * Create a price
  */
 export const create = (
-  params: Stripe.PriceCreateParams
+  params: Stripe.PriceCreateParams,
 ): Effect.Effect<Stripe.Price, StripeError, StripeService> =>
   Effect.request(
     CreatePriceRequest({ params }),
-    RequestResolver.contextFromEffect(CreatePriceResolver)
+    RequestResolver.contextFromEffect(CreatePriceResolver),
   );
 
 /**
@@ -132,11 +103,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.PriceRetrieveParams
+  params?: Stripe.PriceRetrieveParams,
 ): Effect.Effect<Stripe.Price, StripeError, StripeService> =>
   Effect.request(
     RetrievePriceRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrievePriceResolver)
+    RequestResolver.contextFromEffect(RetrievePriceResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -144,20 +115,20 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.PriceUpdateParams
+  params?: Stripe.PriceUpdateParams,
 ): Effect.Effect<Stripe.Price, StripeError, StripeService> =>
   Effect.request(
     UpdatePriceRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdatePriceResolver)
+    RequestResolver.contextFromEffect(UpdatePriceResolver),
   );
 
 /**
  * List prices
  */
 export const list = (
-  params?: Stripe.PriceListParams
+  params?: Stripe.PriceListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Price>, StripeError, StripeService> =>
   Effect.request(
     ListPricesRequest({ params }),
-    RequestResolver.contextFromEffect(ListPricesResolver)
+    RequestResolver.contextFromEffect(ListPricesResolver),
   ).pipe(Effect.withRequestCaching(true));

@@ -28,123 +28,87 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a coupon
  */
-interface CreateCouponRequest extends Request.Request<
-  Stripe.Coupon,
-  StripeError
-> {
+interface CreateCouponRequest extends Request.Request<Stripe.Coupon, StripeError> {
   readonly _tag: "CreateCouponRequest";
   readonly params: Stripe.CouponCreateParams;
 }
 
-const CreateCouponRequest = Request.tagged<CreateCouponRequest>(
-  "CreateCouponRequest"
-);
+const CreateCouponRequest = Request.tagged<CreateCouponRequest>("CreateCouponRequest");
 
-const CreateCouponResolver: RequestResolver.RequestResolver<
-  CreateCouponRequest,
-  StripeService
-> = makeStripeResolver<CreateCouponRequest>((stripe, request) =>
-  stripe.coupons.create(request.params)
-);
+const CreateCouponResolver: RequestResolver.RequestResolver<CreateCouponRequest, StripeService> =
+  makeStripeResolver<CreateCouponRequest>((stripe, request) =>
+    stripe.coupons.create(request.params),
+  );
 
 /**
  * Request to retrieve a coupon
  */
-interface RetrieveCouponRequest extends Request.Request<
-  Stripe.Coupon,
-  StripeError
-> {
+interface RetrieveCouponRequest extends Request.Request<Stripe.Coupon, StripeError> {
   readonly _tag: "RetrieveCouponRequest";
   readonly id: string;
-  readonly params?: Stripe.CouponRetrieveParams;
+  readonly params?: Stripe.CouponRetrieveParams | undefined;
 }
 
-const RetrieveCouponRequest = Request.tagged<RetrieveCouponRequest>(
-  "RetrieveCouponRequest"
-);
+const RetrieveCouponRequest = Request.tagged<RetrieveCouponRequest>("RetrieveCouponRequest");
 
 const RetrieveCouponResolver: RequestResolver.RequestResolver<
   RetrieveCouponRequest,
   StripeService
 > = makeStripeResolver<RetrieveCouponRequest>((stripe, request) =>
-  stripe.coupons.retrieve(request.id, request.params)
+  stripe.coupons.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update a coupon
  */
-interface UpdateCouponRequest extends Request.Request<
-  Stripe.Coupon,
-  StripeError
-> {
+interface UpdateCouponRequest extends Request.Request<Stripe.Coupon, StripeError> {
   readonly _tag: "UpdateCouponRequest";
   readonly id: string;
-  readonly params?: Stripe.CouponUpdateParams;
+  readonly params?: Stripe.CouponUpdateParams | undefined;
 }
 
-const UpdateCouponRequest = Request.tagged<UpdateCouponRequest>(
-  "UpdateCouponRequest"
-);
+const UpdateCouponRequest = Request.tagged<UpdateCouponRequest>("UpdateCouponRequest");
 
-const UpdateCouponResolver: RequestResolver.RequestResolver<
-  UpdateCouponRequest,
-  StripeService
-> = makeStripeResolver<UpdateCouponRequest>((stripe, request) =>
-  stripe.coupons.update(request.id, request.params)
-);
+const UpdateCouponResolver: RequestResolver.RequestResolver<UpdateCouponRequest, StripeService> =
+  makeStripeResolver<UpdateCouponRequest>((stripe, request) =>
+    stripe.coupons.update(request.id, request.params),
+  );
 
 /**
  * Request to delete a coupon
  */
-interface DeleteCouponRequest extends Request.Request<
-  Stripe.DeletedCoupon,
-  StripeError
-> {
+interface DeleteCouponRequest extends Request.Request<Stripe.DeletedCoupon, StripeError> {
   readonly _tag: "DeleteCouponRequest";
   readonly id: string;
 }
 
-const DeleteCouponRequest = Request.tagged<DeleteCouponRequest>(
-  "DeleteCouponRequest"
-);
+const DeleteCouponRequest = Request.tagged<DeleteCouponRequest>("DeleteCouponRequest");
 
-const DeleteCouponResolver: RequestResolver.RequestResolver<
-  DeleteCouponRequest,
-  StripeService
-> = makeStripeResolver<DeleteCouponRequest>((stripe, request) =>
-  stripe.coupons.del(request.id)
-);
+const DeleteCouponResolver: RequestResolver.RequestResolver<DeleteCouponRequest, StripeService> =
+  makeStripeResolver<DeleteCouponRequest>((stripe, request) => stripe.coupons.del(request.id));
 
 /**
  * Request to list coupons
  */
-interface ListCouponsRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Coupon>,
-  StripeError
-> {
+interface ListCouponsRequest extends Request.Request<Stripe.ApiList<Stripe.Coupon>, StripeError> {
   readonly _tag: "ListCouponsRequest";
-  readonly params?: Stripe.CouponListParams;
+  readonly params?: Stripe.CouponListParams | undefined;
 }
 
-const ListCouponsRequest =
-  Request.tagged<ListCouponsRequest>("ListCouponsRequest");
+const ListCouponsRequest = Request.tagged<ListCouponsRequest>("ListCouponsRequest");
 
-const ListCouponsResolver: RequestResolver.RequestResolver<
-  ListCouponsRequest,
-  StripeService
-> = makeStripeResolver<ListCouponsRequest>((stripe, request) =>
-  stripe.coupons.list(request.params)
-);
+const ListCouponsResolver: RequestResolver.RequestResolver<ListCouponsRequest, StripeService> =
+  makeStripeResolver<ListCouponsRequest>((stripe, request) => stripe.coupons.list(request.params));
 
 /**
  * Create a coupon
  */
 export const create = (
-  params: Stripe.CouponCreateParams
+  params: Stripe.CouponCreateParams,
 ): Effect.Effect<Stripe.Coupon, StripeError, StripeService> =>
   Effect.request(
     CreateCouponRequest({ params }),
-    RequestResolver.contextFromEffect(CreateCouponResolver)
+    RequestResolver.contextFromEffect(CreateCouponResolver),
   );
 
 /**
@@ -152,11 +116,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.CouponRetrieveParams
+  params?: Stripe.CouponRetrieveParams,
 ): Effect.Effect<Stripe.Coupon, StripeError, StripeService> =>
   Effect.request(
     RetrieveCouponRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveCouponResolver)
+    RequestResolver.contextFromEffect(RetrieveCouponResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -164,31 +128,29 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.CouponUpdateParams
+  params?: Stripe.CouponUpdateParams,
 ): Effect.Effect<Stripe.Coupon, StripeError, StripeService> =>
   Effect.request(
     UpdateCouponRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateCouponResolver)
+    RequestResolver.contextFromEffect(UpdateCouponResolver),
   );
 
 /**
  * Delete a coupon
  */
-export const del = (
-  id: string
-): Effect.Effect<Stripe.DeletedCoupon, StripeError, StripeService> =>
+export const del = (id: string): Effect.Effect<Stripe.DeletedCoupon, StripeError, StripeService> =>
   Effect.request(
     DeleteCouponRequest({ id }),
-    RequestResolver.contextFromEffect(DeleteCouponResolver)
+    RequestResolver.contextFromEffect(DeleteCouponResolver),
   );
 
 /**
  * List coupons
  */
 export const list = (
-  params?: Stripe.CouponListParams
+  params?: Stripe.CouponListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Coupon>, StripeError, StripeService> =>
   Effect.request(
     ListCouponsRequest({ params }),
-    RequestResolver.contextFromEffect(ListCouponsResolver)
+    RequestResolver.contextFromEffect(ListCouponsResolver),
   ).pipe(Effect.withRequestCaching(true));

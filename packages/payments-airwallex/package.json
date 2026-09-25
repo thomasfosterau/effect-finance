@@ -1,58 +1,65 @@
 {
+  "$schema": "https://www.schemastore.org/package",
   "name": "@thomasfosterau/effect-payments-airwallex",
   "version": "0.0.0",
   "description": "An Airwallex implementation of the vendor-neutral effect-payments core",
-  "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./Airwallex": {
-      "import": "./dist/Airwallex.js",
-      "types": "./dist/Airwallex.d.ts"
-    },
-    "./AirwallexPayments": {
-      "import": "./dist/AirwallexPayments.js",
-      "types": "./dist/AirwallexPayments.d.ts"
-    }
-  },
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsc --project tsconfig.build.json",
-    "typecheck": "tsc --noEmit"
-  },
   "keywords": [
-    "effect",
     "airwallex",
-    "payments",
     "api",
+    "effect",
+    "payments",
     "typescript"
   ],
-  "author": "Thomas Foster",
+  "homepage": "https://github.com/thomasfosterau/effect-stripe#readme",
+  "bugs": {
+    "url": "https://github.com/thomasfosterau/effect-stripe/issues"
+  },
   "license": "MIT",
+  "author": "Thomas Foster <me@thomasfoster.au>",
   "repository": {
     "type": "git",
     "url": "https://github.com/thomasfosterau/effect-stripe.git",
     "directory": "packages/payments-airwallex"
   },
-  "bugs": {
-    "url": "https://github.com/thomasfosterau/effect-stripe/issues"
-  },
-  "homepage": "https://github.com/thomasfosterau/effect-stripe#readme",
-  "peerDependencies": {
-    "effect": "^3.10.0"
-  },
-  "dependencies": {
-    "@thomasfosterau/effect-payments": "workspace:*"
+  "files": [
+    "dist",
+    "README.md",
+    "CLAUDE.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./Airwallex": {
+      "types": "./dist/Airwallex.d.ts",
+      "default": "./dist/Airwallex.js"
+    },
+    "./AirwallexPayments": {
+      "types": "./dist/AirwallexPayments.d.ts",
+      "default": "./dist/AirwallexPayments.js"
+    }
   },
   "publishConfig": {
-    "access": "public",
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
+  },
+  "dependencies": {
+    "@thomasfosterau/effect-payments": "workspace:^"
+  },
+  "devDependencies": {
+    "@effect/language-service": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-istanbul": "catalog:",
+    "effect": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "catalog:peers"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

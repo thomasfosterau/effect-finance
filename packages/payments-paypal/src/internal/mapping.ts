@@ -38,63 +38,63 @@ export interface PayPalMoney {
 export interface PayPalProduct {
   readonly id: string;
   readonly name: string;
-  readonly description?: string | null;
-  readonly create_time?: string | null;
+  readonly description?: string | null | undefined;
+  readonly create_time?: string | null | undefined;
 }
 
 export interface PayPalBillingCycle {
-  readonly tenure_type?: string;
+  readonly tenure_type?: string | undefined;
   readonly frequency?: {
-    readonly interval_unit?: string;
-    readonly interval_count?: number;
+    readonly interval_unit?: string | undefined;
+    readonly interval_count?: number | undefined;
   };
-  readonly pricing_scheme?: { readonly fixed_price?: PayPalMoney };
+  readonly pricing_scheme?: { readonly fixed_price?: PayPalMoney } | undefined;
 }
 
 export interface PayPalPlan {
   readonly id: string;
-  readonly product_id?: string | null;
-  readonly status?: string;
-  readonly billing_cycles?: ReadonlyArray<PayPalBillingCycle>;
-  readonly create_time?: string | null;
+  readonly product_id?: string | null | undefined;
+  readonly status?: string | undefined;
+  readonly billing_cycles?: ReadonlyArray<PayPalBillingCycle> | undefined;
+  readonly create_time?: string | null | undefined;
 }
 
 export interface PayPalCapture {
   readonly id: string;
-  readonly amount?: PayPalMoney;
-  readonly status?: string;
+  readonly amount?: PayPalMoney | undefined;
+  readonly status?: string | undefined;
 }
 
 export interface PayPalPurchaseUnit {
-  readonly amount?: PayPalMoney;
-  readonly description?: string | null;
-  readonly custom_id?: string | null;
-  readonly payments?: { readonly captures?: ReadonlyArray<PayPalCapture> };
+  readonly amount?: PayPalMoney | undefined;
+  readonly description?: string | null | undefined;
+  readonly custom_id?: string | null | undefined;
+  readonly payments?: { readonly captures?: ReadonlyArray<PayPalCapture> } | undefined;
 }
 
 export interface PayPalOrder {
   readonly id: string;
   readonly status: string;
-  readonly purchase_units?: ReadonlyArray<PayPalPurchaseUnit>;
-  readonly create_time?: string | null;
+  readonly purchase_units?: ReadonlyArray<PayPalPurchaseUnit> | undefined;
+  readonly create_time?: string | null | undefined;
 }
 
 export interface PayPalSubscription {
   readonly id: string;
   readonly status: string;
-  readonly plan_id?: string | null;
-  readonly custom_id?: string | null;
-  readonly quantity?: string | null;
-  readonly start_time?: string | null;
-  readonly create_time?: string | null;
-  readonly billing_info?: { readonly next_billing_time?: string | null };
+  readonly plan_id?: string | null | undefined;
+  readonly custom_id?: string | null | undefined;
+  readonly quantity?: string | null | undefined;
+  readonly start_time?: string | null | undefined;
+  readonly create_time?: string | null | undefined;
+  readonly billing_info?: { readonly next_billing_time?: string | null } | undefined;
 }
 
 export interface PayPalRefund {
   readonly id: string;
-  readonly status?: string;
-  readonly amount?: PayPalMoney;
-  readonly create_time?: string | null;
+  readonly status?: string | undefined;
+  readonly amount?: PayPalMoney | undefined;
+  readonly create_time?: string | null | undefined;
 }
 
 /** A PayPal list link, used to detect further pages. */
@@ -128,9 +128,7 @@ const toInterval = (unit: string | undefined): PriceNS.RecurringInterval => {
 };
 
 /** Normalize a PayPal order status to the neutral payment status. */
-export const toPaymentStatus = (
-  status: string
-): PaymentIntentNS.PaymentStatus => {
+export const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus => {
   switch (status) {
     case "CREATED":
     case "SAVED":
@@ -149,9 +147,7 @@ export const toPaymentStatus = (
 };
 
 /** Normalize a PayPal subscription status to the neutral status. */
-export const toSubscriptionStatus = (
-  status: string
-): SubscriptionNS.SubscriptionStatus => {
+export const toSubscriptionStatus = (status: string): SubscriptionNS.SubscriptionStatus => {
   switch (status) {
     case "ACTIVE":
       return "active";
@@ -169,9 +165,7 @@ export const toSubscriptionStatus = (
 };
 
 /** Normalize a PayPal refund status to the neutral status. */
-export const toRefundStatus = (
-  status: string | undefined
-): RefundNS.RefundStatus => {
+export const toRefundStatus = (status: string | undefined): RefundNS.RefundStatus => {
   switch (status) {
     case "COMPLETED":
       return "succeeded";
@@ -200,14 +194,13 @@ export const toProduct = (product: PayPalProduct): ProductNS.Product =>
       metadata: {},
       created: toEpochSeconds(product.create_time),
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map a PayPal billing plan to the neutral price entity. */
 export const toPrice = (plan: PayPalPlan): PriceNS.Price => {
   const cycle =
-    plan.billing_cycles?.find((c) => c.tenure_type === "REGULAR") ??
-    plan.billing_cycles?.[0];
+    plan.billing_cycles?.find((c) => c.tenure_type === "REGULAR") ?? plan.billing_cycles?.[0];
   const price = cycle?.pricing_scheme?.fixed_price;
   const currency = (price?.currency_code ?? "").toLowerCase();
   return new PriceNS.Price(
@@ -224,20 +217,18 @@ export const toPrice = (plan: PayPalPlan): PriceNS.Price => {
               interval: toInterval(cycle.frequency.interval_unit),
               intervalCount: cycle.frequency.interval_count ?? 1,
             },
-            TRUSTED
+            TRUSTED,
           )
         : null,
       metadata: {},
       created: toEpochSeconds(plan.create_time),
     },
-    TRUSTED
+    TRUSTED,
   );
 };
 
 /** Map a PayPal order to the neutral payment intent entity. */
-export const toPaymentIntent = (
-  order: PayPalOrder
-): PaymentIntentNS.PaymentIntent => {
+export const toPaymentIntent = (order: PayPalOrder): PaymentIntentNS.PaymentIntent => {
   const unit = order.purchase_units?.[0];
   const currency = (unit?.amount?.currency_code ?? "").toLowerCase();
   return new PaymentIntentNS.PaymentIntent(
@@ -253,14 +244,12 @@ export const toPaymentIntent = (
       metadata: {},
       created: toEpochSeconds(order.create_time),
     },
-    TRUSTED
+    TRUSTED,
   );
 };
 
 /** Map a PayPal subscription to the neutral entity. */
-export const toSubscription = (
-  subscription: PayPalSubscription
-): SubscriptionNS.Subscription =>
+export const toSubscription = (subscription: PayPalSubscription): SubscriptionNS.Subscription =>
   new SubscriptionNS.Subscription(
     {
       id: subscription.id,
@@ -271,22 +260,18 @@ export const toSubscription = (
           {
             id: subscription.id,
             priceId: subscription.plan_id ?? "",
-            quantity: subscription.quantity
-              ? Number.parseInt(subscription.quantity, 10)
-              : null,
+            quantity: subscription.quantity ? Number.parseInt(subscription.quantity, 10) : null,
           },
-          TRUSTED
+          TRUSTED,
         ),
       ],
       currentPeriodStart: toEpochSeconds(subscription.start_time),
-      currentPeriodEnd: toEpochSeconds(
-        subscription.billing_info?.next_billing_time
-      ),
+      currentPeriodEnd: toEpochSeconds(subscription.billing_info?.next_billing_time),
       cancelAtPeriodEnd: false,
       metadata: {},
       created: toEpochSeconds(subscription.create_time),
     },
-    TRUSTED
+    TRUSTED,
   );
 
 /** Map a PayPal refund to the neutral entity. */
@@ -304,14 +289,14 @@ export const toRefund = (refund: PayPalRefund): RefundNS.Refund => {
       metadata: {},
       created: toEpochSeconds(refund.create_time),
     },
-    TRUSTED
+    TRUSTED,
   );
 };
 
 /** Build a neutral page from a PayPal collection field and its links. */
 export const toPage = <A>(
   items: ReadonlyArray<A>,
-  links: ReadonlyArray<PayPalLink> | undefined
+  links: ReadonlyArray<PayPalLink> | undefined,
 ): Page<A> => ({
   data: items,
   hasMore: links?.some((link) => link.rel === "next") ?? false,

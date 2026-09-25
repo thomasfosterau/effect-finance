@@ -33,32 +33,29 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create an account link
  */
-interface CreateAccountLinkRequest extends Request.Request<
-  Stripe.AccountLink,
-  StripeError
-> {
+interface CreateAccountLinkRequest extends Request.Request<Stripe.AccountLink, StripeError> {
   readonly _tag: "CreateAccountLinkRequest";
   readonly params: Stripe.AccountLinkCreateParams;
 }
 
 const CreateAccountLinkRequest = Request.tagged<CreateAccountLinkRequest>(
-  "CreateAccountLinkRequest"
+  "CreateAccountLinkRequest",
 );
 
 const CreateAccountLinkResolver: RequestResolver.RequestResolver<
   CreateAccountLinkRequest,
   StripeService
 > = makeStripeResolver<CreateAccountLinkRequest>((stripe, request) =>
-  stripe.accountLinks.create(request.params)
+  stripe.accountLinks.create(request.params),
 );
 
 /**
  * Create an account link
  */
 export const create = (
-  params: Stripe.AccountLinkCreateParams
+  params: Stripe.AccountLinkCreateParams,
 ): Effect.Effect<Stripe.AccountLink, StripeError, StripeService> =>
   Effect.request(
     CreateAccountLinkRequest({ params }),
-    RequestResolver.contextFromEffect(CreateAccountLinkResolver)
+    RequestResolver.contextFromEffect(CreateAccountLinkResolver),
   );

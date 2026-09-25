@@ -18,9 +18,9 @@ export const PROVIDER = "airwallex";
 
 /** The shape of an Airwallex API error body. */
 export interface AirwallexErrorBody {
-  readonly code?: string;
-  readonly message?: string;
-  readonly source?: string;
+  readonly code?: string | undefined;
+  readonly message?: string | undefined;
+  readonly source?: string | undefined;
 }
 
 /**
@@ -28,10 +28,9 @@ export interface AirwallexErrorBody {
  */
 export const handleAirwallexError = (
   status: number,
-  body: AirwallexErrorBody | undefined
+  body: AirwallexErrorBody | undefined,
 ): PaymentsError => {
-  const message =
-    body?.message ?? `Airwallex request failed with status ${status}`;
+  const message = body?.message ?? `Airwallex request failed with status ${status}`;
 
   if (status === 401 || status === 403) {
     return new PaymentAuthenticationError({ message, statusCode: status });

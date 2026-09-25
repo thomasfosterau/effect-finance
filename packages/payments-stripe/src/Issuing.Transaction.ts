@@ -31,18 +31,18 @@ interface RetrieveTransactionRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveTransactionRequest";
   readonly id: string;
-  readonly params?: Stripe.Issuing.TransactionRetrieveParams;
+  readonly params?: Stripe.Issuing.TransactionRetrieveParams | undefined;
 }
 
 const RetrieveTransactionRequest = Request.tagged<RetrieveTransactionRequest>(
-  "RetrieveTransactionRequest"
+  "RetrieveTransactionRequest",
 );
 
 const RetrieveTransactionResolver: RequestResolver.RequestResolver<
   RetrieveTransactionRequest,
   StripeService
 > = makeStripeResolver<RetrieveTransactionRequest>((stripe, request) =>
-  stripe.issuing.transactions.retrieve(request.id, request.params)
+  stripe.issuing.transactions.retrieve(request.id, request.params),
 );
 
 /**
@@ -54,18 +54,18 @@ interface UpdateTransactionRequest extends Request.Request<
 > {
   readonly _tag: "UpdateTransactionRequest";
   readonly id: string;
-  readonly params?: Stripe.Issuing.TransactionUpdateParams;
+  readonly params?: Stripe.Issuing.TransactionUpdateParams | undefined;
 }
 
 const UpdateTransactionRequest = Request.tagged<UpdateTransactionRequest>(
-  "UpdateTransactionRequest"
+  "UpdateTransactionRequest",
 );
 
 const UpdateTransactionResolver: RequestResolver.RequestResolver<
   UpdateTransactionRequest,
   StripeService
 > = makeStripeResolver<UpdateTransactionRequest>((stripe, request) =>
-  stripe.issuing.transactions.update(request.id, request.params)
+  stripe.issuing.transactions.update(request.id, request.params),
 );
 
 /**
@@ -76,18 +76,16 @@ interface ListTransactionsRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListTransactionsRequest";
-  readonly params?: Stripe.Issuing.TransactionListParams;
+  readonly params?: Stripe.Issuing.TransactionListParams | undefined;
 }
 
-const ListTransactionsRequest = Request.tagged<ListTransactionsRequest>(
-  "ListTransactionsRequest"
-);
+const ListTransactionsRequest = Request.tagged<ListTransactionsRequest>("ListTransactionsRequest");
 
 const ListTransactionsResolver: RequestResolver.RequestResolver<
   ListTransactionsRequest,
   StripeService
 > = makeStripeResolver<ListTransactionsRequest>((stripe, request) =>
-  stripe.issuing.transactions.list(request.params)
+  stripe.issuing.transactions.list(request.params),
 );
 
 /**
@@ -95,11 +93,11 @@ const ListTransactionsResolver: RequestResolver.RequestResolver<
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.Issuing.TransactionRetrieveParams
+  params?: Stripe.Issuing.TransactionRetrieveParams,
 ): Effect.Effect<Stripe.Issuing.Transaction, StripeError, StripeService> =>
   Effect.request(
     RetrieveTransactionRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveTransactionResolver)
+    RequestResolver.contextFromEffect(RetrieveTransactionResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -107,24 +105,20 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.Issuing.TransactionUpdateParams
+  params?: Stripe.Issuing.TransactionUpdateParams,
 ): Effect.Effect<Stripe.Issuing.Transaction, StripeError, StripeService> =>
   Effect.request(
     UpdateTransactionRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateTransactionResolver)
+    RequestResolver.contextFromEffect(UpdateTransactionResolver),
   );
 
 /**
  * List issuing transactions
  */
 export const list = (
-  params?: Stripe.Issuing.TransactionListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.Issuing.Transaction>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.Issuing.TransactionListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Transaction>, StripeError, StripeService> =>
   Effect.request(
     ListTransactionsRequest({ params }),
-    RequestResolver.contextFromEffect(ListTransactionsResolver)
+    RequestResolver.contextFromEffect(ListTransactionsResolver),
   ).pipe(Effect.withRequestCaching(true));

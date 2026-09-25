@@ -1,12 +1,8 @@
 # effect-payments
 
-A **vendor-neutral payments core for Effect**, with a **Stripe implementation** —
-the payments analogue of Effect's AI packages, where [`@effect/ai`](https://effect.website/docs/ai/introduction/)
-defines a provider-agnostic abstraction and `@effect/ai-openai` supplies a
-concrete implementation.
+A **vendor-neutral payments core for Effect**, with a **Stripe implementation** — the payments analogue of Effect's AI packages, where [`@effect/ai`](https://effect.website/docs/ai/introduction/) defines a provider-agnostic abstraction and `@effect/ai-openai` supplies a concrete implementation.
 
-[![CI](https://github.com/thomasfosterau/effect-stripe/actions/workflows/ci.yml/badge.svg)](https://github.com/thomasfosterau/effect-stripe/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/thomasfosterau/effect-stripe/actions/workflows/ci.yml/badge.svg)](https://github.com/thomasfosterau/effect-stripe/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Packages
 
@@ -19,8 +15,7 @@ concrete implementation.
 
 ## The idea
 
-Your program depends only on **capabilities** defined by the core — it never
-imports Stripe:
+Your program depends only on **capabilities** defined by the core — it never imports Stripe:
 
 ```typescript
 import { Effect } from "effect";
@@ -39,8 +34,7 @@ const onboard = (email: string, priceId: string) =>
   });
 ```
 
-The **provider** is chosen at the edge of your application by providing a layer.
-Swapping providers means swapping the layer, not the program:
+The **provider** is chosen at the edge of your application by providing a layer. Swapping providers means swapping the layer, not the program:
 
 ```typescript
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
@@ -48,7 +42,7 @@ import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePa
 const layer = StripePayments.layer({ apiKey: "sk_test_..." });
 
 const result = await Effect.runPromise(
-  onboard("jane@example.com", "price_123").pipe(Effect.provide(layer))
+  onboard("jane@example.com", "price_123").pipe(Effect.provide(layer)),
 );
 ```
 
@@ -60,11 +54,7 @@ import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/Ai
 const layer = AirwallexPayments.layer({ clientId: "...", apiKey: "..." });
 ```
 
-Providers may implement only the capabilities they support, and different
-providers cover different subsets — Airwallex covers customers, payment intents
-and refunds; PayPal covers products, prices, subscriptions, payment intents and
-refunds but has no customers. The type system enforces this: a program that
-needs a capability the provided layer doesn't supply simply won't type-check.
+Providers may implement only the capabilities they support, and different providers cover different subsets — Airwallex covers customers, payment intents and refunds; PayPal covers products, prices, subscriptions, payment intents and refunds but has no customers. The type system enforces this: a program that needs a capability the provided layer doesn't supply simply won't type-check.
 
 ## Installation
 
@@ -72,37 +62,28 @@ needs a capability the provided layer doesn't supply simply won't type-check.
 npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe effect stripe
 ```
 
-`effect` is a peer dependency of both packages; `stripe` is required by the
-Stripe provider.
+`effect` is a peer dependency of both packages; `stripe` is required by the Stripe provider.
 
 ## The vendor-neutral core
 
 ### Capabilities
 
-Each resource is an abstract Effect service (a `Context.Tag`). A program that
-calls `Customer.create(...)` requires the `Customers` capability in its
-environment; nothing more.
+Each resource is an abstract Effect service (a `Context.Tag`). A program that calls `Customer.create(...)` requires the `Customers` capability in its environment; nothing more.
 
-| Module | Capability | Operations |
-| --- | --- | --- |
-| `Customer` | `Customers` | `create`, `retrieve`, `update`, `del`, `list` |
-| `Product` | `Products` | `create`, `retrieve`, `update`, `del`, `list` |
-| `Price` | `Prices` | `create`, `retrieve`, `update`, `list` |
+| Module          | Capability       | Operations                                                  |
+| --------------- | ---------------- | ----------------------------------------------------------- |
+| `Customer`      | `Customers`      | `create`, `retrieve`, `update`, `del`, `list`               |
+| `Product`       | `Products`       | `create`, `retrieve`, `update`, `del`, `list`               |
+| `Price`         | `Prices`         | `create`, `retrieve`, `update`, `list`                      |
 | `PaymentIntent` | `PaymentIntents` | `create`, `retrieve`, `update`, `confirm`, `cancel`, `list` |
-| `Subscription` | `Subscriptions` | `create`, `retrieve`, `update`, `cancel`, `list` |
-| `Refund` | `Refunds` | `create`, `retrieve`, `update`, `list` |
+| `Subscription`  | `Subscriptions`  | `create`, `retrieve`, `update`, `cancel`, `list`            |
+| `Refund`        | `Refunds`        | `create`, `retrieve`, `update`, `list`                      |
 
-Every operation returns `Effect<Entity, PaymentsError, Capability>`. List
-operations return a neutral `Page<Entity>` (`{ data, hasMore }`); deletions
-return `Deleted` (`{ id, deleted: true }`).
+Every operation returns `Effect<Entity, PaymentsError, Capability>`. List operations return a neutral `Page<Entity>` (`{ data, hasMore }`); deletions return `Deleted` (`{ id, deleted: true }`).
 
 ### Domain types
 
-Entities are provider-agnostic [`effect/Schema`](https://effect.website/docs/schema/introduction/)
-classes — e.g. `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`,
-`Refund`, and `Money` (amounts are always in the smallest currency unit). They
-contain only fields that are meaningful across providers, in a normalized shape
-(`camelCase`, neutral status enums).
+Entities are provider-agnostic [`effect/Schema`](https://effect.website/docs/schema/introduction/) classes — e.g. `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, and `Money` (amounts are always in the smallest currency unit). They contain only fields that are meaningful across providers, in a normalized shape (`camelCase`, neutral status enums).
 
 ### Errors
 
@@ -114,19 +95,18 @@ The failure channel is the neutral `PaymentsError` union:
 - `PaymentInvalidRequestError` — invalid parameters
 - `PaymentNetworkError` — transport-level failure
 
-Plus `PaymentConfigError` (raised while building a provider layer) and
-`SignatureVerificationError` (webhook verification).
+Plus `PaymentConfigError` (raised while building a provider layer) and `SignatureVerificationError` (webhook verification).
 
 ```typescript
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 
 const program = Customer.create({ email: "jane@example.com" }).pipe(
   Effect.catchTag("PaymentAuthenticationError", (e) =>
-    Effect.logError(`Auth failed: ${e.message}`)
+    Effect.logError(`Auth failed: ${e.message}`),
   ),
   Effect.catchTag("PaymentRateLimitError", (e) =>
-    Effect.logError(`Rate limited; retry after ${e.retryAfter}s`)
-  )
+    Effect.logError(`Rate limited; retry after ${e.retryAfter}s`),
+  ),
 );
 ```
 
@@ -134,8 +114,7 @@ const program = Customer.create({ email: "jane@example.com" }).pipe(
 
 ### Providing the capabilities
 
-`StripePayments.layer` bundles the Stripe client and every capability so a
-neutral program can be satisfied with a single `Effect.provide`:
+`StripePayments.layer` bundles the Stripe client and every capability so a neutral program can be satisfied with a single `Effect.provide`:
 
 ```typescript
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
@@ -150,25 +129,18 @@ const layer = StripePayments.layer({
 const layer = StripePayments.layerFromEnv();
 ```
 
-For finer control, `StripePayments.capabilities` provides every capability but
-requires a `StripeService`, and individual layers
-(`StripePayments.customersLayer`, etc.) are exported too. The `Stripe` module
-provides just the client (`Stripe.layer` / `Stripe.layerFromEnv` / `Stripe.make`).
+For finer control, `StripePayments.capabilities` provides every capability but requires a `StripeService`, and individual layers (`StripePayments.customersLayer`, etc.) are exported too. The `Stripe` module provides just the client (`Stripe.layer` / `Stripe.layerFromEnv` / `Stripe.make`).
 
 ### The Stripe escape hatch
 
-The neutral core deliberately covers only concepts common to payment providers.
-Stripe-specific resources — Treasury, Issuing, Terminal, Identity, Connect,
-Invoices, Checkout, and many more — remain available as full-fidelity modules
-that return Stripe SDK types directly:
+The neutral core deliberately covers only concepts common to payment providers. Stripe-specific resources — Treasury, Issuing, Terminal, Identity, Connect, Invoices, Checkout, and many more — remain available as full-fidelity modules that return Stripe SDK types directly:
 
 ```typescript
 import * as Treasury from "@thomasfosterau/effect-payments-stripe/Treasury";
 import * as Invoice from "@thomasfosterau/effect-payments-stripe/Invoice";
 ```
 
-These require the `Stripe` service (provided by any of the layers above) and
-fail with the neutral `PaymentsError` channel.
+These require the `Stripe` service (provided by any of the layers above) and fail with the neutral `PaymentsError` channel.
 
 ### Webhooks
 
@@ -182,25 +154,23 @@ const handle = (body: string | Buffer, signature: string, secret: string) =>
     return event;
   }).pipe(
     Effect.catchTag("SignatureVerificationError", (e) =>
-      Effect.logError(`Invalid webhook signature: ${e.message}`)
-    )
+      Effect.logError(`Invalid webhook signature: ${e.message}`),
+    ),
   );
 ```
 
-See [`packages/payments-stripe/examples`](packages/payments-stripe/examples) for
-runnable examples.
+See [`packages/payments-stripe/examples`](packages/payments-stripe/examples) for runnable examples.
 
 ## Development
 
-This is a [Bun](https://bun.sh) workspace.
+This is a pnpm workspace on the [Vite+](https://viteplus.dev) toolchain (`vp`). Conventions for humans and agents are in [AGENTS.md](AGENTS.md); the pre-PR checklist is in [CONTRIBUTING.md](CONTRIBUTING.md); releases are in [PUBLISHING.md](PUBLISHING.md).
 
 ```bash
-bun install         # install all workspace dependencies
-bun run build       # build the core, then the Stripe provider
-bun run test        # run the full test suite (Vitest)
-bun run typecheck   # type-check the whole workspace
-bun run lint        # lint
-bun run format      # format with Prettier
+pnpm install          # dependencies, git hooks, and the Effect-patched tsc / oxlint
+vp check              # format + lint (oxfmt + oxlint)
+vp run check          # type gate: every package, plus the emitted declarations
+vp run -r test:unit   # unit tests (Vitest, every vendor seam stubbed)
+vp run -r build       # emit each package's dist/ (vp pack)
 ```
 
 ## License
@@ -209,6 +179,4 @@ MIT © Thomas Foster
 
 ## Acknowledgments
 
-Built with [Effect](https://effect.website/) and the
-[Stripe Node.js SDK](https://github.com/stripe/stripe-node). The two-package
-shape is inspired by [`@effect/ai`](https://effect.website/docs/ai/introduction/).
+Built with [Effect](https://effect.website/) and the [Stripe Node.js SDK](https://github.com/stripe/stripe-node). The two-package shape is inspired by [`@effect/ai`](https://effect.website/docs/ai/introduction/).

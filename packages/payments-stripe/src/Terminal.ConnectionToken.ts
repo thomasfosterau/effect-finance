@@ -35,17 +35,18 @@ interface CreateConnectionTokenRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "CreateConnectionTokenRequest";
-  readonly params?: Stripe.Terminal.ConnectionTokenCreateParams;
+  readonly params?: Stripe.Terminal.ConnectionTokenCreateParams | undefined;
 }
 
-const CreateConnectionTokenRequest =
-  Request.tagged<CreateConnectionTokenRequest>("CreateConnectionTokenRequest");
+const CreateConnectionTokenRequest = Request.tagged<CreateConnectionTokenRequest>(
+  "CreateConnectionTokenRequest",
+);
 
 const CreateConnectionTokenResolver: RequestResolver.RequestResolver<
   CreateConnectionTokenRequest,
   StripeService
 > = makeStripeResolver<CreateConnectionTokenRequest>((stripe, request) =>
-  stripe.terminal.connectionTokens.create(request.params)
+  stripe.terminal.connectionTokens.create(request.params),
 );
 
 /**
@@ -56,9 +57,9 @@ const CreateConnectionTokenResolver: RequestResolver.RequestResolver<
  * whenever the Terminal SDK needs to connect to a reader.
  */
 export const create = (
-  params?: Stripe.Terminal.ConnectionTokenCreateParams
+  params?: Stripe.Terminal.ConnectionTokenCreateParams,
 ): Effect.Effect<Stripe.Terminal.ConnectionToken, StripeError, StripeService> =>
   Effect.request(
     CreateConnectionTokenRequest({ params }),
-    RequestResolver.contextFromEffect(CreateConnectionTokenResolver)
+    RequestResolver.contextFromEffect(CreateConnectionTokenResolver),
   );

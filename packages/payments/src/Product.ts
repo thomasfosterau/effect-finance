@@ -25,24 +25,24 @@ export class Product extends Schema.Class<Product>("@effect-payments/Product")({
 /** Parameters for creating a product. */
 export interface CreateParams {
   readonly name: string;
-  readonly description?: string;
-  readonly active?: boolean;
-  readonly metadata?: Record<string, string>;
+  readonly description?: string | undefined;
+  readonly active?: boolean | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for updating a product. */
 export interface UpdateParams {
-  readonly name?: string;
-  readonly description?: string;
-  readonly active?: boolean;
-  readonly metadata?: Record<string, string>;
+  readonly name?: string | undefined;
+  readonly description?: string | undefined;
+  readonly active?: boolean | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for listing products. */
 export interface ListParams {
-  readonly limit?: number;
-  readonly active?: boolean;
-  readonly startingAfter?: string;
+  readonly limit?: number | undefined;
+  readonly active?: boolean | undefined;
+  readonly startingAfter?: string | undefined;
 }
 
 /**
@@ -51,18 +51,11 @@ export interface ListParams {
 export class Products extends Context.Tag("@effect-payments/Products")<
   Products,
   {
-    readonly create: (
-      params: CreateParams
-    ) => Effect.Effect<Product, PaymentsError>;
+    readonly create: (params: CreateParams) => Effect.Effect<Product, PaymentsError>;
     readonly retrieve: (id: string) => Effect.Effect<Product, PaymentsError>;
-    readonly update: (
-      id: string,
-      params: UpdateParams
-    ) => Effect.Effect<Product, PaymentsError>;
+    readonly update: (id: string, params: UpdateParams) => Effect.Effect<Product, PaymentsError>;
     readonly del: (id: string) => Effect.Effect<Deleted, PaymentsError>;
-    readonly list: (
-      params?: ListParams
-    ) => Effect.Effect<Page<Product>, PaymentsError>;
+    readonly list: (params?: ListParams) => Effect.Effect<Page<Product>, PaymentsError>;
   }
 >() {}
 

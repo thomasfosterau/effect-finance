@@ -1,82 +1,89 @@
 {
+  "$schema": "https://www.schemastore.org/package",
   "name": "@thomasfosterau/effect-payments",
   "version": "0.0.0",
   "description": "A vendor-neutral payments core for Effect",
-  "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./Customer": {
-      "import": "./dist/Customer.js",
-      "types": "./dist/Customer.d.ts"
-    },
-    "./Product": {
-      "import": "./dist/Product.js",
-      "types": "./dist/Product.d.ts"
-    },
-    "./Price": {
-      "import": "./dist/Price.js",
-      "types": "./dist/Price.d.ts"
-    },
-    "./PaymentIntent": {
-      "import": "./dist/PaymentIntent.js",
-      "types": "./dist/PaymentIntent.d.ts"
-    },
-    "./Subscription": {
-      "import": "./dist/Subscription.js",
-      "types": "./dist/Subscription.d.ts"
-    },
-    "./Refund": {
-      "import": "./dist/Refund.js",
-      "types": "./dist/Refund.d.ts"
-    },
-    "./Money": {
-      "import": "./dist/Money.js",
-      "types": "./dist/Money.d.ts"
-    },
-    "./Page": {
-      "import": "./dist/Page.js",
-      "types": "./dist/Page.d.ts"
-    },
-    "./PaymentsError": {
-      "import": "./dist/PaymentsError.js",
-      "types": "./dist/PaymentsError.d.ts"
-    }
-  },
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsc --project tsconfig.build.json",
-    "typecheck": "tsc --noEmit"
-  },
   "keywords": [
+    "api",
     "effect",
     "payments",
-    "api",
     "typescript"
   ],
-  "author": "Thomas Foster",
+  "homepage": "https://github.com/thomasfosterau/effect-stripe#readme",
+  "bugs": {
+    "url": "https://github.com/thomasfosterau/effect-stripe/issues"
+  },
   "license": "MIT",
+  "author": "Thomas Foster <me@thomasfoster.au>",
   "repository": {
     "type": "git",
     "url": "https://github.com/thomasfosterau/effect-stripe.git",
     "directory": "packages/payments"
   },
-  "bugs": {
-    "url": "https://github.com/thomasfosterau/effect-stripe/issues"
-  },
-  "homepage": "https://github.com/thomasfosterau/effect-stripe#readme",
-  "peerDependencies": {
-    "effect": "^3.10.0"
+  "files": [
+    "dist",
+    "README.md",
+    "CLAUDE.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./Customer": {
+      "types": "./dist/Customer.d.ts",
+      "default": "./dist/Customer.js"
+    },
+    "./Product": {
+      "types": "./dist/Product.d.ts",
+      "default": "./dist/Product.js"
+    },
+    "./Price": {
+      "types": "./dist/Price.d.ts",
+      "default": "./dist/Price.js"
+    },
+    "./PaymentIntent": {
+      "types": "./dist/PaymentIntent.d.ts",
+      "default": "./dist/PaymentIntent.js"
+    },
+    "./Subscription": {
+      "types": "./dist/Subscription.d.ts",
+      "default": "./dist/Subscription.js"
+    },
+    "./Refund": {
+      "types": "./dist/Refund.d.ts",
+      "default": "./dist/Refund.js"
+    },
+    "./Money": {
+      "types": "./dist/Money.d.ts",
+      "default": "./dist/Money.js"
+    },
+    "./Page": {
+      "types": "./dist/Page.d.ts",
+      "default": "./dist/Page.js"
+    },
+    "./PaymentsError": {
+      "types": "./dist/PaymentsError.d.ts",
+      "default": "./dist/PaymentsError.js"
+    }
   },
   "publishConfig": {
-    "access": "public",
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
+  },
+  "devDependencies": {
+    "@effect/language-service": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-istanbul": "catalog:",
+    "effect": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "catalog:peers"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

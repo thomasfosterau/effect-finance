@@ -26,15 +26,7 @@ const ZERO_DECIMAL = new Set([
 ]);
 
 // Currencies with three decimal places.
-const THREE_DECIMAL = new Set([
-  "bhd",
-  "iqd",
-  "jod",
-  "kwd",
-  "lyd",
-  "omr",
-  "tnd",
-]);
+const THREE_DECIMAL = new Set(["bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd"]);
 
 const factor = (currency: string): number => {
   const code = currency.toLowerCase();
@@ -43,8 +35,7 @@ const factor = (currency: string): number => {
   return 100;
 };
 
-const decimals = (currency: string): number =>
-  Math.round(Math.log10(factor(currency)));
+const decimals = (currency: string): number => Math.round(Math.log10(factor(currency)));
 
 /** Format neutral minor units as a PayPal major-unit decimal string. */
 export const toMajorString = (minor: number, currency: string): string =>

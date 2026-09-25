@@ -25,7 +25,7 @@ const handleEvent = (event: import("stripe").Stripe.Event) =>
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object as any;
         console.log(
-          `PaymentIntent ${paymentIntent.id} succeeded for ${paymentIntent.amount} ${paymentIntent.currency}`
+          `PaymentIntent ${paymentIntent.id} succeeded for ${paymentIntent.amount} ${paymentIntent.currency}`,
         );
         break;
       }
@@ -33,7 +33,7 @@ const handleEvent = (event: import("stripe").Stripe.Event) =>
       case "payment_intent.payment_failed": {
         const paymentIntent = event.data.object as any;
         console.log(
-          `PaymentIntent ${paymentIntent.id} failed: ${paymentIntent.last_payment_error?.message}`
+          `PaymentIntent ${paymentIntent.id} failed: ${paymentIntent.last_payment_error?.message}`,
         );
         break;
       }
@@ -58,25 +58,19 @@ const handleEvent = (event: import("stripe").Stripe.Event) =>
 
       case "charge.succeeded": {
         const charge = event.data.object as any;
-        console.log(
-          `Charge ${charge.id} succeeded for ${charge.amount} ${charge.currency}`
-        );
+        console.log(`Charge ${charge.id} succeeded for ${charge.amount} ${charge.currency}`);
         break;
       }
 
       case "charge.failed": {
         const charge = event.data.object as any;
-        console.log(
-          `Charge ${charge.id} failed: ${charge.failure_message}`
-        );
+        console.log(`Charge ${charge.id} failed: ${charge.failure_message}`);
         break;
       }
 
       case "invoice.payment_succeeded": {
         const invoice = event.data.object as any;
-        console.log(
-          `Invoice ${invoice.id} paid for ${invoice.amount_paid} ${invoice.currency}`
-        );
+        console.log(`Invoice ${invoice.id} paid for ${invoice.amount_paid} ${invoice.currency}`);
         break;
       }
 
@@ -89,7 +83,7 @@ const handleEvent = (event: import("stripe").Stripe.Event) =>
       case "checkout.session.completed": {
         const session = event.data.object as any;
         console.log(`Checkout session ${session.id} completed`);
-        
+
         // You can fetch the full customer details if needed
         if (session.customer) {
           const customer = yield* Customer.retrieve(session.customer as string);
@@ -113,18 +107,10 @@ const handleEvent = (event: import("stripe").Stripe.Event) =>
  * This would typically be called from an HTTP endpoint handler
  * (e.g., Express, Fastify, Next.js API route, etc.)
  */
-const processWebhook = (
-  payload: string | Buffer,
-  signature: string,
-  webhookSecret: string
-) =>
+const processWebhook = (payload: string | Buffer, signature: string, webhookSecret: string) =>
   Effect.gen(function* () {
     // Verify the webhook signature and construct the event
-    const event = yield* Webhook.constructEvent(
-      payload,
-      signature,
-      webhookSecret
-    );
+    const event = yield* Webhook.constructEvent(payload, signature, webhookSecret);
 
     // Handle the event based on its type
     yield* handleEvent(event);
@@ -137,7 +123,7 @@ const processWebhook = (
  */
 const expressExample = () => {
   console.log("\n=== Express Webhook Handler Example ===\n");
-  
+
   // Simulated Express request
   const simulatedRequest = {
     body: JSON.stringify({
@@ -161,10 +147,7 @@ const expressExample = () => {
 
   // Generate a test signature
   const setupProgram = Effect.gen(function* () {
-    const signature = yield* Webhook.generateTestHeaderString(
-      simulatedRequest.body,
-      webhookSecret
-    );
+    const signature = yield* Webhook.generateTestHeaderString(simulatedRequest.body, webhookSecret);
     simulatedRequest.headers["stripe-signature"] = signature;
   });
 
@@ -172,7 +155,7 @@ const expressExample = () => {
   const webhookProgram = processWebhook(
     simulatedRequest.body,
     simulatedRequest.headers["stripe-signature"],
-    webhookSecret
+    webhookSecret,
   );
 
   // Run the program with error handling
@@ -187,7 +170,7 @@ const expressExample = () => {
     Effect.catchAll((error) => {
       console.error("Webhook processing failed:", error);
       return Effect.succeed({ error: "Processing failed" });
-    })
+    }),
   );
 
   Effect.runPromise(program.pipe(Effect.provide(layer)))
@@ -221,24 +204,17 @@ const testingExample = () => {
 
   const program = Effect.gen(function* () {
     // Generate a test signature
-    const signature = yield* Webhook.generateTestHeaderString(
-      testPayload,
-      webhookSecret
-    );
+    const signature = yield* Webhook.generateTestHeaderString(testPayload, webhookSecret);
     console.log("Generated signature:", signature);
 
     // Verify the signature
-    const event = yield* Webhook.constructEvent(
-      testPayload,
-      signature,
-      webhookSecret
-    );
+    const event = yield* Webhook.constructEvent(testPayload, signature, webhookSecret);
     console.log("Event verified:", event.type);
 
     // Try with wrong secret (should fail)
     const wrongSecret = "whsec_wrong_secret";
     const failedAttempt = yield* Effect.flip(
-      Webhook.constructEvent(testPayload, signature, wrongSecret)
+      Webhook.constructEvent(testPayload, signature, wrongSecret),
     );
 
     if (failedAttempt instanceof SignatureVerificationError) {
@@ -280,17 +256,10 @@ const asyncExample = () => {
 
   const program = Effect.gen(function* () {
     // Generate signature using async method
-    const signature = yield* Webhook.generateTestHeaderStringAsync(
-      testPayload,
-      webhookSecret
-    );
+    const signature = yield* Webhook.generateTestHeaderStringAsync(testPayload, webhookSecret);
 
     // Verify using async method
-    const event = yield* Webhook.constructEventAsync(
-      testPayload,
-      signature,
-      webhookSecret
-    );
+    const event = yield* Webhook.constructEventAsync(testPayload, signature, webhookSecret);
 
     yield* handleEvent(event);
 
@@ -333,18 +302,16 @@ const toleranceExample = () => {
     const signature = yield* Webhook.generateTestHeaderString(
       testPayload,
       webhookSecret,
-      oldTimestamp
+      oldTimestamp,
     );
 
     // This should fail with default tolerance (300 seconds)
     const failedAttempt = yield* Effect.flip(
-      Webhook.constructEvent(testPayload, signature, webhookSecret)
+      Webhook.constructEvent(testPayload, signature, webhookSecret),
     );
 
     if (failedAttempt instanceof SignatureVerificationError) {
-      console.log(
-        "Old signature rejected with default tolerance (as expected)"
-      );
+      console.log("Old signature rejected with default tolerance (as expected)");
     }
 
     // This should succeed with extended tolerance
@@ -352,7 +319,7 @@ const toleranceExample = () => {
       testPayload,
       signature,
       webhookSecret,
-      1200 // 20 minutes
+      1200, // 20 minutes
     );
 
     console.log("Old signature accepted with extended tolerance:", event.type);

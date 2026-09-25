@@ -20,13 +20,13 @@ export const SubscriptionStatus = Schema.Literal(
   "incomplete",
   "incomplete_expired",
   "trialing",
-  "paused"
+  "paused",
 );
 export type SubscriptionStatus = Schema.Schema.Type<typeof SubscriptionStatus>;
 
 /** A single line item of a subscription, billed against a price. */
 export class SubscriptionItem extends Schema.Class<SubscriptionItem>(
-  "@effect-payments/SubscriptionItem"
+  "@effect-payments/SubscriptionItem",
 )({
   id: Schema.String,
   priceId: Schema.String,
@@ -36,9 +36,7 @@ export class SubscriptionItem extends Schema.Class<SubscriptionItem>(
 /**
  * A recurring agreement to bill a customer for one or more prices.
  */
-export class Subscription extends Schema.Class<Subscription>(
-  "@effect-payments/Subscription"
-)({
+export class Subscription extends Schema.Class<Subscription>("@effect-payments/Subscription")({
   id: Schema.String,
   customerId: Schema.String,
   status: SubscriptionStatus,
@@ -56,53 +54,45 @@ export class Subscription extends Schema.Class<Subscription>(
 /** A price/quantity pair used when creating a subscription. */
 export interface ItemParams {
   readonly price: string;
-  readonly quantity?: number;
+  readonly quantity?: number | undefined;
 }
 
 /** Parameters for creating a subscription. */
 export interface CreateParams {
   readonly customer: string;
   readonly items: ReadonlyArray<ItemParams>;
-  readonly cancelAtPeriodEnd?: boolean;
-  readonly metadata?: Record<string, string>;
+  readonly cancelAtPeriodEnd?: boolean | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for updating a subscription. */
 export interface UpdateParams {
-  readonly cancelAtPeriodEnd?: boolean;
-  readonly metadata?: Record<string, string>;
+  readonly cancelAtPeriodEnd?: boolean | undefined;
+  readonly metadata?: Record<string, string> | undefined;
 }
 
 /** Parameters for listing subscriptions. */
 export interface ListParams {
-  readonly limit?: number;
-  readonly customer?: string;
-  readonly status?: SubscriptionStatus;
-  readonly startingAfter?: string;
+  readonly limit?: number | undefined;
+  readonly customer?: string | undefined;
+  readonly status?: SubscriptionStatus | undefined;
+  readonly startingAfter?: string | undefined;
 }
 
 /**
  * The subscription capability.
  */
-export class Subscriptions extends Context.Tag(
-  "@effect-payments/Subscriptions"
-)<
+export class Subscriptions extends Context.Tag("@effect-payments/Subscriptions")<
   Subscriptions,
   {
-    readonly create: (
-      params: CreateParams
-    ) => Effect.Effect<Subscription, PaymentsError>;
-    readonly retrieve: (
-      id: string
-    ) => Effect.Effect<Subscription, PaymentsError>;
+    readonly create: (params: CreateParams) => Effect.Effect<Subscription, PaymentsError>;
+    readonly retrieve: (id: string) => Effect.Effect<Subscription, PaymentsError>;
     readonly update: (
       id: string,
-      params: UpdateParams
+      params: UpdateParams,
     ) => Effect.Effect<Subscription, PaymentsError>;
     readonly cancel: (id: string) => Effect.Effect<Subscription, PaymentsError>;
-    readonly list: (
-      params?: ListParams
-    ) => Effect.Effect<Page<Subscription>, PaymentsError>;
+    readonly list: (params?: ListParams) => Effect.Effect<Page<Subscription>, PaymentsError>;
   }
 >() {}
 

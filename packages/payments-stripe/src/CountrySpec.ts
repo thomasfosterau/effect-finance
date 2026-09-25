@@ -26,24 +26,21 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to retrieve a country spec
  */
-interface RetrieveCountrySpecRequest extends Request.Request<
-  Stripe.CountrySpec,
-  StripeError
-> {
+interface RetrieveCountrySpecRequest extends Request.Request<Stripe.CountrySpec, StripeError> {
   readonly _tag: "RetrieveCountrySpecRequest";
   readonly country: string;
-  readonly params?: Stripe.CountrySpecRetrieveParams;
+  readonly params?: Stripe.CountrySpecRetrieveParams | undefined;
 }
 
 const RetrieveCountrySpecRequest = Request.tagged<RetrieveCountrySpecRequest>(
-  "RetrieveCountrySpecRequest"
+  "RetrieveCountrySpecRequest",
 );
 
 const RetrieveCountrySpecResolver: RequestResolver.RequestResolver<
   RetrieveCountrySpecRequest,
   StripeService
 > = makeStripeResolver<RetrieveCountrySpecRequest>((stripe, request) =>
-  stripe.countrySpecs.retrieve(request.country, request.params)
+  stripe.countrySpecs.retrieve(request.country, request.params),
 );
 
 /**
@@ -54,18 +51,16 @@ interface ListCountrySpecsRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListCountrySpecsRequest";
-  readonly params?: Stripe.CountrySpecListParams;
+  readonly params?: Stripe.CountrySpecListParams | undefined;
 }
 
-const ListCountrySpecsRequest = Request.tagged<ListCountrySpecsRequest>(
-  "ListCountrySpecsRequest"
-);
+const ListCountrySpecsRequest = Request.tagged<ListCountrySpecsRequest>("ListCountrySpecsRequest");
 
 const ListCountrySpecsResolver: RequestResolver.RequestResolver<
   ListCountrySpecsRequest,
   StripeService
 > = makeStripeResolver<ListCountrySpecsRequest>((stripe, request) =>
-  stripe.countrySpecs.list(request.params)
+  stripe.countrySpecs.list(request.params),
 );
 
 /**
@@ -73,24 +68,20 @@ const ListCountrySpecsResolver: RequestResolver.RequestResolver<
  */
 export const retrieve = (
   country: string,
-  params?: Stripe.CountrySpecRetrieveParams
+  params?: Stripe.CountrySpecRetrieveParams,
 ): Effect.Effect<Stripe.CountrySpec, StripeError, StripeService> =>
   Effect.request(
     RetrieveCountrySpecRequest({ country, params }),
-    RequestResolver.contextFromEffect(RetrieveCountrySpecResolver)
+    RequestResolver.contextFromEffect(RetrieveCountrySpecResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
  * List country specs
  */
 export const list = (
-  params?: Stripe.CountrySpecListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.CountrySpec>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.CountrySpecListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.CountrySpec>, StripeError, StripeService> =>
   Effect.request(
     ListCountrySpecsRequest({ params }),
-    RequestResolver.contextFromEffect(ListCountrySpecsResolver)
+    RequestResolver.contextFromEffect(ListCountrySpecsResolver),
   ).pipe(Effect.withRequestCaching(true));

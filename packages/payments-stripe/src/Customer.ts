@@ -28,23 +28,18 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a customer
  */
-interface CreateCustomerRequest extends Request.Request<
-  Stripe.Customer,
-  StripeError
-> {
+interface CreateCustomerRequest extends Request.Request<Stripe.Customer, StripeError> {
   readonly _tag: "CreateCustomerRequest";
-  readonly params?: Stripe.CustomerCreateParams;
+  readonly params?: Stripe.CustomerCreateParams | undefined;
 }
 
-const CreateCustomerRequest = Request.tagged<CreateCustomerRequest>(
-  "CreateCustomerRequest"
-);
+const CreateCustomerRequest = Request.tagged<CreateCustomerRequest>("CreateCustomerRequest");
 
 const CreateCustomerResolver: RequestResolver.RequestResolver<
   CreateCustomerRequest,
   StripeService
 > = makeStripeResolver<CreateCustomerRequest>((stripe, request) =>
-  stripe.customers.create(request.params)
+  stripe.customers.create(request.params),
 );
 
 /**
@@ -56,63 +51,51 @@ interface RetrieveCustomerRequest extends Request.Request<
 > {
   readonly _tag: "RetrieveCustomerRequest";
   readonly id: string;
-  readonly params?: Stripe.CustomerRetrieveParams;
+  readonly params?: Stripe.CustomerRetrieveParams | undefined;
 }
 
-const RetrieveCustomerRequest = Request.tagged<RetrieveCustomerRequest>(
-  "RetrieveCustomerRequest"
-);
+const RetrieveCustomerRequest = Request.tagged<RetrieveCustomerRequest>("RetrieveCustomerRequest");
 
 const RetrieveCustomerResolver: RequestResolver.RequestResolver<
   RetrieveCustomerRequest,
   StripeService
 > = makeStripeResolver<RetrieveCustomerRequest>((stripe, request) =>
-  stripe.customers.retrieve(request.id, request.params)
+  stripe.customers.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update a customer
  */
-interface UpdateCustomerRequest extends Request.Request<
-  Stripe.Customer,
-  StripeError
-> {
+interface UpdateCustomerRequest extends Request.Request<Stripe.Customer, StripeError> {
   readonly _tag: "UpdateCustomerRequest";
   readonly id: string;
-  readonly params?: Stripe.CustomerUpdateParams;
+  readonly params?: Stripe.CustomerUpdateParams | undefined;
 }
 
-const UpdateCustomerRequest = Request.tagged<UpdateCustomerRequest>(
-  "UpdateCustomerRequest"
-);
+const UpdateCustomerRequest = Request.tagged<UpdateCustomerRequest>("UpdateCustomerRequest");
 
 const UpdateCustomerResolver: RequestResolver.RequestResolver<
   UpdateCustomerRequest,
   StripeService
 > = makeStripeResolver<UpdateCustomerRequest>((stripe, request) =>
-  stripe.customers.update(request.id, request.params)
+  stripe.customers.update(request.id, request.params),
 );
 
 /**
  * Request to delete a customer
  */
-interface DeleteCustomerRequest extends Request.Request<
-  Stripe.DeletedCustomer,
-  StripeError
-> {
+interface DeleteCustomerRequest extends Request.Request<Stripe.DeletedCustomer, StripeError> {
   readonly _tag: "DeleteCustomerRequest";
   readonly id: string;
 }
 
-const DeleteCustomerRequest = Request.tagged<DeleteCustomerRequest>(
-  "DeleteCustomerRequest"
-);
+const DeleteCustomerRequest = Request.tagged<DeleteCustomerRequest>("DeleteCustomerRequest");
 
 const DeleteCustomerResolver: RequestResolver.RequestResolver<
   DeleteCustomerRequest,
   StripeService
 > = makeStripeResolver<DeleteCustomerRequest>((stripe, request) =>
-  stripe.customers.del(request.id)
+  stripe.customers.del(request.id),
 );
 
 /**
@@ -123,29 +106,25 @@ interface ListCustomersRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListCustomersRequest";
-  readonly params?: Stripe.CustomerListParams;
+  readonly params?: Stripe.CustomerListParams | undefined;
 }
 
-const ListCustomersRequest = Request.tagged<ListCustomersRequest>(
-  "ListCustomersRequest"
-);
+const ListCustomersRequest = Request.tagged<ListCustomersRequest>("ListCustomersRequest");
 
-const ListCustomersResolver: RequestResolver.RequestResolver<
-  ListCustomersRequest,
-  StripeService
-> = makeStripeResolver<ListCustomersRequest>((stripe, request) =>
-  stripe.customers.list(request.params)
-);
+const ListCustomersResolver: RequestResolver.RequestResolver<ListCustomersRequest, StripeService> =
+  makeStripeResolver<ListCustomersRequest>((stripe, request) =>
+    stripe.customers.list(request.params),
+  );
 
 /**
  * Create a customer
  */
 export const create = (
-  params?: Stripe.CustomerCreateParams
+  params?: Stripe.CustomerCreateParams,
 ): Effect.Effect<Stripe.Customer, StripeError, StripeService> =>
   Effect.request(
     CreateCustomerRequest({ params }),
-    RequestResolver.contextFromEffect(CreateCustomerResolver)
+    RequestResolver.contextFromEffect(CreateCustomerResolver),
   );
 
 /**
@@ -153,15 +132,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.CustomerRetrieveParams
-): Effect.Effect<
-  Stripe.Customer | Stripe.DeletedCustomer,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.CustomerRetrieveParams,
+): Effect.Effect<Stripe.Customer | Stripe.DeletedCustomer, StripeError, StripeService> =>
   Effect.request(
     RetrieveCustomerRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveCustomerResolver)
+    RequestResolver.contextFromEffect(RetrieveCustomerResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -169,31 +144,31 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.CustomerUpdateParams
+  params?: Stripe.CustomerUpdateParams,
 ): Effect.Effect<Stripe.Customer, StripeError, StripeService> =>
   Effect.request(
     UpdateCustomerRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateCustomerResolver)
+    RequestResolver.contextFromEffect(UpdateCustomerResolver),
   );
 
 /**
  * Delete a customer
  */
 export const del = (
-  id: string
+  id: string,
 ): Effect.Effect<Stripe.DeletedCustomer, StripeError, StripeService> =>
   Effect.request(
     DeleteCustomerRequest({ id }),
-    RequestResolver.contextFromEffect(DeleteCustomerResolver)
+    RequestResolver.contextFromEffect(DeleteCustomerResolver),
   );
 
 /**
  * List customers
  */
 export const list = (
-  params?: Stripe.CustomerListParams
+  params?: Stripe.CustomerListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Customer>, StripeError, StripeService> =>
   Effect.request(
     ListCustomersRequest({ params }),
-    RequestResolver.contextFromEffect(ListCustomersResolver)
+    RequestResolver.contextFromEffect(ListCustomersResolver),
   ).pipe(Effect.withRequestCaching(true));

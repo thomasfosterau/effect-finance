@@ -28,68 +28,60 @@ import { StripeService } from "./Stripe.js";
 /**
  * Request to create a promotion code
  */
-interface CreatePromotionCodeRequest extends Request.Request<
-  Stripe.PromotionCode,
-  StripeError
-> {
+interface CreatePromotionCodeRequest extends Request.Request<Stripe.PromotionCode, StripeError> {
   readonly _tag: "CreatePromotionCodeRequest";
   readonly params: Stripe.PromotionCodeCreateParams;
 }
 
 const CreatePromotionCodeRequest = Request.tagged<CreatePromotionCodeRequest>(
-  "CreatePromotionCodeRequest"
+  "CreatePromotionCodeRequest",
 );
 
 const CreatePromotionCodeResolver: RequestResolver.RequestResolver<
   CreatePromotionCodeRequest,
   StripeService
 > = makeStripeResolver<CreatePromotionCodeRequest>((stripe, request) =>
-  stripe.promotionCodes.create(request.params)
+  stripe.promotionCodes.create(request.params),
 );
 
 /**
  * Request to retrieve a promotion code
  */
-interface RetrievePromotionCodeRequest extends Request.Request<
-  Stripe.PromotionCode,
-  StripeError
-> {
+interface RetrievePromotionCodeRequest extends Request.Request<Stripe.PromotionCode, StripeError> {
   readonly _tag: "RetrievePromotionCodeRequest";
   readonly id: string;
-  readonly params?: Stripe.PromotionCodeRetrieveParams;
+  readonly params?: Stripe.PromotionCodeRetrieveParams | undefined;
 }
 
-const RetrievePromotionCodeRequest =
-  Request.tagged<RetrievePromotionCodeRequest>("RetrievePromotionCodeRequest");
+const RetrievePromotionCodeRequest = Request.tagged<RetrievePromotionCodeRequest>(
+  "RetrievePromotionCodeRequest",
+);
 
 const RetrievePromotionCodeResolver: RequestResolver.RequestResolver<
   RetrievePromotionCodeRequest,
   StripeService
 > = makeStripeResolver<RetrievePromotionCodeRequest>((stripe, request) =>
-  stripe.promotionCodes.retrieve(request.id, request.params)
+  stripe.promotionCodes.retrieve(request.id, request.params),
 );
 
 /**
  * Request to update a promotion code
  */
-interface UpdatePromotionCodeRequest extends Request.Request<
-  Stripe.PromotionCode,
-  StripeError
-> {
+interface UpdatePromotionCodeRequest extends Request.Request<Stripe.PromotionCode, StripeError> {
   readonly _tag: "UpdatePromotionCodeRequest";
   readonly id: string;
-  readonly params?: Stripe.PromotionCodeUpdateParams;
+  readonly params?: Stripe.PromotionCodeUpdateParams | undefined;
 }
 
 const UpdatePromotionCodeRequest = Request.tagged<UpdatePromotionCodeRequest>(
-  "UpdatePromotionCodeRequest"
+  "UpdatePromotionCodeRequest",
 );
 
 const UpdatePromotionCodeResolver: RequestResolver.RequestResolver<
   UpdatePromotionCodeRequest,
   StripeService
 > = makeStripeResolver<UpdatePromotionCodeRequest>((stripe, request) =>
-  stripe.promotionCodes.update(request.id, request.params)
+  stripe.promotionCodes.update(request.id, request.params),
 );
 
 /**
@@ -100,29 +92,29 @@ interface ListPromotionCodesRequest extends Request.Request<
   StripeError
 > {
   readonly _tag: "ListPromotionCodesRequest";
-  readonly params?: Stripe.PromotionCodeListParams;
+  readonly params?: Stripe.PromotionCodeListParams | undefined;
 }
 
 const ListPromotionCodesRequest = Request.tagged<ListPromotionCodesRequest>(
-  "ListPromotionCodesRequest"
+  "ListPromotionCodesRequest",
 );
 
 const ListPromotionCodesResolver: RequestResolver.RequestResolver<
   ListPromotionCodesRequest,
   StripeService
 > = makeStripeResolver<ListPromotionCodesRequest>((stripe, request) =>
-  stripe.promotionCodes.list(request.params)
+  stripe.promotionCodes.list(request.params),
 );
 
 /**
  * Create a promotion code
  */
 export const create = (
-  params: Stripe.PromotionCodeCreateParams
+  params: Stripe.PromotionCodeCreateParams,
 ): Effect.Effect<Stripe.PromotionCode, StripeError, StripeService> =>
   Effect.request(
     CreatePromotionCodeRequest({ params }),
-    RequestResolver.contextFromEffect(CreatePromotionCodeResolver)
+    RequestResolver.contextFromEffect(CreatePromotionCodeResolver),
   );
 
 /**
@@ -130,11 +122,11 @@ export const create = (
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.PromotionCodeRetrieveParams
+  params?: Stripe.PromotionCodeRetrieveParams,
 ): Effect.Effect<Stripe.PromotionCode, StripeError, StripeService> =>
   Effect.request(
     RetrievePromotionCodeRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrievePromotionCodeResolver)
+    RequestResolver.contextFromEffect(RetrievePromotionCodeResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -142,24 +134,20 @@ export const retrieve = (
  */
 export const update = (
   id: string,
-  params?: Stripe.PromotionCodeUpdateParams
+  params?: Stripe.PromotionCodeUpdateParams,
 ): Effect.Effect<Stripe.PromotionCode, StripeError, StripeService> =>
   Effect.request(
     UpdatePromotionCodeRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdatePromotionCodeResolver)
+    RequestResolver.contextFromEffect(UpdatePromotionCodeResolver),
   );
 
 /**
  * List promotion codes
  */
 export const list = (
-  params?: Stripe.PromotionCodeListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.PromotionCode>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.PromotionCodeListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.PromotionCode>, StripeError, StripeService> =>
   Effect.request(
     ListPromotionCodesRequest({ params }),
-    RequestResolver.contextFromEffect(ListPromotionCodesResolver)
+    RequestResolver.contextFromEffect(ListPromotionCodesResolver),
   ).pipe(Effect.withRequestCaching(true));

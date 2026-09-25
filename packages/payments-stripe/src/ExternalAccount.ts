@@ -39,14 +39,15 @@ interface CreateExternalAccountRequest extends Request.Request<
   readonly params: Stripe.ExternalAccountCreateParams;
 }
 
-const CreateExternalAccountRequest =
-  Request.tagged<CreateExternalAccountRequest>("CreateExternalAccountRequest");
+const CreateExternalAccountRequest = Request.tagged<CreateExternalAccountRequest>(
+  "CreateExternalAccountRequest",
+);
 
 const CreateExternalAccountResolver: RequestResolver.RequestResolver<
   CreateExternalAccountRequest,
   StripeService
 > = makeStripeResolver<CreateExternalAccountRequest>((stripe, request) =>
-  stripe.accounts.createExternalAccount(request.accountId, request.params)
+  stripe.accounts.createExternalAccount(request.accountId, request.params),
 );
 
 /**
@@ -59,23 +60,18 @@ interface RetrieveExternalAccountRequest extends Request.Request<
   readonly _tag: "RetrieveExternalAccountRequest";
   readonly accountId: string;
   readonly id: string;
-  readonly params?: Stripe.ExternalAccountRetrieveParams;
+  readonly params?: Stripe.ExternalAccountRetrieveParams | undefined;
 }
 
-const RetrieveExternalAccountRequest =
-  Request.tagged<RetrieveExternalAccountRequest>(
-    "RetrieveExternalAccountRequest"
-  );
+const RetrieveExternalAccountRequest = Request.tagged<RetrieveExternalAccountRequest>(
+  "RetrieveExternalAccountRequest",
+);
 
 const RetrieveExternalAccountResolver: RequestResolver.RequestResolver<
   RetrieveExternalAccountRequest,
   StripeService
 > = makeStripeResolver<RetrieveExternalAccountRequest>((stripe, request) =>
-  stripe.accounts.retrieveExternalAccount(
-    request.accountId,
-    request.id,
-    request.params
-  )
+  stripe.accounts.retrieveExternalAccount(request.accountId, request.id, request.params),
 );
 
 /**
@@ -88,21 +84,18 @@ interface UpdateExternalAccountRequest extends Request.Request<
   readonly _tag: "UpdateExternalAccountRequest";
   readonly accountId: string;
   readonly id: string;
-  readonly params?: Stripe.ExternalAccountUpdateParams;
+  readonly params?: Stripe.ExternalAccountUpdateParams | undefined;
 }
 
-const UpdateExternalAccountRequest =
-  Request.tagged<UpdateExternalAccountRequest>("UpdateExternalAccountRequest");
+const UpdateExternalAccountRequest = Request.tagged<UpdateExternalAccountRequest>(
+  "UpdateExternalAccountRequest",
+);
 
 const UpdateExternalAccountResolver: RequestResolver.RequestResolver<
   UpdateExternalAccountRequest,
   StripeService
 > = makeStripeResolver<UpdateExternalAccountRequest>((stripe, request) =>
-  stripe.accounts.updateExternalAccount(
-    request.accountId,
-    request.id,
-    request.params
-  )
+  stripe.accounts.updateExternalAccount(request.accountId, request.id, request.params),
 );
 
 /**
@@ -117,14 +110,15 @@ interface DeleteExternalAccountRequest extends Request.Request<
   readonly id: string;
 }
 
-const DeleteExternalAccountRequest =
-  Request.tagged<DeleteExternalAccountRequest>("DeleteExternalAccountRequest");
+const DeleteExternalAccountRequest = Request.tagged<DeleteExternalAccountRequest>(
+  "DeleteExternalAccountRequest",
+);
 
 const DeleteExternalAccountResolver: RequestResolver.RequestResolver<
   DeleteExternalAccountRequest,
   StripeService
 > = makeStripeResolver<DeleteExternalAccountRequest>((stripe, request) =>
-  stripe.accounts.deleteExternalAccount(request.accountId, request.id)
+  stripe.accounts.deleteExternalAccount(request.accountId, request.id),
 );
 
 /**
@@ -136,18 +130,18 @@ interface ListExternalAccountsRequest extends Request.Request<
 > {
   readonly _tag: "ListExternalAccountsRequest";
   readonly accountId: string;
-  readonly params?: Stripe.ExternalAccountListParams;
+  readonly params?: Stripe.ExternalAccountListParams | undefined;
 }
 
 const ListExternalAccountsRequest = Request.tagged<ListExternalAccountsRequest>(
-  "ListExternalAccountsRequest"
+  "ListExternalAccountsRequest",
 );
 
 const ListExternalAccountsResolver: RequestResolver.RequestResolver<
   ListExternalAccountsRequest,
   StripeService
 > = makeStripeResolver<ListExternalAccountsRequest>((stripe, request) =>
-  stripe.accounts.listExternalAccounts(request.accountId, request.params)
+  stripe.accounts.listExternalAccounts(request.accountId, request.params),
 );
 
 /**
@@ -155,15 +149,11 @@ const ListExternalAccountsResolver: RequestResolver.RequestResolver<
  */
 export const create = (
   accountId: string,
-  params: Stripe.ExternalAccountCreateParams
-): Effect.Effect<
-  Stripe.BankAccount | Stripe.Card,
-  StripeError,
-  StripeService
-> =>
+  params: Stripe.ExternalAccountCreateParams,
+): Effect.Effect<Stripe.BankAccount | Stripe.Card, StripeError, StripeService> =>
   Effect.request(
     CreateExternalAccountRequest({ accountId, params }),
-    RequestResolver.contextFromEffect(CreateExternalAccountResolver)
+    RequestResolver.contextFromEffect(CreateExternalAccountResolver),
   );
 
 /**
@@ -172,15 +162,11 @@ export const create = (
 export const retrieve = (
   accountId: string,
   id: string,
-  params?: Stripe.ExternalAccountRetrieveParams
-): Effect.Effect<
-  Stripe.BankAccount | Stripe.Card,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.ExternalAccountRetrieveParams,
+): Effect.Effect<Stripe.BankAccount | Stripe.Card, StripeError, StripeService> =>
   Effect.request(
     RetrieveExternalAccountRequest({ accountId, id, params }),
-    RequestResolver.contextFromEffect(RetrieveExternalAccountResolver)
+    RequestResolver.contextFromEffect(RetrieveExternalAccountResolver),
   ).pipe(Effect.withRequestCaching(true));
 
 /**
@@ -189,15 +175,11 @@ export const retrieve = (
 export const update = (
   accountId: string,
   id: string,
-  params?: Stripe.ExternalAccountUpdateParams
-): Effect.Effect<
-  Stripe.BankAccount | Stripe.Card,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.ExternalAccountUpdateParams,
+): Effect.Effect<Stripe.BankAccount | Stripe.Card, StripeError, StripeService> =>
   Effect.request(
     UpdateExternalAccountRequest({ accountId, id, params }),
-    RequestResolver.contextFromEffect(UpdateExternalAccountResolver)
+    RequestResolver.contextFromEffect(UpdateExternalAccountResolver),
   );
 
 /**
@@ -205,15 +187,11 @@ export const update = (
  */
 export const del = (
   accountId: string,
-  id: string
-): Effect.Effect<
-  Stripe.DeletedBankAccount | Stripe.DeletedCard,
-  StripeError,
-  StripeService
-> =>
+  id: string,
+): Effect.Effect<Stripe.DeletedBankAccount | Stripe.DeletedCard, StripeError, StripeService> =>
   Effect.request(
     DeleteExternalAccountRequest({ accountId, id }),
-    RequestResolver.contextFromEffect(DeleteExternalAccountResolver)
+    RequestResolver.contextFromEffect(DeleteExternalAccountResolver),
   );
 
 /**
@@ -221,13 +199,9 @@ export const del = (
  */
 export const list = (
   accountId: string,
-  params?: Stripe.ExternalAccountListParams
-): Effect.Effect<
-  Stripe.ApiList<Stripe.BankAccount | Stripe.Card>,
-  StripeError,
-  StripeService
-> =>
+  params?: Stripe.ExternalAccountListParams,
+): Effect.Effect<Stripe.ApiList<Stripe.BankAccount | Stripe.Card>, StripeError, StripeService> =>
   Effect.request(
     ListExternalAccountsRequest({ accountId, params }),
-    RequestResolver.contextFromEffect(ListExternalAccountsResolver)
+    RequestResolver.contextFromEffect(ListExternalAccountsResolver),
   ).pipe(Effect.withRequestCaching(true));

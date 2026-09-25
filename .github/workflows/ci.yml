@@ -1,88 +1,57 @@
 name: CI
 
+# ONE job, ONE required check: the pipeline's task graph lives in
+# vite.config.ts (the root `check` task and every package's `test:unit` /
+# `build`), not in GitHub Actions `needs:`. Copied in shape from the effect-web
+# library (through it the effect-drizzle-ext library and the gardeneria
+# application): nothing here needs a database, a stage or a credential — every
+# vendor seam is stubbed in the unit suites — so every PR class runs the whole
+# gate.
+
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    branches: [main]
 
-permissions:
-  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# No permissions by default; the single job grants only read access.
+permissions: {}
 
 jobs:
-  lint:
+  ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
+    env:
+      # A modest ceiling for every Node process in the pipeline. NODE_OPTIONS
+      # is inherited by every child, including each vitest fork.
+      NODE_OPTIONS: --max-old-space-size=2048
+      VITEST_MAX_WORKERS: 2
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          bun-version: 1.3.8
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Lint
-        run: bun run lint
-
-      - name: Format check
-        run: bun run format:check
-
-  typecheck:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Restore the Vite+ task cache
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
-          bun-version: 1.3.8
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Type check
-        run: bun run typecheck
-
-  test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.8
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Run tests
-        run: bun run test
-
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.8
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
+          path: node_modules/.vite/task-cache
+          key: vp-task-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            vp-task-v1-${{ runner.os }}-
+      - name: Format and lint
+        run: vp check
+      - name: Type gates (packages + emitted declarations)
+        run: vp run --concurrency-limit 2 check
+      - name: Unit tests
+        run: vp run -r test:unit
       - name: Build
-        run: bun run build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: packages/*/dist/
+        run: vp run -r build
+      - name: Audit
+        run: pnpm audit --audit-level high

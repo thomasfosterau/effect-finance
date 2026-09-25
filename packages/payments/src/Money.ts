@@ -23,8 +23,7 @@ export class Money extends Schema.Class<Money>("@effect-payments/Money")({
 /**
  * Construct a {@link Money} value from a minor-unit amount and currency.
  */
-export const make = (amount: number, currency: string): Money =>
-  Money.make({ amount, currency });
+export const make = (amount: number, currency: string): Money => Money.make({ amount, currency });
 
 /** Shared shape for metadata bags accepted/returned across resources. */
 export const Metadata = Schema.Record({

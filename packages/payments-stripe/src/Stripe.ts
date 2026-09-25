@@ -1,6 +1,7 @@
 import { Context, Effect, Layer } from "effect";
 import Stripe from "stripe";
 import { PaymentConfigError } from "@thomasfosterau/effect-payments";
+import { omitUndefined } from "./internal/omitUndefined.js";
 
 /**
  * Default Stripe API version
@@ -12,10 +13,10 @@ const DEFAULT_API_VERSION = "2025-02-24.acacia" as Stripe.LatestApiVersion;
  */
 export interface StripeConfig {
   readonly apiKey: string;
-  readonly apiVersion?: string;
-  readonly maxNetworkRetries?: number;
-  readonly timeout?: number;
-  readonly appInfo?: Stripe.AppInfo;
+  readonly apiVersion?: string | undefined;
+  readonly maxNetworkRetries?: number | undefined;
+  readonly timeout?: number | undefined;
+  readonly appInfo?: Stripe.AppInfo | undefined;
 }
 
 /**
@@ -25,10 +26,7 @@ export interface StripeConfig {
  * every neutral capability layer (see `StripePayments`) and every raw resource
  * module depends on it.
  */
-export class StripeService extends Context.Tag("Stripe")<
-  StripeService,
-  Stripe
->() {}
+export class StripeService extends Context.Tag("Stripe")<StripeService, Stripe>() {}
 
 /**
  * Alias for {@link StripeService} using the conventional provider-client name.
@@ -38,40 +36,38 @@ export const StripeClient = StripeService;
 /**
  * Create a Stripe client from configuration
  */
-export const make = (
-  config: StripeConfig
-): Effect.Effect<Stripe, PaymentConfigError> =>
+export const make = (config: StripeConfig): Effect.Effect<Stripe, PaymentConfigError> =>
   Effect.gen(function* () {
     if (!config.apiKey) {
-      yield* Effect.fail(
+      return yield* Effect.fail(
         new PaymentConfigError({
           message: "Stripe API key is required",
-        })
+        }),
       );
     }
 
-    return new Stripe(config.apiKey, {
-      apiVersion:
-        (config.apiVersion as Stripe.LatestApiVersion) || DEFAULT_API_VERSION,
-      maxNetworkRetries: config.maxNetworkRetries,
-      timeout: config.timeout,
-      appInfo: config.appInfo,
-    });
+    return new Stripe(
+      config.apiKey,
+      omitUndefined({
+        apiVersion: (config.apiVersion as Stripe.LatestApiVersion) || DEFAULT_API_VERSION,
+        maxNetworkRetries: config.maxNetworkRetries,
+        timeout: config.timeout,
+        appInfo: config.appInfo,
+      }),
+    );
   });
 
 /**
  * Create a Stripe service layer from configuration
  */
-export const layer = (
-  config: StripeConfig
-): Layer.Layer<StripeService, PaymentConfigError> =>
+export const layer = (config: StripeConfig): Layer.Layer<StripeService, PaymentConfigError> =>
   Layer.effect(StripeService, make(config));
 
 /**
  * Create a Stripe service layer from environment variable
  */
 export const layerFromEnv = (
-  envVar: string = "STRIPE_API_KEY"
+  envVar: string = "STRIPE_API_KEY",
 ): Layer.Layer<StripeService, PaymentConfigError> =>
   Layer.effect(
     StripeService,
@@ -82,12 +78,12 @@ export const layerFromEnv = (
         return yield* Effect.fail(
           new PaymentConfigError({
             message: `Environment variable ${envVar} is not set`,
-          })
+          }),
         );
       }
 
       return new Stripe(apiKey, {
         apiVersion: DEFAULT_API_VERSION,
       });
-    })
+    }),
   );
