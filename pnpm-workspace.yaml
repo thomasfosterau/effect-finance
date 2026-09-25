@@ -43,7 +43,7 @@ catalog:
   # Effect 3 until #38 (slice 2 of #36) moves the workspace to 4.0.0-rc.115.
   effect: 3.22.2
   effect-solutions: ^0.5.3
-  fallow: 3.25.0
+  fallow: 3.28.0
   # The official Stripe SDK. A runtime dependency of
   # @thomasfosterau/effect-payments-stripe until the fetch-only transport
   # (#39) makes it an optional alternative.
