@@ -55,6 +55,20 @@ updates:
             "version-update:semver-minor",
             "version-update:semver-patch",
           ]
+      # Pinned to vitest's exact version (vite-plus 0.3.x → vitest 4.1.11), so
+      # it moves with the trio by hand.
+      - dependency-name: "@vitest/coverage-istanbul"
+        update-types:
+          [
+            "version-update:semver-major",
+            "version-update:semver-minor",
+            "version-update:semver-patch",
+          ]
+      # The SDK's major versions change parameter and response types across
+      # every resource module; it is on its way out of the required surface
+      # (#39, the fetch-only transport), so majors wait for that.
+      - dependency-name: "stripe"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "vite-plus"
         update-types:
           [
