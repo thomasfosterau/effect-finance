@@ -13,7 +13,7 @@ Stripe: the neutral capabilities as `Layer`s (`StripePayments`) plus one resourc
 ## Local invariants
 
 - **Stripe failures become neutral errors in one place**: `toPaymentsError` (`internal/error.ts`), fed by the fetch transport's `classifyResponse` (status + the `Schema`-decoded `{ error: { type, code, message, param } }` envelope, 401 / 403 / 429 winning over the body's `type`, as in the SDK) and by the SDK transport's `handleStripeError`. A resource module never throws and never leaks an SDK error class.
-- **Only `Stripe.ts` loads `stripe` at runtime.** Everything else imports it with `import type` only, so a Worker bundle never contains the SDK; `tests/sdkOptional.test.ts` walks the runtime import graph and fails otherwise.
+- **Only `Stripe.ts` loads `stripe` at runtime.** Everything else imports it with `import type` only, so a Worker bundle never contains the SDK; `tests/sdkOptional.test.ts` walks the sources' runtime import graph and `tests/dist-consumer/src/sdkOptional.ts` (in that package's `check` task) walks the emitted `dist/` graph; either fails otherwise.
 - **The key never reaches an error or a log line.** It is a `Redacted` until the header is set; a transport failure's `cause` is the underlying error, never the `HttpClientRequest` (whose headers carry the key).
 - **Options objects bound for the SDK go through `omitUndefined`** (`internal/omitUndefined.ts`): the SDK's parameter types declare bare `?: T`, which `exactOptionalPropertyTypes` will not let an assembled `T | undefined` satisfy. The form encoder skips `undefined` values, so the fetch transport takes assembled objects as they are.
 

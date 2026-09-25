@@ -10,6 +10,13 @@
  * Entities are then constructed with schema checks disabled: the vendor data
  * has just been decoded.
  *
+ * **Enumerations are closed.** A status or type decodes against the neutral
+ * literal set (`PaymentStatus`, `SubscriptionStatus`, `RefundStatus`, the
+ * price `type` and recurring `interval`), so a value Stripe adds later fails
+ * the whole decode — and one such item fails a whole list page — with
+ * `PaymentProviderError`, rather than being passed through unmodelled. A
+ * lenient fallback is tracked in #58.
+ *
  * @module
  */
 

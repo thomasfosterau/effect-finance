@@ -60,19 +60,20 @@ export interface StripeFailure {
   readonly raw?: unknown;
 }
 
+/** A string Stripe may send, omit, or send as `null` (`"code": null`). */
+const Text = Schema.optional(Schema.NullOr(Schema.String));
+
 /**
- * The `error` member of a Stripe error response. Every field is optional and
- * unknown fields are ignored: the envelope is decoded leniently, and a body
- * that does not decode is classified from its status alone.
+ * The `error` member of a Stripe error response, narrowed to the fields the
+ * classification reads. Every field is optional and nullable, and unknown
+ * fields are ignored: the envelope is decoded leniently, and a body that does
+ * not decode is classified from its status alone.
  */
 const StripeErrorObject = Schema.Struct({
-  type: Schema.optional(Schema.String),
-  code: Schema.optional(Schema.String),
-  message: Schema.optional(Schema.String),
-  param: Schema.optional(Schema.String),
-  decline_code: Schema.optional(Schema.String),
-  doc_url: Schema.optional(Schema.String),
-  request_log_url: Schema.optional(Schema.String),
+  type: Text,
+  code: Text,
+  message: Text,
+  param: Text,
 });
 
 /**
@@ -81,19 +82,47 @@ const StripeErrorObject = Schema.Struct({
  */
 const StripeErrorEnvelope = Schema.Struct({
   error: Schema.Union([StripeErrorObject, Schema.String]),
-  error_description: Schema.optional(Schema.String),
+  error_description: Text,
 });
 
-type StripeErrorObject = typeof StripeErrorObject.Type;
+/** The classification's view of an error body, `null`s read as absent. */
+interface StripeErrorFields {
+  readonly type: string | undefined;
+  readonly code: string | undefined;
+  readonly message: string | undefined;
+  readonly param: string | undefined;
+  /**
+   * The vendor error object exactly as received — every field, including the
+   * ones not decoded (`decline_code`, `payment_intent`, `advice_code`, …) —
+   * or the whole body for the OAuth form.
+   */
+  readonly raw: unknown;
+}
 
 const decodeEnvelope = Schema.decodeUnknownOption(StripeErrorEnvelope);
 
-/** The error object of a response body, normalising the OAuth form. */
-export const errorObjectOf = (body: unknown): StripeErrorObject | undefined =>
+const orUndefined = (value: string | null | undefined): string | undefined => value ?? undefined;
+
+/** The error fields of a response body, normalising the OAuth form. */
+const errorFieldsOf = (body: unknown): StripeErrorFields | undefined =>
   Option.match(decodeEnvelope(body), {
     onNone: () => undefined,
-    onSome: ({ error, error_description }) =>
-      Predicate.isString(error) ? { type: error, message: error_description } : error,
+    onSome: ({ error, error_description }): StripeErrorFields =>
+      Predicate.isString(error)
+        ? {
+            type: error,
+            code: undefined,
+            message: orUndefined(error_description),
+            param: undefined,
+            raw: body,
+          }
+        : {
+            type: orUndefined(error.type),
+            code: orUndefined(error.code),
+            message: orUndefined(error.message),
+            param: orUndefined(error.param),
+            raw: Predicate.hasProperty(body, "error") ? body.error : undefined,
+          },
   });
 
 /** The SDK's `type` → error class dispatch (`StripeError.generate`). */
@@ -142,7 +171,7 @@ export const classifyResponse = (
   retryAfter: string | undefined,
   body: unknown,
 ): StripeFailure => {
-  const error = errorObjectOf(body);
+  const error = errorFieldsOf(body);
   if (error === undefined) {
     // Not a Stripe error envelope — typically a proxy or load-balancer page.
     return {
@@ -159,7 +188,7 @@ export const classifyResponse = (
     statusCode: status,
     param: error.param,
     retryAfter: retryAfterOf(retryAfter),
-    raw: error,
+    raw: error.raw,
   };
 };
 

@@ -27,7 +27,7 @@ import {
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
 import type { StripeParams } from "./internal/params.js";
-import { path } from "./internal/index.js";
+import { path, type RequestPath, withPath } from "./internal/index.js";
 import {
   decodeCustomer,
   decodeCustomerPage,
@@ -59,11 +59,13 @@ const call =
   (http: StripeHttp["Service"]) =>
   <A>(
     method: StripeMethod,
-    requestPath: string,
+    requestPath: RequestPath,
     params: StripeParams | undefined,
     decode: (body: unknown) => Effect.Effect<A, PaymentsError>,
   ): Effect.Effect<A, PaymentsError> =>
-    Effect.flatMap(http.request({ method, path: requestPath, params }), decode);
+    withPath(requestPath, (valid) =>
+      Effect.flatMap(http.request({ method, path: valid, params }), decode),
+    );
 
 // ---------------------------------------------------------------------------
 // Customers

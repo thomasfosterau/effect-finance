@@ -56,7 +56,7 @@ describe("StripeHttp request encoding", () => {
     const { run, calls } = send(ok, {
       method: "POST",
       path: "/v1/customers",
-      params: { email: "grower@example.test", metadata: { user_id: "user-1" } },
+      params: { email: "jane@example.com", metadata: { user_id: "user-1" } },
     });
     const body = await Effect.runPromise(run);
 
@@ -68,8 +68,8 @@ describe("StripeHttp request encoding", () => {
     expect(call.headers.get("stripe-version")).toBe(DEFAULT_API_VERSION);
     expect(call.headers.get("accept")).toBe("application/json");
     expect(call.headers.get("content-type")).toBe("application/x-www-form-urlencoded");
-    expect(call.body).toBe("email=grower%40example.test&metadata[user_id]=user-1");
-    // gardeneria's assertion: the body parses back to the bracketed keys.
+    expect(call.body).toBe("email=jane%40example.com&metadata[user_id]=user-1");
+    // The body parses back to the bracketed keys.
     expect(new URLSearchParams(call.body).get("metadata[user_id]")).toBe("user-1");
   });
 
@@ -232,6 +232,40 @@ describe("StripeHttp error decoding", () => {
       param: "line_items[0][price]",
       statusCode: 400,
     });
+  });
+
+  it("reads null error fields as absent rather than failing the decode", async () => {
+    const error = await once(400, {
+      error: {
+        type: "invalid_request_error",
+        code: null,
+        message: "Missing required param: customer.",
+        param: "customer",
+        decline_code: null,
+        doc_url: null,
+      },
+    });
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(error).toMatchObject({
+      message: "Missing required param: customer.",
+      param: "customer",
+      statusCode: 400,
+    });
+  });
+
+  it("keeps the whole vendor error object as the cause, undecoded fields included", async () => {
+    const vendor = {
+      type: "card_error",
+      code: "card_declined",
+      message: "Your card was declined.",
+      advice_code: "try_again_later",
+      payment_intent: { id: "pi_1", status: "requires_payment_method" },
+      charge: "ch_1",
+      payment_method: { id: "pm_1" },
+    };
+    const error = await once(402, { error: vendor });
+    expect(error).toMatchObject({ _tag: "PaymentProviderError", code: "card_declined" });
+    expect((error as { cause?: unknown }).cause).toEqual(vendor);
   });
 
   it("maps a 401 to PaymentAuthenticationError whatever the body's type", async () => {
@@ -462,6 +496,24 @@ describe("StripeHttp uploads", () => {
     expect((part as Blob).type).toBe("application/pdf");
   });
 
+  it("sends a bare Uint8Array parameter as a file part", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "file_2", object: "file" }));
+    await Effect.runPromise(
+      Effect.flatMap(StripeHttp, (client) =>
+        client.request({
+          method: "POST",
+          path: "/v1/files",
+          params: { purpose: "dispute_evidence", file: new TextEncoder().encode("bytes") },
+          upload: true,
+        }),
+      ).pipe(Effect.provide(layer(config())), Effect.provide(http)),
+    );
+    const part = calls[0]?.form?.get("file");
+    expect(part).toBeInstanceOf(Blob);
+    expect(await (part as Blob).text()).toBe("bytes");
+    expect(calls[0]?.form?.get("file[0]")).toBeNull();
+  });
+
   it("refuses file data it cannot send", async () => {
     const { http, calls } = stubFetch(ok);
     const error = await Effect.runPromise(
@@ -533,6 +585,21 @@ describe("resource modules over the fetch transport", () => {
     expect(subscription.cancel_at_period_end).toBe(true);
     expect(calls[0]?.url.toString()).toBe("https://api.stripe.com/v1/subscriptions/sub_1");
     expect(calls[0]?.body).toBe("cancel_at_period_end=true");
+  });
+
+  it("fails a missing or empty id instead of addressing another endpoint", async () => {
+    const { http, calls } = stubFetch(ok);
+    for (const id of ["", undefined as unknown as string]) {
+      const error = await Effect.runPromise(
+        Effect.flip(Customer.retrieve(id)).pipe(
+          Effect.provide(layer(config())),
+          Effect.provide(http),
+        ),
+      );
+      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+      expect(error.message).toContain("Path segment 1 of /v1/customers/{…}");
+    }
+    expect(calls).toHaveLength(0);
   });
 
   it("encodes a path segment", async () => {

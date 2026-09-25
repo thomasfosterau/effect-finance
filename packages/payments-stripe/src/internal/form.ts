@@ -28,7 +28,9 @@ type Pair = readonly [key: string, value: string];
  * (RFC 3986) escapes: `!`, `'`, `(`, `)`, `*`.
  */
 const escape = (text: string): string =>
-  encodeURIComponent(text).replace(
+  // `toWellFormed` replaces a lone surrogate with U+FFFD, which
+  // `encodeURIComponent` would otherwise reject with a `URIError`.
+  encodeURIComponent(text.toWellFormed()).replace(
     /[!'()*]/g,
     (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );

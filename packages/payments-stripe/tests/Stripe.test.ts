@@ -102,6 +102,23 @@ describe("Stripe SDK transport", () => {
       expect(calls[1]?.headers.get("stripe-account")).toBe("acct_1");
     });
 
+    it("passes request options to an upload", async () => {
+      const { transport, calls } = sdkWith(() => jsonResponse(200, { id: "file_1" }));
+      await Effect.runPromise(
+        transport.request({
+          method: "POST",
+          path: "/v1/files",
+          params: { purpose: "dispute_evidence", file: { data: "%PDF", name: "e.pdf" } },
+          upload: true,
+          idempotencyKey: "upload-1",
+          stripeAccount: "acct_1",
+        }),
+      );
+      expect(calls[0]?.url.host).toBe("files.stripe.com");
+      expect(calls[0]?.headers.get("idempotency-key")).toBe("upload-1");
+      expect(calls[0]?.headers.get("stripe-account")).toBe("acct_1");
+    });
+
     it("maps an SDK invalid-request error, keeping the param", async () => {
       const { transport } = sdkWith(() =>
         jsonResponse(400, {

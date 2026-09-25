@@ -26,6 +26,10 @@ describe("Stripe form encoding", () => {
     expect(encodeForm({ unicode: "héllo 🌱" })).toBe("unicode=h%C3%A9llo%20%F0%9F%8C%B1");
   });
 
+  it("replaces a lone surrogate rather than throwing", () => {
+    expect(encodeForm({ broken: "a\uD800b" })).toBe("broken=a%EF%BF%BDb");
+  });
+
   it("nests objects in brackets, escaping keys but not the brackets", () => {
     expect(encodeForm({ metadata: { user_id: "u1", "my key": "v&w=x" } })).toBe(
       "metadata[user_id]=u1&metadata[my%20key]=v%26w%3Dx",

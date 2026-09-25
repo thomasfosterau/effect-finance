@@ -81,8 +81,10 @@ catalogs:
     effect: ">=4.0.0-rc.115"
     # Optional (`peerDependenciesMeta`): only the `./Stripe` SDK transport and
     # the SDK-based `./Webhook` verifier load it; the types the resource
-    # modules return come from it too.
-    stripe: ">=17.6.0"
+    # modules return come from it too. Caret, not `>=`: those types describe
+    # the SDK major's API version (17 → 2025-02-24.acacia, the fetch
+    # transport's DEFAULT_API_VERSION), so a new major moves both together.
+    stripe: ^17.6.0
 
 overrides:
   vite: "catalog:"

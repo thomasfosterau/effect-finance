@@ -93,15 +93,15 @@ export const transport = (stripe: Stripe): StripeHttp["Service"] =>
     request: (request: StripeRequest) =>
       Effect.tryPromise({
         try: (): Promise<unknown> => {
-          if (request.upload) {
-            // SAFETY: an upload's parameters are the Files API's; the
-            // resource module (`File.create`) types them as such.
-            return stripe.files.create(request.params as Stripe.FileCreateParams);
-          }
           const options = omitUndefined({
             idempotencyKey: request.idempotencyKey,
             stripeAccount: request.stripeAccount,
           });
+          if (request.upload) {
+            // SAFETY: an upload's parameters are the Files API's; the
+            // resource module (`File.create`) types them as such.
+            return stripe.files.create(request.params as Stripe.FileCreateParams, options);
+          }
           if (request.method === "POST") {
             // SAFETY: `rawRequest` form-encodes any object, as the SDK's
             // resource methods do.

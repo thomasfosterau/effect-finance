@@ -21,6 +21,10 @@
  *   `DELETE`; a file upload goes as `multipart/form-data` to the uploads host.
  * - **Refuses redirects** (`redirect: "error"` on the fetch client): following
  *   one would replay the `Authorization` header at whatever host it named.
+ *   `fetch` reports a refused redirect as a network failure, which cannot be
+ *   told apart portably from any other, so it is retried like one and then
+ *   fails with `PaymentNetworkError`; no attempt ever reaches the redirect
+ *   target.
  * - **Retries** connection failures, `409`s and `5xx`s (deferring to a
  *   `Stripe-Should-Retry` header) with the SDK's backoff, reusing one
  *   `Idempotency-Key` across the attempts of a `POST`.
@@ -117,7 +121,8 @@ export interface StripeRequest {
   /**
    * Send the parameters as `multipart/form-data` to the uploads origin (the
    * Files API). A parameter shaped `{ data, name?, type? }` becomes a file
-   * part; `data` is a string, a `Uint8Array` or a `Blob`.
+   * part (`data` a string, a `Uint8Array` or a `Blob`), as does a bare
+   * `Uint8Array` or `Blob`.
    */
   readonly upload?: boolean | undefined;
 }
@@ -144,6 +149,10 @@ interface FilePart {
 const isFilePart = (value: unknown): value is FilePart =>
   Predicate.isObject(value) && "data" in value;
 
+/** Raw bytes passed directly as a parameter, which are a file too. */
+const isBytes = (value: unknown): value is Blob | Uint8Array =>
+  value instanceof Blob || value instanceof Uint8Array;
+
 const blobOf = (part: FilePart): Blob | undefined => {
   const options = { type: part.type ?? "application/octet-stream" };
   if (part.data instanceof Blob) return part.data;
@@ -162,10 +171,11 @@ type FormPart =
   | { readonly name: string; readonly blob: Blob; readonly filename: string };
 
 /** One upload parameter's multipart fields, or why it cannot be sent. */
-const formPartsOf = ([key, value]: readonly [string, unknown]): Effect.Effect<
+const formPartsOf = ([key, input]: readonly [string, unknown]): Effect.Effect<
   ReadonlyArray<FormPart>,
   PaymentInvalidRequestError
 > => {
+  const value: unknown = isBytes(input) ? { data: input } : input;
   if (!isFilePart(value)) {
     return Effect.succeed(flattenParams({ [key]: value }).map(([name, text]) => ({ name, text })));
   }
