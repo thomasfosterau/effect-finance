@@ -7,7 +7,7 @@
  * executed; type-checked only.
  */
 
-import type { Effect, Layer } from "effect";
+import { type Effect, type Layer, Redacted } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import type Stripe from "stripe";
 import {
@@ -27,7 +27,8 @@ import type * as Subscription from "@thomasfosterau/effect-payments/Subscription
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 import * as StripeCustomer from "@thomasfosterau/effect-payments-stripe/Customer";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
-import type { StripeService } from "@thomasfosterau/effect-payments-stripe/Stripe";
+import * as StripeSdk from "@thomasfosterau/effect-payments-stripe/Stripe";
+import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
 import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
 import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
 
@@ -44,7 +45,9 @@ export const price: Money = money(2000, "usd");
 
 // ── providers ─────────────────────────────────────────────────────────────
 
-export const stripeLayer = StripePayments.layer({ apiKey: "sk_test_123" });
+export const stripeLayer = StripePayments.layer({ apiKey: Redacted.make("sk_test_123") });
+export const stripeHttpLayer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_123") });
+export const stripeSdkLayer = StripeSdk.layer({ apiKey: Redacted.make("sk_test_123") });
 export const paypalLayer = PayPalPayments.layer({ clientId: "id", clientSecret: "secret" });
 export const airwallexLayer = AirwallexPayments.layer({ clientId: "id", apiKey: "key" });
 export const stripeCustomer = StripeCustomer.retrieve("cus_123");
@@ -80,11 +83,23 @@ export type Checks = [
   /** _airwallexProvidesCustomers */ Assert<
     Customer.Customers extends Layer.Success<typeof airwallexLayer> ? true : false
   >,
-  /** _stripeResourceRequiresClient */ Assert<
-    Equals<Effect.Services<typeof stripeCustomer>, StripeService>
+  /** _stripeResourceRequiresTransport */ Assert<
+    Equals<Effect.Services<typeof stripeCustomer>, StripeHttp.StripeHttp>
   >,
+  /** _stripeResourceIsTyped */ Assert<
+    Equals<Effect.Success<typeof stripeCustomer>, Stripe.Customer | Stripe.DeletedCustomer>
+  >,
+  /** _stripeHttpNeedsHttpClient */ Assert<
+    Equals<Layer.Services<typeof stripeHttpLayer>, HttpClient.HttpClient>
+  >,
+  /** _stripeSdkProvidesTransport */ Assert<
+    Equals<Layer.Success<typeof stripeSdkLayer>, StripeHttp.StripeHttp | StripeSdk.StripeService>
+  >,
+  /** _stripeSdkNeedsNothing */ Assert<Equals<Layer.Services<typeof stripeSdkLayer>, never>>,
   /** _webhookEvent */ Assert<Equals<Effect.Success<typeof event>, Stripe.Event>>,
-  /** _stripeNeedsNothing */ Assert<Equals<Layer.Services<typeof stripeLayer>, never>>,
+  /** _stripeNeedsHttpClient */ Assert<
+    Equals<Layer.Services<typeof stripeLayer>, HttpClient.HttpClient>
+  >,
   /** _paypalNeedsHttpClient */ Assert<
     Equals<Layer.Services<typeof paypalLayer>, HttpClient.HttpClient>
   >,

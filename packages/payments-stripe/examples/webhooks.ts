@@ -8,7 +8,7 @@
  * - Process webhook events safely
  */
 
-import { Effect } from "effect";
+import { Effect, Redacted } from "effect";
 import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
 import * as Customer from "@thomasfosterau/effect-payments-stripe/Customer";
@@ -143,7 +143,7 @@ const expressExample = () => {
   };
 
   const webhookSecret = "whsec_test_secret";
-  const layer = Stripe.layer({ apiKey: "sk_test_..." });
+  const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
 
   // Generate a test signature
   const setupProgram = Effect.gen(function* () {
@@ -189,7 +189,7 @@ const testingExample = () => {
   console.log("\n=== Testing Webhook Signatures Example ===\n");
 
   const webhookSecret = "whsec_test_secret";
-  const layer = Stripe.layer({ apiKey: "sk_test_..." });
+  const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
 
   const testPayload = JSON.stringify({
     id: "evt_test",
@@ -240,7 +240,7 @@ const asyncExample = () => {
   console.log("\n=== Async Webhook Verification Example ===\n");
 
   const webhookSecret = "whsec_test_secret";
-  const layer = Stripe.layer({ apiKey: "sk_test_..." });
+  const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
 
   const testPayload = JSON.stringify({
     id: "evt_test_async",
@@ -282,7 +282,7 @@ const toleranceExample = () => {
   console.log("\n=== Webhook Tolerance Example ===\n");
 
   const webhookSecret = "whsec_test_secret";
-  const layer = Stripe.layer({ apiKey: "sk_test_..." });
+  const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
 
   const testPayload = JSON.stringify({
     id: "evt_test_tolerance",

@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as IssuingCard from "@thomasfosterau/effect-payments-stripe/Issuing.Card";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createCard = (cardholderId: string) =>
  *   IssuingCard.create({
@@ -19,23 +20,25 @@
  *   return card;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create an issuing card
  */
 export const create = (
   params: Stripe.Issuing.CardCreateParams,
-): Effect.Effect<Stripe.Issuing.Card, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.issuing.cards.create(params));
+): Effect.Effect<Stripe.Issuing.Card, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/issuing/cards", params);
 
 /**
  * Retrieve an issuing card
@@ -43,8 +46,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.Issuing.CardRetrieveParams,
-): Effect.Effect<Stripe.Issuing.Card, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.issuing.cards.retrieve(id, params));
+): Effect.Effect<Stripe.Issuing.Card, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/issuing/cards/${id}`, params);
 
 /**
  * Update an issuing card
@@ -52,13 +55,13 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.Issuing.CardUpdateParams,
-): Effect.Effect<Stripe.Issuing.Card, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.issuing.cards.update(id, params));
+): Effect.Effect<Stripe.Issuing.Card, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/issuing/cards/${id}`, params);
 
 /**
  * List issuing cards
  */
 export const list = (
   params?: Stripe.Issuing.CardListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Card>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.issuing.cards.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Card>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/issuing/cards", params);

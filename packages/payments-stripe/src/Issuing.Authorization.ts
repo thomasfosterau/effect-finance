@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as IssuingAuthorization from "@thomasfosterau/effect-payments-stripe/Issuing.Authorization";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const program = Effect.gen(function* () {
  *   const authorization = yield* IssuingAuthorization.retrieve("iauth_xxx");
@@ -13,15 +14,17 @@
  *   return approved;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve an issuing authorization
@@ -29,8 +32,8 @@ import type { StripeService } from "./Stripe.js";
 export const retrieve = (
   id: string,
   params?: Stripe.Issuing.AuthorizationRetrieveParams,
-): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.issuing.authorizations.retrieve(id, params));
+): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/issuing/authorizations/${id}`, params);
 
 /**
  * Update an issuing authorization
@@ -38,16 +41,16 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.Issuing.AuthorizationUpdateParams,
-): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.issuing.authorizations.update(id, params));
+): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/issuing/authorizations/${id}`, params);
 
 /**
  * List issuing authorizations
  */
 export const list = (
   params?: Stripe.Issuing.AuthorizationListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Authorization>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.issuing.authorizations.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Authorization>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/issuing/authorizations", params);
 
 /**
  * Approve an issuing authorization
@@ -55,8 +58,8 @@ export const list = (
 export const approve = (
   id: string,
   params?: Stripe.Issuing.AuthorizationApproveParams,
-): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.issuing.authorizations.approve(id, params));
+): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/issuing/authorizations/${id}/approve`, params);
 
 /**
  * Decline an issuing authorization
@@ -64,5 +67,5 @@ export const approve = (
 export const decline = (
   id: string,
   params?: Stripe.Issuing.AuthorizationDeclineParams,
-): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.issuing.authorizations.decline(id, params));
+): Effect.Effect<Stripe.Issuing.Authorization, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/issuing/authorizations/${id}/decline`, params);

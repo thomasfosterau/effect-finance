@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as CountrySpec from "@thomasfosterau/effect-payments-stripe/CountrySpec";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const program = Effect.gen(function* () {
  *   const usSpec = yield* CountrySpec.retrieve("US");
@@ -13,15 +14,17 @@
  *   return { usSpec, allSpecs };
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a country spec
@@ -29,13 +32,13 @@ import type { StripeService } from "./Stripe.js";
 export const retrieve = (
   country: string,
   params?: Stripe.CountrySpecRetrieveParams,
-): Effect.Effect<Stripe.CountrySpec, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.countrySpecs.retrieve(country, params));
+): Effect.Effect<Stripe.CountrySpec, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/country_specs/${country}`, params);
 
 /**
  * List country specs
  */
 export const list = (
   params?: Stripe.CountrySpecListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.CountrySpec>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.countrySpecs.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.CountrySpec>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/country_specs", params);

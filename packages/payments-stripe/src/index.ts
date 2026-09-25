@@ -4,28 +4,37 @@
  * The Stripe implementation of the vendor-neutral
  * `@thomasfosterau/effect-payments` core. It provides:
  *
- * - **`Stripe`** — the Stripe client service and the `Layer`s that construct
- *   it from configuration or the environment.
+ * - **`StripeHttp`** — the fetch-only transport over `effect/unstable/http`'s
+ *   `HttpClient` (form-encoded bodies, pinned `Stripe-Version`, `Redacted`
+ *   key), which runs in a Cloudflare Worker with no Node API and no SDK.
  * - **`StripePayments`** — `Layer`s that implement the neutral capabilities
  *   (`Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`,
- *   `Refunds`) on top of the Stripe SDK, plus `layer`/`layerFromEnv` that bundle
- *   the client and every capability together.
+ *   `Refunds`) over that transport, plus `layer`/`layerFromEnv` that bundle
+ *   the transport and every capability together.
  * - **Raw resource modules** (`Customer`, `Product`, `Charge`, `Treasury`, …) —
- *   the full-fidelity Stripe escape hatch returning Stripe SDK types, for the
- *   many resources that have no vendor-neutral equivalent.
+ *   the full-fidelity Stripe escape hatch, typed with the `stripe` package's
+ *   declarations, for the many resources that have no vendor-neutral
+ *   equivalent.
+ *
+ * The official SDK is an optional alternative transport, imported from its
+ * own subpath (`@thomasfosterau/effect-payments-stripe/Stripe`) and never
+ * loaded by this entry point.
  *
  * This mirrors Effect's AI packages: `@effect/ai` defines the abstraction and
  * `@effect/ai-openai` implements it while still exposing provider-specific APIs.
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as Customer from "@thomasfosterau/effect-payments/Customer";
  * import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
  *
  * const program = Customer.create({ email: "jane@example.com" });
  *
- * const layer = StripePayments.layer({ apiKey: "sk_test_..." });
+ * const layer = StripePayments.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  *
@@ -36,8 +45,10 @@
 // and the neutral error channel).
 export * as Payments from "@thomasfosterau/effect-payments";
 
-// Stripe client + neutral capability implementations.
-export * as Stripe from "./Stripe.js";
+// The fetch-only transport + neutral capability implementations. The SDK
+// transport (`./Stripe`) is deliberately not re-exported here: it loads the
+// optional `stripe` peer, and this entry point must load without it.
+export * as StripeHttp from "./StripeHttp.js";
 export * as StripePayments from "./StripePayments.js";
 
 // Raw Stripe resource modules (provider-specific escape hatch).
@@ -85,4 +96,4 @@ export * as SubscriptionSchedule from "./SubscriptionSchedule.js";
 export * as Webhook from "./Webhook.js";
 
 export type { StripeError as StripeErrors } from "./internal/index.js";
-export type { StripeConfig } from "./Stripe.js";
+export type { StripeHttpConfig } from "./StripeHttp.js";

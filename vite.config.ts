@@ -156,6 +156,16 @@ export default defineConfig({
           "effect/avoid-ts-ignore": "off",
         },
       },
+      // Vendor wire schemas decode a provider's JSON under the provider's own
+      // field names (`active`, `livemode`, `has_more`); renaming them to
+      // `is*` would decode nothing. The neutral entities they map onto keep
+      // the rule.
+      {
+        files: ["packages/*/src/internal/mapping.ts"],
+        rules: {
+          "effect/require-is-prefix-for-boolean-schema-field": "off",
+        },
+      },
       // The examples are runnable scripts: the process edge, where the
       // program is run, logs to the terminal and reads its key from the
       // environment.

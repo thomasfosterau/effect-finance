@@ -1,96 +1,58 @@
 import { Effect } from "effect";
-import Stripe from "stripe";
-import {
-  PaymentAuthenticationError,
-  PaymentInvalidRequestError,
-  PaymentNetworkError,
-  PaymentProviderError,
-  PaymentRateLimitError,
-  type PaymentsError,
-} from "@thomasfosterau/effect-payments";
-import { StripeService } from "../Stripe.js";
-
-/**
- * The provider tag attached to neutral errors raised by this implementation.
- */
-export const PROVIDER = "stripe";
+import type { PaymentsError } from "@thomasfosterau/effect-payments";
+import { StripeHttp, type StripeMethod } from "../StripeHttp.js";
+import type { StripeParams } from "./params.js";
 
 /**
  * All possible errors that can occur during a Stripe API call, expressed in
  * terms of the vendor-neutral {@link PaymentsError} channel.
  *
  * Note: configuration errors are not included as they only occur during layer
- * initialization, not during API calls wrapped with `wrapStripeCall`.
+ * initialization, not during API calls.
  */
 export type StripeError = PaymentsError;
 
 /**
- * Convert a thrown Stripe SDK error into a vendor-neutral payments error.
+ * A request path with every interpolated value URI-encoded as one segment:
+ * `` path`/v1/customers/${id}` ``.
  */
-export const handleStripeError = (error: unknown): PaymentsError => {
-  if (error instanceof Stripe.errors.StripeError) {
-    const { message, type, code, statusCode, raw } = error;
-
-    switch (type) {
-      case "StripeAuthenticationError":
-        return new PaymentAuthenticationError({ message, statusCode });
-      case "StripeRateLimitError": {
-        // Extract retry-after information from headers
-        // Stripe returns this in the "Retry-After" header
-        // SAFETY: `type` is the SDK's discriminant for its error subclasses.
-        const rateLimitError = error as Stripe.errors.StripeRateLimitError;
-        const headers = rateLimitError.headers;
-        const retryAfterHeader = headers?.["Retry-After"] ?? headers?.["retry-after"];
-        let retryAfter: number | undefined;
-        if (retryAfterHeader !== undefined) {
-          const parsed = Number.parseInt(String(retryAfterHeader), 10);
-          retryAfter = Number.isNaN(parsed) ? undefined : parsed;
-        }
-        return new PaymentRateLimitError({ message, retryAfter });
-      }
-      case "StripeInvalidRequestError":
-        return new PaymentInvalidRequestError({
-          message,
-          // SAFETY: `type` is the SDK's discriminant for its error subclasses.
-          param: (error as Stripe.errors.StripeInvalidRequestError).param,
-          statusCode,
-        });
-      case "StripeConnectionError":
-        return new PaymentNetworkError({ message, cause: error });
-      case "StripePermissionError":
-      case "StripeIdempotencyError":
-      case "StripeAPIError":
-      default:
-        // Handle all other error types as a generic provider error
-        return new PaymentProviderError({
-          message,
-          provider: PROVIDER,
-          code: code ?? type,
-          statusCode,
-          cause: raw,
-        });
-    }
-  }
-
-  return new PaymentProviderError({
-    message: error instanceof Error ? error.message : String(error),
-    provider: PROVIDER,
-    cause: error,
-  });
-};
+export const path = (strings: TemplateStringsArray, ...segments: ReadonlyArray<string>): string =>
+  strings.reduce(
+    (built, literal, index) =>
+      index === 0 ? literal : `${built}${encodeURIComponent(segments[index - 1] ?? "")}${literal}`,
+    "",
+  );
 
 /**
- * Run one Stripe SDK call against the {@link StripeService} in context,
- * mapping a rejection onto the neutral error channel with
- * {@link handleStripeError}. Every resource module's operations are one call
- * to this.
+ * Issue one Stripe API call through the {@link StripeHttp} transport in
+ * context. Every resource module's operations are one call to this.
+ *
+ * The result is the response JSON as the resource module names it (the
+ * `stripe` package's type for that resource at the pinned API version). It is
+ * not decoded: the resource modules are the full-fidelity escape hatch, and
+ * the capability layers decode the fields they read (`StripePayments`).
  */
-export const wrapStripeCall = <A>(
-  fn: (stripe: Stripe) => Promise<A>,
-): Effect.Effect<A, StripeError, StripeService> =>
-  Effect.flatMap(StripeService, (stripe) =>
-    Effect.tryPromise({
-      try: () => fn(stripe),
-      catch: handleStripeError,
-    }),
-  );
+export const stripeRequest = <A>(
+  method: StripeMethod,
+  requestPath: string,
+  params?: StripeParams | undefined,
+): Effect.Effect<A, StripeError, StripeHttp> =>
+  // SAFETY: NOT checked — see above. The shape is the one the Stripe API
+  // documents for this path at the pinned `Stripe-Version`.
+  Effect.flatMap(StripeHttp, (http) =>
+    http.request({ method, path: requestPath, params }),
+  ) as Effect.Effect<A, StripeError, StripeHttp>;
+
+/**
+ * Upload through the {@link StripeHttp} transport: a `multipart/form-data`
+ * `POST` to the uploads origin (the Files API), unchecked like
+ * {@link stripeRequest}.
+ */
+export const stripeUpload = <A>(
+  requestPath: string,
+  params: StripeParams,
+): Effect.Effect<A, StripeError, StripeHttp> =>
+  // SAFETY: NOT checked — see `stripeRequest`.
+  Effect.flatMap(StripeHttp, (http) =>
+    http.request({ method: "POST", path: requestPath, params, upload: true }),
+  ) as Effect.Effect<A, StripeError, StripeHttp>;

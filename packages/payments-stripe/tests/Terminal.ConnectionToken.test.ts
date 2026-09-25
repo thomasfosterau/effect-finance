@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import { describe, it, expect } from "vite-plus/test";
+import { Effect } from "effect";
 import type Stripe from "stripe";
 import * as TerminalConnectionToken from "../src/Terminal.ConnectionToken.ts";
-import { StripeService } from "../src/Stripe.ts";
+import type { StripeRequest } from "../src/StripeHttp.ts";
+import { fakeStripeHttp } from "./support.ts";
 
 describe("Terminal.ConnectionToken", () => {
   const createMockStripe = () => {
@@ -12,33 +13,31 @@ describe("Terminal.ConnectionToken", () => {
       location: "tml_123",
     } as Stripe.Terminal.ConnectionToken;
 
-    return {
-      terminal: {
-        connectionTokens: {
-          create: vi.fn().mockResolvedValue(mockToken),
-        },
-      },
-    } as unknown as Stripe;
+    return (request: StripeRequest) => {
+      return mockToken;
+    };
   };
 
-  const createTestLayer = (mockStripe: Stripe) => Layer.succeed(StripeService, mockStripe);
+  const createTestLayer = (answer: (request: StripeRequest) => unknown) => fakeStripeHttp(answer);
 
   describe("create", () => {
-    it("should call stripe.terminal.connectionTokens.create with no params", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should create through the transport with no params", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const result = await Effect.runPromise(
         TerminalConnectionToken.create().pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.connectionTokens.create).toHaveBeenCalledWith(undefined);
+      expect(calls[0]).toEqual({
+        method: "POST",
+        path: "/v1/terminal/connection_tokens",
+        params: undefined,
+      });
       expect(result.secret).toBe("pst_test_123456789");
     });
 
-    it("should call stripe.terminal.connectionTokens.create with location param", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should create through the transport with location param", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const params = { location: "tml_123" };
 
@@ -46,7 +45,7 @@ describe("Terminal.ConnectionToken", () => {
         TerminalConnectionToken.create(params).pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.connectionTokens.create).toHaveBeenCalledWith(params);
+      expect(calls[0]).toEqual({ method: "POST", path: "/v1/terminal/connection_tokens", params });
       expect(result.location).toBe("tml_123");
     });
   });

@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as Subscription from "@thomasfosterau/effect-payments-stripe/Subscription";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createSubscription = (customerId: string, priceId: string) =>
  *   Subscription.create({
@@ -18,23 +19,25 @@
  *   return subscription;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a subscription
  */
 export const create = (
   params: Stripe.SubscriptionCreateParams,
-): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.subscriptions.create(params));
+): Effect.Effect<Stripe.Subscription, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/subscriptions", params);
 
 /**
  * Retrieve a subscription
@@ -42,8 +45,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.SubscriptionRetrieveParams,
-): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.subscriptions.retrieve(id, params));
+): Effect.Effect<Stripe.Subscription, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/subscriptions/${id}`, params);
 
 /**
  * Update a subscription
@@ -51,8 +54,8 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.SubscriptionUpdateParams,
-): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.subscriptions.update(id, params));
+): Effect.Effect<Stripe.Subscription, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/subscriptions/${id}`, params);
 
 /**
  * Cancel a subscription
@@ -60,13 +63,13 @@ export const update = (
 export const cancel = (
   id: string,
   params?: Stripe.SubscriptionCancelParams,
-): Effect.Effect<Stripe.Subscription, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.subscriptions.cancel(id, params));
+): Effect.Effect<Stripe.Subscription, StripeError, StripeHttp> =>
+  stripeRequest("DELETE", path`/v1/subscriptions/${id}`, params);
 
 /**
  * List subscriptions
  */
 export const list = (
   params?: Stripe.SubscriptionListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Subscription>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.subscriptions.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Subscription>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/subscriptions", params);

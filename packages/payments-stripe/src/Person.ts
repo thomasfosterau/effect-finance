@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as Person from "@thomasfosterau/effect-payments-stripe/Person";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createPerson = (accountId: string) =>
  *   Person.create(accountId, {
@@ -18,15 +19,17 @@
  *   return person;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a person
@@ -34,8 +37,8 @@ import type { StripeService } from "./Stripe.js";
 export const create = (
   accountId: string,
   params: Stripe.PersonCreateParams,
-): Effect.Effect<Stripe.Person, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.accounts.createPerson(accountId, params));
+): Effect.Effect<Stripe.Person, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/accounts/${accountId}/persons`, params);
 
 /**
  * Retrieve a person
@@ -44,8 +47,8 @@ export const retrieve = (
   accountId: string,
   id: string,
   params?: Stripe.PersonRetrieveParams,
-): Effect.Effect<Stripe.Person, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.accounts.retrievePerson(accountId, id, params));
+): Effect.Effect<Stripe.Person, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/accounts/${accountId}/persons/${id}`, params);
 
 /**
  * Update a person
@@ -54,8 +57,8 @@ export const update = (
   accountId: string,
   id: string,
   params?: Stripe.PersonUpdateParams,
-): Effect.Effect<Stripe.Person, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.accounts.updatePerson(accountId, id, params));
+): Effect.Effect<Stripe.Person, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/accounts/${accountId}/persons/${id}`, params);
 
 /**
  * Delete a person
@@ -63,8 +66,8 @@ export const update = (
 export const del = (
   accountId: string,
   id: string,
-): Effect.Effect<Stripe.DeletedPerson, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.accounts.deletePerson(accountId, id));
+): Effect.Effect<Stripe.DeletedPerson, StripeError, StripeHttp> =>
+  stripeRequest("DELETE", path`/v1/accounts/${accountId}/persons/${id}`);
 
 /**
  * List persons
@@ -72,5 +75,5 @@ export const del = (
 export const list = (
   accountId: string,
   params?: Stripe.PersonListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Person>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.accounts.listPersons(accountId, params));
+): Effect.Effect<Stripe.ApiList<Stripe.Person>, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/accounts/${accountId}/persons`, params);

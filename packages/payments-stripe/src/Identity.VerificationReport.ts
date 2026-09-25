@@ -3,24 +3,27 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as IdentityVerificationReport from "@thomasfosterau/effect-payments-stripe/Identity.VerificationReport";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const program = Effect.gen(function* () {
  *   const report = yield* IdentityVerificationReport.retrieve("vr_123");
  *   return report;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a verification report
@@ -33,8 +36,8 @@ import type { StripeService } from "./Stripe.js";
 export const retrieve = (
   id: string,
   params?: Stripe.Identity.VerificationReportRetrieveParams,
-): Effect.Effect<Stripe.Identity.VerificationReport, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.identity.verificationReports.retrieve(id, params));
+): Effect.Effect<Stripe.Identity.VerificationReport, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/identity/verification_reports/${id}`, params);
 
 /**
  * List verification reports
@@ -49,5 +52,5 @@ export const retrieve = (
  */
 export const list = (
   params?: Stripe.Identity.VerificationReportListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Identity.VerificationReport>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.identity.verificationReports.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Identity.VerificationReport>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/identity/verification_reports", params);

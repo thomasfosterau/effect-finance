@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as Transaction from "@thomasfosterau/effect-payments-stripe/Treasury.Transaction";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const getTransaction = (id: string) => Transaction.retrieve(id);
  *
@@ -14,15 +15,17 @@
  *   return transaction;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a transaction
@@ -30,13 +33,13 @@ import type { StripeService } from "./Stripe.js";
 export const retrieve = (
   id: string,
   params?: Stripe.Treasury.TransactionRetrieveParams,
-): Effect.Effect<Stripe.Treasury.Transaction, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.treasury.transactions.retrieve(id, params));
+): Effect.Effect<Stripe.Treasury.Transaction, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/treasury/transactions/${id}`, params);
 
 /**
  * List transactions
  */
 export const list = (
   params: Stripe.Treasury.TransactionListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Treasury.Transaction>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.treasury.transactions.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Treasury.Transaction>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/treasury/transactions", params);

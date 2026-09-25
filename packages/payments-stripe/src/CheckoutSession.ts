@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as CheckoutSession from "@thomasfosterau/effect-payments-stripe/CheckoutSession";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createSession = (priceId: string, successUrl: string, cancelUrl: string) =>
  *   CheckoutSession.create({
@@ -20,23 +21,25 @@
  *   return session;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a checkout session
  */
 export const create = (
   params: Stripe.Checkout.SessionCreateParams,
-): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.checkout.sessions.create(params));
+): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/checkout/sessions", params);
 
 /**
  * Retrieve a checkout session
@@ -44,8 +47,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.Checkout.SessionRetrieveParams,
-): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.checkout.sessions.retrieve(id, params));
+): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/checkout/sessions/${id}`, params);
 
 /**
  * Expire a checkout session
@@ -53,13 +56,13 @@ export const retrieve = (
 export const expire = (
   id: string,
   params?: Stripe.Checkout.SessionExpireParams,
-): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.checkout.sessions.expire(id, params));
+): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/checkout/sessions/${id}/expire`, params);
 
 /**
  * List checkout sessions
  */
 export const list = (
   params?: Stripe.Checkout.SessionListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Checkout.Session>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.checkout.sessions.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Checkout.Session>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/checkout/sessions", params);

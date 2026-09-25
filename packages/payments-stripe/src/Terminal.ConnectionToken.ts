@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as TerminalConnectionToken from "@thomasfosterau/effect-payments-stripe/Terminal.ConnectionToken";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createToken = (locationId?: string) =>
  *   TerminalConnectionToken.create(
@@ -17,15 +18,17 @@
  *   return token;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a terminal connection token
@@ -36,5 +39,5 @@ import type { StripeService } from "./Stripe.js";
  */
 export const create = (
   params?: Stripe.Terminal.ConnectionTokenCreateParams,
-): Effect.Effect<Stripe.Terminal.ConnectionToken, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.terminal.connectionTokens.create(params));
+): Effect.Effect<Stripe.Terminal.ConnectionToken, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/terminal/connection_tokens", params);

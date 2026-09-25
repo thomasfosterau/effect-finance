@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as Review from "@thomasfosterau/effect-payments-stripe/Review";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const program = Effect.gen(function* () {
  *   const review = yield* Review.retrieve("prv_123");
@@ -13,15 +14,17 @@
  *   return approved;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a review
@@ -29,16 +32,16 @@ import type { StripeService } from "./Stripe.js";
 export const retrieve = (
   id: string,
   params?: Stripe.ReviewRetrieveParams,
-): Effect.Effect<Stripe.Review, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.reviews.retrieve(id, params));
+): Effect.Effect<Stripe.Review, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/reviews/${id}`, params);
 
 /**
  * List reviews
  */
 export const list = (
   params?: Stripe.ReviewListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Review>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.reviews.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Review>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/reviews", params);
 
 /**
  * Approve a review
@@ -46,5 +49,5 @@ export const list = (
 export const approve = (
   id: string,
   params?: Stripe.ReviewApproveParams,
-): Effect.Effect<Stripe.Review, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.reviews.approve(id, params));
+): Effect.Effect<Stripe.Review, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/reviews/${id}/approve`, params);

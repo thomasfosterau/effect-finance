@@ -1,9 +1,14 @@
 /**
  * Webhook utilities for verifying and processing Stripe webhook events
  *
+ * These wrap the official SDK's verifier, so they need its client
+ * ({@link StripeService}) from the optional SDK transport (`Stripe.layer`) and
+ * the optional `stripe` peer installed. A WebCrypto verifier that needs
+ * neither becomes the default in #41.
+ *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Redacted } from "effect";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
  * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
@@ -25,7 +30,7 @@
  *     return event;
  *   });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
  * const result = await Effect.runPromise(
  *   handleWebhook(payload, signature).pipe(Effect.provide(layer))
  * );
@@ -36,7 +41,7 @@ import { Effect } from "effect";
 import type Stripe from "stripe";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
 import { omitUndefined } from "./internal/omitUndefined.js";
-import { StripeService } from "./Stripe.js";
+import { StripeService } from "./internal/sdk.js";
 
 /**
  * Configuration for webhook verification
@@ -67,7 +72,7 @@ export interface WebhookConfig {
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Redacted } from "effect";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
  * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
@@ -81,7 +86,7 @@ export interface WebhookConfig {
  *   return event;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
  * await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
@@ -123,7 +128,7 @@ export const constructEvent = (
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Redacted } from "effect";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
  * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
@@ -137,7 +142,7 @@ export const constructEvent = (
  *   return event;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
  * await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
@@ -179,7 +184,7 @@ export const constructEventAsync = (
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Redacted } from "effect";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
  * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
@@ -193,7 +198,7 @@ export const constructEventAsync = (
  *   return event;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
  * await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
@@ -239,7 +244,7 @@ export const generateTestHeaderString = (
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Redacted } from "effect";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
  * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
@@ -260,7 +265,7 @@ export const generateTestHeaderString = (
  *   return event;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
  * await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */

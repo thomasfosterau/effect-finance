@@ -171,9 +171,6 @@ importers:
       '@thomasfosterau/effect-payments':
         specifier: workspace:^
         version: link:../payments
-      stripe:
-        specifier: 'catalog:'
-        version: 17.7.0
     devDependencies:
       '@effect/language-service':
         specifier: 'catalog:'
@@ -187,6 +184,9 @@ importers:
       effect:
         specifier: 4.0.0-rc.115
         version: 4.0.0-rc.115
+      stripe:
+        specifier: 'catalog:'
+        version: 17.7.0
 
   tests/dist-consumer:
     dependencies:

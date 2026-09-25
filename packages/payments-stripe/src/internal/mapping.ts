@@ -1,15 +1,19 @@
 /**
- * Translation between Stripe SDK objects and vendor-neutral payments entities.
+ * Translation between Stripe's wire objects and vendor-neutral payments
+ * entities.
  *
- * Stripe is the source of truth here, so entities are constructed with schema
- * validation disabled — we trust the SDK's shapes rather than re-decoding them
- * on every call.
+ * Each Stripe object a capability layer reads is **decoded** with a `Schema`
+ * narrowed to the fields the mapping uses — the response is not trusted, and a
+ * 2xx whose body does not decode fails with {@link PaymentProviderError}
+ * rather than producing an entity built from `undefined`. Unknown fields are
+ * ignored, so a newer API version adding fields does not break decoding.
+ * Entities are then constructed with schema checks disabled: the vendor data
+ * has just been decoded.
  *
  * @module
  */
 
-import type { Schema } from "effect";
-import type Stripe from "stripe";
+import { Effect, Predicate, Schema } from "effect";
 import {
   Customer as CustomerNS,
   Product as ProductNS,
@@ -17,29 +21,142 @@ import {
   PaymentIntent as PaymentIntentNS,
   Subscription as SubscriptionNS,
   Refund as RefundNS,
+  PaymentProviderError,
   type Page,
 } from "@thomasfosterau/effect-payments";
+import { PROVIDER } from "./error.js";
 
-/**
- * Construct entities from trusted Stripe data without re-running the schema
- * checks (the provider's own response is the source of truth).
- */
+/** The vendor data was decoded just before construction. */
 const TRUSTED: Schema.MakeOptions = { disableChecks: true };
 
-/** Extract the id of a possibly-expanded Stripe reference. */
-const idOf = (value: string | { readonly id: string } | null | undefined): string | null => {
+// ---------------------------------------------------------------------------
+// Wire shapes
+// ---------------------------------------------------------------------------
+
+/** A reference Stripe may return as an id or, when expanded, as the object. */
+const Ref = Schema.Union([Schema.String, Schema.Struct({ id: Schema.String })]);
+
+/** An optional, nullable field. */
+const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema));
+
+const Metadata = Maybe(Schema.Record(Schema.String, Schema.String));
+
+/** `{ id, deleted: true }` — Stripe's answer to a delete, and to reading a deleted object. */
+const StripeDeleted = Schema.Struct({ id: Schema.String, deleted: Schema.Literal(true) });
+
+const StripeCustomer = Schema.Struct({
+  id: Schema.String,
+  email: Maybe(Schema.String),
+  name: Maybe(Schema.String),
+  phone: Maybe(Schema.String),
+  description: Maybe(Schema.String),
+  metadata: Metadata,
+  created: Schema.Number,
+  livemode: Schema.Boolean,
+});
+
+/** A customer read back may be the deleted stub. */
+const StripeCustomerOrDeleted = Schema.Union([StripeDeleted, StripeCustomer]);
+
+const StripeProduct = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  description: Maybe(Schema.String),
+  active: Schema.Boolean,
+  metadata: Metadata,
+  created: Schema.Number,
+});
+
+const StripePrice = Schema.Struct({
+  id: Schema.String,
+  product: Maybe(Ref),
+  active: Schema.Boolean,
+  currency: Schema.String,
+  unit_amount: Maybe(Schema.Number),
+  type: Schema.Literals(["one_time", "recurring"]),
+  recurring: Maybe(
+    Schema.Struct({
+      interval: PriceNS.RecurringInterval,
+      interval_count: Schema.Number,
+    }),
+  ),
+  metadata: Metadata,
+  created: Schema.Number,
+});
+
+const StripePaymentIntent = Schema.Struct({
+  id: Schema.String,
+  amount: Schema.Number,
+  currency: Schema.String,
+  status: PaymentIntentNS.PaymentStatus,
+  customer: Maybe(Ref),
+  payment_method: Maybe(Ref),
+  client_secret: Maybe(Schema.String),
+  description: Maybe(Schema.String),
+  metadata: Metadata,
+  created: Schema.Number,
+});
+
+/**
+ * A subscription. The billing period moved from the subscription onto its
+ * items in API version 2025-03-31 ("basil"); both are decoded and the first
+ * item's period is preferred, so the mapping holds on either side of that
+ * version.
+ */
+const StripeSubscription = Schema.Struct({
+  id: Schema.String,
+  customer: Ref,
+  status: SubscriptionNS.SubscriptionStatus,
+  items: Schema.Struct({
+    data: Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        price: Schema.Struct({ id: Schema.String }),
+        quantity: Maybe(Schema.Number),
+        current_period_start: Maybe(Schema.Number),
+        current_period_end: Maybe(Schema.Number),
+      }),
+    ),
+  }),
+  current_period_start: Maybe(Schema.Number),
+  current_period_end: Maybe(Schema.Number),
+  cancel_at_period_end: Schema.Boolean,
+  metadata: Metadata,
+  created: Schema.Number,
+});
+
+const StripeRefund = Schema.Struct({
+  id: Schema.String,
+  amount: Schema.Number,
+  currency: Schema.String,
+  status: Maybe(RefundNS.RefundStatus),
+  payment_intent: Maybe(Ref),
+  charge: Maybe(Ref),
+  reason: Maybe(Schema.String),
+  metadata: Metadata,
+  created: Schema.Number,
+});
+
+/** A list page: `{ object: "list", data, has_more }`. */
+const StripeList = <S extends Schema.Top>(item: S) =>
+  Schema.Struct({ data: Schema.Array(item), has_more: Schema.Boolean });
+
+// ---------------------------------------------------------------------------
+// Mapping
+// ---------------------------------------------------------------------------
+
+/** The id of a possibly-expanded reference. */
+const idOf = (value: typeof Ref.Type | null | undefined): string | null => {
   if (value == null) return null;
-  return typeof value === "string" ? value : value.id;
+  return Predicate.isString(value) ? value : value.id;
 };
 
-const metadataOf = (metadata: Stripe.Metadata | null | undefined): Record<string, string> =>
-  metadata ?? {};
+const metadataOf = (metadata: typeof Metadata.Type) => ({
+  ...metadata,
+});
 
-/** Map a Stripe customer (or deleted customer) to the neutral entity. */
-export const toCustomer = (
-  customer: Stripe.Customer | Stripe.DeletedCustomer,
-): CustomerNS.Customer => {
-  if ("deleted" in customer && customer.deleted) {
+const toCustomer = (customer: typeof StripeCustomerOrDeleted.Type): CustomerNS.Customer => {
+  if ("deleted" in customer) {
     return new CustomerNS.Customer(
       {
         id: customer.id,
@@ -69,8 +186,7 @@ export const toCustomer = (
   );
 };
 
-/** Map a Stripe product to the neutral entity. */
-export const toProduct = (product: Stripe.Product): ProductNS.Product =>
+const toProduct = (product: typeof StripeProduct.Type): ProductNS.Product =>
   new ProductNS.Product(
     {
       id: product.id,
@@ -83,8 +199,7 @@ export const toProduct = (product: Stripe.Product): ProductNS.Product =>
     TRUSTED,
   );
 
-/** Map a Stripe price to the neutral entity. */
-export const toPrice = (price: Stripe.Price): PriceNS.Price =>
+const toPrice = (price: typeof StripePrice.Type): PriceNS.Price =>
   new PriceNS.Price(
     {
       id: price.id,
@@ -108,8 +223,7 @@ export const toPrice = (price: Stripe.Price): PriceNS.Price =>
     TRUSTED,
   );
 
-/** Map a Stripe payment intent to the neutral entity. */
-export const toPaymentIntent = (intent: Stripe.PaymentIntent): PaymentIntentNS.PaymentIntent =>
+const toPaymentIntent = (intent: typeof StripePaymentIntent.Type): PaymentIntentNS.PaymentIntent =>
   new PaymentIntentNS.PaymentIntent(
     {
       id: intent.id,
@@ -126,9 +240,18 @@ export const toPaymentIntent = (intent: Stripe.PaymentIntent): PaymentIntentNS.P
     TRUSTED,
   );
 
-/** Map a Stripe subscription to the neutral entity. */
-export const toSubscription = (subscription: Stripe.Subscription): SubscriptionNS.Subscription =>
-  new SubscriptionNS.Subscription(
+/**
+ * A subscription's entity, or `undefined` when it carries no billing period
+ * on its first item or on itself — a shape no API version produces.
+ */
+const toSubscription = (
+  subscription: typeof StripeSubscription.Type,
+): SubscriptionNS.Subscription | undefined => {
+  const first = subscription.items.data[0];
+  const start = first?.current_period_start ?? subscription.current_period_start;
+  const end = first?.current_period_end ?? subscription.current_period_end;
+  if (start == null || end == null) return undefined;
+  return new SubscriptionNS.Subscription(
     {
       id: subscription.id,
       customerId: idOf(subscription.customer) ?? "",
@@ -136,33 +259,27 @@ export const toSubscription = (subscription: Stripe.Subscription): SubscriptionN
       items: subscription.items.data.map(
         (item) =>
           new SubscriptionNS.SubscriptionItem(
-            {
-              id: item.id,
-              priceId: item.price.id,
-              quantity: item.quantity ?? null,
-            },
+            { id: item.id, priceId: item.price.id, quantity: item.quantity ?? null },
             TRUSTED,
           ),
       ),
-      currentPeriodStart: subscription.current_period_start,
-      currentPeriodEnd: subscription.current_period_end,
+      currentPeriodStart: start,
+      currentPeriodEnd: end,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
       metadata: metadataOf(subscription.metadata),
       created: subscription.created,
     },
     TRUSTED,
   );
+};
 
-/** Map a Stripe refund to the neutral entity. */
-export const toRefund = (refund: Stripe.Refund): RefundNS.Refund =>
+const toRefund = (refund: typeof StripeRefund.Type): RefundNS.Refund =>
   new RefundNS.Refund(
     {
       id: refund.id,
       amount: refund.amount,
       currency: refund.currency,
-      // SAFETY: Stripe's refund statuses are exactly the neutral set
-      // (`pending`, `requires_action`, `succeeded`, `failed`, `canceled`).
-      status: (refund.status ?? "pending") as RefundNS.RefundStatus,
+      status: refund.status ?? "pending",
       paymentIntentId: idOf(refund.payment_intent),
       chargeId: idOf(refund.charge),
       reason: refund.reason ?? null,
@@ -172,8 +289,83 @@ export const toRefund = (refund: Stripe.Refund): RefundNS.Refund =>
     TRUSTED,
   );
 
-/** Map a Stripe list response into a neutral page. */
-export const toPage = <S, A>(list: Stripe.ApiList<S>, map: (value: S) => A): Page<A> => ({
-  data: list.data.map(map),
-  hasMore: list.has_more,
-});
+// ---------------------------------------------------------------------------
+// Decoders
+// ---------------------------------------------------------------------------
+
+const malformed = (what: string, cause?: unknown): PaymentProviderError =>
+  new PaymentProviderError({
+    message: `Stripe returned a malformed ${what} response`,
+    provider: PROVIDER,
+    cause,
+  });
+
+/**
+ * Decode a response body with `schema` and map it, failing with
+ * {@link PaymentProviderError} when it does not decode or does not map.
+ */
+const decoder =
+  <S extends Schema.Codec<unknown, unknown>, A>(
+    what: string,
+    schema: S,
+    map: (value: S["Type"]) => A | undefined,
+  ) =>
+  (body: unknown): Effect.Effect<A, PaymentProviderError> =>
+    Schema.decodeUnknownEffect(schema)(body).pipe(
+      Effect.mapError((cause) => malformed(what, cause)),
+      Effect.flatMap((value) => {
+        const mapped = map(value);
+        return mapped === undefined ? Effect.fail(malformed(what)) : Effect.succeed(mapped);
+      }),
+    );
+
+/** Decode a list page and map every item, as a neutral page. */
+const pageDecoder = <S extends Schema.Codec<unknown, unknown>, A>(
+  what: string,
+  item: S,
+  map: (value: S["Type"]) => A | undefined,
+) =>
+  decoder(`${what} list`, StripeList(item), (list): Page<A> | undefined => {
+    const data = list.data.map(map);
+    return data.every((value): value is A => value !== undefined)
+      ? { data, hasMore: list.has_more }
+      : undefined;
+  });
+
+/** A customer (or the deleted stub, read back). */
+export const decodeCustomer = decoder("customer", StripeCustomerOrDeleted, toCustomer);
+/** A page of customers. */
+export const decodeCustomerPage = pageDecoder("customer", StripeCustomer, toCustomer);
+/** The `{ id, deleted: true }` answer to a delete. */
+export const decodeDeleted = decoder("deletion", StripeDeleted, (deleted) => ({
+  id: deleted.id,
+  deleted: true as const,
+}));
+/** A product. */
+export const decodeProduct = decoder("product", StripeProduct, toProduct);
+/** A page of products. */
+export const decodeProductPage = pageDecoder("product", StripeProduct, toProduct);
+/** A price. */
+export const decodePrice = decoder("price", StripePrice, toPrice);
+/** A page of prices. */
+export const decodePricePage = pageDecoder("price", StripePrice, toPrice);
+/** A payment intent. */
+export const decodePaymentIntent = decoder("payment intent", StripePaymentIntent, toPaymentIntent);
+/** A page of payment intents. */
+export const decodePaymentIntentPage = pageDecoder(
+  "payment intent",
+  StripePaymentIntent,
+  toPaymentIntent,
+);
+/** A subscription. */
+export const decodeSubscription = decoder("subscription", StripeSubscription, toSubscription);
+/** A page of subscriptions. */
+export const decodeSubscriptionPage = pageDecoder(
+  "subscription",
+  StripeSubscription,
+  toSubscription,
+);
+/** A refund. */
+export const decodeRefund = decoder("refund", StripeRefund, toRefund);
+/** A page of refunds. */
+export const decodeRefundPage = pageDecoder("refund", StripeRefund, toRefund);

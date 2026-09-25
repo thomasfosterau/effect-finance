@@ -37,9 +37,13 @@ const onboard = (email: string, priceId: string) =>
 The **provider** is chosen at the edge of your application by providing a layer. Swapping providers means swapping the layer, not the program:
 
 ```typescript
+import { Layer, Redacted } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 
-const layer = StripePayments.layer({ apiKey: "sk_test_..." });
+const layer = StripePayments.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+  Layer.provide(FetchHttpClient.layer), // every provider speaks effect/unstable/http
+);
 
 const result = await Effect.runPromise(
   onboard("jane@example.com", "price_123").pipe(Effect.provide(layer)),
@@ -54,7 +58,7 @@ import { FetchHttpClient } from "effect/unstable/http";
 import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
 
 const layer = AirwallexPayments.layer({ clientId: "...", apiKey: "..." }).pipe(
-  Layer.provide(FetchHttpClient.layer), // the Airwallex and PayPal layers speak effect/unstable/http
+  Layer.provide(FetchHttpClient.layer),
 );
 ```
 
@@ -63,10 +67,10 @@ Providers may implement only the capabilities they support, and different provid
 ## Installation
 
 ```bash
-npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe effect stripe
+npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe effect
 ```
 
-`effect` is a peer dependency of both packages; `stripe` is required by the Stripe provider.
+`effect` is a peer dependency of every package. The Stripe provider talks to the API over `fetch` (through `effect/unstable/http`), with no Node API and no SDK, so it runs in a Cloudflare Worker. The official `stripe` package is an **optional** peer: install it (a dev dependency is enough) for the types the Stripe resource modules return, and as a runtime dependency only to use the SDK transport (`@thomasfosterau/effect-payments-stripe/Stripe`) or the SDK-based `Webhook` verifier.
 
 ## The vendor-neutral core
 
@@ -118,35 +122,42 @@ const program = Customer.create({ email: "jane@example.com" }).pipe(
 
 ### Providing the capabilities
 
-`StripePayments.layer` bundles the Stripe client and every capability so a neutral program can be satisfied with a single `Effect.provide`:
+`StripePayments.layer` bundles the fetch transport and every capability so a neutral program can be satisfied with a single `Effect.provide` (plus an `HttpClient`):
 
 ```typescript
+import { Layer, Redacted } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 
 const layer = StripePayments.layer({
-  apiKey: "sk_test_...",
+  apiKey: Redacted.make("sk_test_..."),
+  apiVersion: "2025-08-27.basil", // pinned in Stripe-Version; defaults to 2025-02-24.acacia
   maxNetworkRetries: 3,
   timeout: 10_000,
-});
+}).pipe(Layer.provide(FetchHttpClient.layer));
 
-// Or from an environment variable (STRIPE_API_KEY by default):
-const layer = StripePayments.layerFromEnv();
+// Or from a configuration variable (STRIPE_API_KEY by default), read as a Redacted:
+const fromEnv = StripePayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 ```
 
-For finer control, `StripePayments.capabilities` provides every capability but requires a `StripeService`, and individual layers (`StripePayments.customersLayer`, etc.) are exported too. The `Stripe` module provides just the client (`Stripe.layer` / `Stripe.layerFromEnv` / `Stripe.make`).
+The transport is `StripeHttp`: form-encoded bodies with Stripe's bracketed nesting, a pinned `Stripe-Version`, the key as a `Redacted` bearer token, redirects refused, the SDK's retry policy (connection failures, `409`, `5xx`, `Stripe-Should-Retry`) with one `Idempotency-Key` across the attempts of a `POST`, and Stripe's error envelope decoded onto the neutral errors. Tests stub `FetchHttpClient.Fetch`.
+
+For finer control, `StripePayments.capabilities` provides every capability over an existing `StripeHttp`, and individual layers (`StripePayments.customersLayer`, etc.) are exported too. To run on the official SDK instead, provide the capabilities with `Stripe.layer` (from `@thomasfosterau/effect-payments-stripe/Stripe`), which builds an SDK client and provides `StripeHttp` over it.
 
 ### The Stripe escape hatch
 
-The neutral core deliberately covers only concepts common to payment providers. Stripe-specific resources — Treasury, Issuing, Terminal, Identity, Connect, Invoices, Checkout, and many more — remain available as full-fidelity modules that return Stripe SDK types directly:
+The neutral core deliberately covers only concepts common to payment providers. Stripe-specific resources — Treasury, Issuing, Terminal, Identity, Connect, Invoices, Checkout, and many more — remain available as full-fidelity modules, typed with the `stripe` package's declarations:
 
 ```typescript
 import * as Treasury from "@thomasfosterau/effect-payments-stripe/Treasury";
 import * as Invoice from "@thomasfosterau/effect-payments-stripe/Invoice";
 ```
 
-These require the `Stripe` service (provided by any of the layers above) and fail with the neutral `PaymentsError` channel.
+These require the `StripeHttp` transport (from `StripeHttp.layer`, or `Stripe.layer` for the SDK) and fail with the neutral `PaymentsError` channel.
 
 ### Webhooks
+
+`Webhook` wraps the SDK's verifier today, so it needs the SDK client from `Stripe.layer`; a WebCrypto verifier becomes the default in #41.
 
 ```typescript
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
@@ -183,4 +194,4 @@ MIT © Thomas Foster
 
 ## Acknowledgments
 
-Built with [Effect](https://effect.website/) and the [Stripe Node.js SDK](https://github.com/stripe/stripe-node). The two-package shape is inspired by [`@effect/ai`](https://effect.website/docs/ai/introduction/).
+Built with [Effect](https://effect.website/); the optional SDK transport uses the [Stripe Node.js SDK](https://github.com/stripe/stripe-node). The two-package shape is inspired by [`@effect/ai`](https://effect.website/docs/ai/introduction/).

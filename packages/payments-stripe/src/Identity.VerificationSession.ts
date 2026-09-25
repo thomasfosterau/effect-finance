@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as IdentityVerificationSession from "@thomasfosterau/effect-payments-stripe/Identity.VerificationSession";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createSession = (type: "document" | "id_number") =>
  *   IdentityVerificationSession.create({ type });
@@ -15,15 +16,17 @@
  *   return session;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a verification session
@@ -38,8 +41,8 @@ import type { StripeService } from "./Stripe.js";
  */
 export const create = (
   params: Stripe.Identity.VerificationSessionCreateParams,
-): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.identity.verificationSessions.create(params));
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/identity/verification_sessions", params);
 
 /**
  * Retrieve a verification session
@@ -52,8 +55,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.Identity.VerificationSessionRetrieveParams,
-): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.identity.verificationSessions.retrieve(id, params));
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/identity/verification_sessions/${id}`, params);
 
 /**
  * Update a verification session
@@ -68,8 +71,8 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.Identity.VerificationSessionUpdateParams,
-): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.identity.verificationSessions.update(id, params));
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/identity/verification_sessions/${id}`, params);
 
 /**
  * Cancel a verification session
@@ -83,8 +86,8 @@ export const update = (
  */
 export const cancel = (
   id: string,
-): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.identity.verificationSessions.cancel(id));
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/identity/verification_sessions/${id}/cancel`);
 
 /**
  * Redact a verification session
@@ -100,8 +103,8 @@ export const cancel = (
  */
 export const redact = (
   id: string,
-): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.identity.verificationSessions.redact(id));
+): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/identity/verification_sessions/${id}/redact`);
 
 /**
  * List verification sessions
@@ -116,5 +119,5 @@ export const redact = (
  */
 export const list = (
   params?: Stripe.Identity.VerificationSessionListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Identity.VerificationSession>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.identity.verificationSessions.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Identity.VerificationSession>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/identity/verification_sessions", params);

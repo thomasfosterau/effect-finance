@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as Payout from "@thomasfosterau/effect-payments-stripe/Payout";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createPayout = (amount: number, currency: string) =>
  *   Payout.create({ amount, currency });
@@ -15,23 +16,25 @@
  *   return payout;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a payout
  */
 export const create = (
   params: Stripe.PayoutCreateParams,
-): Effect.Effect<Stripe.Payout, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.payouts.create(params));
+): Effect.Effect<Stripe.Payout, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/payouts", params);
 
 /**
  * Retrieve a payout
@@ -39,8 +42,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.PayoutRetrieveParams,
-): Effect.Effect<Stripe.Payout, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.payouts.retrieve(id, params));
+): Effect.Effect<Stripe.Payout, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/payouts/${id}`, params);
 
 /**
  * Update a payout
@@ -48,8 +51,8 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.PayoutUpdateParams,
-): Effect.Effect<Stripe.Payout, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.payouts.update(id, params));
+): Effect.Effect<Stripe.Payout, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/payouts/${id}`, params);
 
 /**
  * Cancel a payout
@@ -57,13 +60,13 @@ export const update = (
 export const cancel = (
   id: string,
   params?: Stripe.PayoutCancelParams,
-): Effect.Effect<Stripe.Payout, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.payouts.cancel(id, params));
+): Effect.Effect<Stripe.Payout, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/payouts/${id}/cancel`, params);
 
 /**
  * List payouts
  */
 export const list = (
   params?: Stripe.PayoutListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Payout>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.payouts.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Payout>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/payouts", params);

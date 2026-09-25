@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as PaymentMethod from "@thomasfosterau/effect-payments-stripe/PaymentMethod";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createPaymentMethod = (type: string) =>
  *   PaymentMethod.create({ type });
@@ -15,23 +16,25 @@
  *   return paymentMethod;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a payment method
  */
 export const create = (
   params: Stripe.PaymentMethodCreateParams,
-): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentMethods.create(params));
+): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/payment_methods", params);
 
 /**
  * Retrieve a payment method
@@ -39,8 +42,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.PaymentMethodRetrieveParams,
-): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentMethods.retrieve(id, params));
+): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/payment_methods/${id}`, params);
 
 /**
  * Update a payment method
@@ -48,8 +51,8 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.PaymentMethodUpdateParams,
-): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentMethods.update(id, params));
+): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/payment_methods/${id}`, params);
 
 /**
  * Attach a payment method to a customer
@@ -57,8 +60,8 @@ export const update = (
 export const attach = (
   id: string,
   params: Stripe.PaymentMethodAttachParams,
-): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentMethods.attach(id, params));
+): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/payment_methods/${id}/attach`, params);
 
 /**
  * Detach a payment method from a customer
@@ -66,13 +69,13 @@ export const attach = (
 export const detach = (
   id: string,
   params?: Stripe.PaymentMethodDetachParams,
-): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentMethods.detach(id, params));
+): Effect.Effect<Stripe.PaymentMethod, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/payment_methods/${id}/detach`, params);
 
 /**
  * List payment methods
  */
 export const list = (
   params: Stripe.PaymentMethodListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.PaymentMethod>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentMethods.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.PaymentMethod>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/payment_methods", params);
