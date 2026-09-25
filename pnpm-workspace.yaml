@@ -39,7 +39,7 @@ catalog:
   # before bumping any of the three.
   "@effect/tsgo": 0.45.0
   "@types/node": ^26.4.1
-  "@vitest/coverage-istanbul": 4.1.11
+  "@vitest/coverage-istanbul": 5.0.1
   # Effect 3 until #38 (slice 2 of #36) moves the workspace to 4.0.0-rc.115.
   effect: 3.22.2
   effect-solutions: ^0.5.3
