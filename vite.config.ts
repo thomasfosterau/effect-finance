@@ -103,12 +103,13 @@ export default defineConfig({
       // which parse a vendor value rather than read the clock.
       "effect/use-clock-service": "warn",
       // ---- Effect preset: rules this workspace's conventions cut across ----
-      // `prefer-option-over-null` also fires on `?: T | undefined`, which is
-      // the ONLY spelling of an optional member `exactOptionalPropertyTypes`
-      // lets a caller forward an optional of its own into (AGENTS.md). A bare
-      // `null` / `undefined` in a return type is still a finding to read; the
-      // options-object members are not.
-      "effect/prefer-option-over-null": "warn",
+      // `prefer-option-over-null` fires on `?: T | undefined`, which is the
+      // ONLY spelling of an optional member `exactOptionalPropertyTypes` lets
+      // a caller forward an optional of its own into — the spelling AGENTS.md
+      // mandates — and on the `null`s of the neutral entities' `NullOr`
+      // fields. Nearly every site is the convention, so the rule is off rather
+      // than a wall of warnings that hides the real ones.
+      "effect/prefer-option-over-null": "off",
       // `unknown` is the honest type at the vendor boundary: a thrown SDK
       // error handed to `handleStripeError`, a vendor error body before it is
       // mapped onto the neutral channel.

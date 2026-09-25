@@ -136,4 +136,65 @@ describe("Airwallex client", () => {
     );
     expect(error).toBeInstanceOf(PaymentConfigError);
   });
+  it("sends Content-Type: application/json on a bodyless POST", async () => {
+    const { http, calls } = stubFetch(() => new Response(null, { status: 204 }));
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        yield* client.request({ method: "POST", path: "/api/v1/pa/payment_intents/int_1/cancel" });
+      }).pipe(Effect.provide(http)),
+    );
+
+    const post = calls.find((c) => c.url.endsWith("/api/v1/pa/payment_intents/int_1/cancel"))!;
+    expect(post.method).toBe("POST");
+    expect(post.body).toBeUndefined();
+    expect(post.headers.get("content-type")).toBe("application/json");
+  });
+
+  it("logs in once for concurrent first requests", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        yield* Effect.all(
+          Array.from({ length: 5 }, () =>
+            client.request({ method: "GET", path: "/api/v1/pa/customers/cus_1" }),
+          ),
+          { concurrency: "unbounded" },
+        );
+      }).pipe(Effect.provide(http)),
+    );
+
+    expect(calls.filter((c) => c.url.endsWith(LOGIN_PATH))).toHaveLength(1);
+    expect(calls.filter((c) => c.url.endsWith("/api/v1/pa/customers/cus_1"))).toHaveLength(5);
+  });
+
+  it("forgets the cached token after a 401 and logs in again on the next call", async () => {
+    let resourceCalls = 0;
+    const { http, calls } = stubFetch(() => {
+      resourceCalls += 1;
+      return resourceCalls === 1
+        ? jsonResponse(401, { message: "token revoked" })
+        : jsonResponse(200, { id: "x" });
+    });
+
+    const second = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        const first = yield* Effect.flip(
+          client.request({ method: "GET", path: "/api/v1/pa/customers/cus_1" }),
+        );
+        expect(first).toBeInstanceOf(PaymentAuthenticationError);
+        return yield* client.request<{ id: string }>({
+          method: "GET",
+          path: "/api/v1/pa/customers/cus_1",
+        });
+      }).pipe(Effect.provide(http)),
+    );
+
+    expect(second.id).toBe("x");
+    expect(calls.filter((c) => c.url.endsWith(LOGIN_PATH))).toHaveLength(2);
+  });
 });

@@ -13,7 +13,18 @@
  * @module
  */
 
-import { Clock, Config, Context, DateTime, Effect, Layer, Option, Ref, Schema } from "effect";
+import {
+  Clock,
+  Config,
+  Context,
+  DateTime,
+  Effect,
+  Layer,
+  Option,
+  Ref,
+  Schema,
+  Semaphore,
+} from "effect";
 import { HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/unstable/http";
 import {
   PaymentConfigError,
@@ -103,6 +114,9 @@ export const make = (
     const http = yield* HttpClient.HttpClient;
     const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     const tokenRef = yield* Ref.make(Option.none<TokenState>());
+    // One login at a time: concurrent first calls (or calls racing an expiry)
+    // wait for the in-flight login and then reuse its token.
+    const tokenLock = yield* Semaphore.make(1);
 
     const execute = (
       request: HttpClientRequest.HttpClientRequest,
@@ -147,15 +161,18 @@ export const make = (
       return body.token;
     });
 
-    // Refresh a minute before expiry to avoid using a token mid-rotation.
-    const getToken: Effect.Effect<string, PaymentsError> = Effect.gen(function* () {
-      const current = yield* Ref.get(tokenRef);
-      const now = yield* Clock.currentTimeMillis;
-      if (Option.isSome(current) && current.value.expiresAt - 60_000 > now) {
-        return current.value.token;
-      }
-      return yield* login;
-    });
+    // Refresh a minute before expiry to avoid using a token mid-rotation. The
+    // check runs under `tokenLock`, so only the first caller logs in.
+    const getToken: Effect.Effect<string, PaymentsError> = tokenLock.withPermits(1)(
+      Effect.gen(function* () {
+        const current = yield* Ref.get(tokenRef);
+        const now = yield* Clock.currentTimeMillis;
+        if (Option.isSome(current) && current.value.expiresAt - 60_000 > now) {
+          return current.value.token;
+        }
+        return yield* login;
+      }),
+    );
 
     const request = <A>(req: AirwallexRequest): Effect.Effect<A, PaymentsError> =>
       Effect.gen(function* () {
@@ -163,9 +180,19 @@ export const make = (
         const base = HttpClientRequest.make(req.method)(
           buildUrl(baseUrl, req.path, req.query),
         ).pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.acceptJson);
+        // `Content-Type: application/json` goes on EVERY request, body or not,
+        // as it did before the move to HttpClient: PayPal answers a bodyless
+        // POST (`/v1/billing/plans/{id}/activate`) without it with 415.
         const response = yield* execute(
-          req.body != null ? HttpClientRequest.bodyJsonUnsafe(base, req.body) : base,
+          req.body != null
+            ? HttpClientRequest.bodyJsonUnsafe(base, req.body)
+            : HttpClientRequest.setHeader(base, "Content-Type", "application/json"),
         );
+        if (response.status === 401) {
+          // A revoked or rotated token: forget it, so the next call logs in
+          // again instead of replaying the rejected token until it expires.
+          yield* Ref.set(tokenRef, Option.none());
+        }
         if (!isOk(response.status)) {
           return yield* handleAirwallexError(
             response.status,
