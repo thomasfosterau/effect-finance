@@ -100,6 +100,9 @@ export default defineConfig({
       // Run this before `fallow audit` (the commit hook runs the audit).
       "test:coverage": {
         command: "vp test run --coverage",
+        // The provider suites resolve the core through its `exports` (its
+        // `dist/`), which a cold tree does not have yet.
+        dependsOn: ["@thomasfosterau/effect-payments#build"],
         cache: false,
       },
     },
