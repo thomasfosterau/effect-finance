@@ -167,7 +167,7 @@ const expressExample = () => {
       console.error("Webhook signature verification failed:", error.message);
       return Effect.succeed({ error: "Invalid signature" });
     }),
-    Effect.catchAll((error) => {
+    Effect.catch((error) => {
       console.error("Webhook processing failed:", error);
       return Effect.succeed({ error: "Processing failed" });
     }),

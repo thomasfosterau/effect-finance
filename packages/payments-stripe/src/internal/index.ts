@@ -1,4 +1,4 @@
-import { Effect, Request, RequestResolver } from "effect";
+import { Effect } from "effect";
 import Stripe from "stripe";
 import {
   PaymentAuthenticationError,
@@ -37,6 +37,7 @@ export const handleStripeError = (error: unknown): PaymentsError => {
       case "StripeRateLimitError": {
         // Extract retry-after information from headers
         // Stripe returns this in the "Retry-After" header
+        // SAFETY: `type` is the SDK's discriminant for its error subclasses.
         const rateLimitError = error as Stripe.errors.StripeRateLimitError;
         const headers = rateLimitError.headers;
         const retryAfterHeader = headers?.["Retry-After"] ?? headers?.["retry-after"];
@@ -50,6 +51,7 @@ export const handleStripeError = (error: unknown): PaymentsError => {
       case "StripeInvalidRequestError":
         return new PaymentInvalidRequestError({
           message,
+          // SAFETY: `type` is the SDK's discriminant for its error subclasses.
           param: (error as Stripe.errors.StripeInvalidRequestError).param,
           statusCode,
         });
@@ -78,32 +80,17 @@ export const handleStripeError = (error: unknown): PaymentsError => {
 };
 
 /**
- * Wraps a Stripe API call in an Effect with the Stripe service from context
+ * Run one Stripe SDK call against the {@link StripeService} in context,
+ * mapping a rejection onto the neutral error channel with
+ * {@link handleStripeError}. Every resource module's operations are one call
+ * to this.
  */
 export const wrapStripeCall = <A>(
   fn: (stripe: Stripe) => Promise<A>,
 ): Effect.Effect<A, StripeError, StripeService> =>
-  Effect.gen(function* () {
-    const stripe = yield* StripeService;
-    return yield* Effect.tryPromise({
+  Effect.flatMap(StripeService, (stripe) =>
+    Effect.tryPromise({
       try: () => fn(stripe),
       catch: handleStripeError,
-    });
-  });
-
-/**
- * Create a RequestResolver for Stripe API calls
- * The resolver accesses StripeService from context for each request.
- */
-export const makeStripeResolver = <R extends Request.Request<any, any>>(
-  execute: (stripe: Stripe, request: R) => Promise<Request.Request.Success<R>>,
-): RequestResolver.RequestResolver<R, StripeService> =>
-  RequestResolver.fromEffect((request: R) =>
-    Effect.gen(function* () {
-      const stripe = yield* StripeService;
-      return yield* Effect.tryPromise({
-        try: () => execute(stripe, request),
-        catch: handleStripeError,
-      }) as Effect.Effect<Request.Request.Success<R>, Request.Request.Error<R>, never>;
     }),
   );

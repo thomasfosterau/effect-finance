@@ -48,7 +48,7 @@ export interface ListParams {
 /**
  * The product capability.
  */
-export class Products extends Context.Tag("@effect-payments/Products")<
+export class Products extends Context.Service<
   Products,
   {
     readonly create: (params: CreateParams) => Effect.Effect<Product, PaymentsError>;
@@ -57,17 +57,23 @@ export class Products extends Context.Tag("@effect-payments/Products")<
     readonly del: (id: string) => Effect.Effect<Deleted, PaymentsError>;
     readonly list: (params?: ListParams) => Effect.Effect<Page<Product>, PaymentsError>;
   }
->() {}
-
-const accessors = Effect.serviceFunctions(Products);
+>()("@effect-payments/Products") {}
 
 /** Create a product. */
-export const create = accessors.create;
+export const create = (params: CreateParams): Effect.Effect<Product, PaymentsError, Products> =>
+  Effect.flatMap(Products, (service) => service.create(params));
 /** Retrieve a product by id. */
-export const retrieve = accessors.retrieve;
+export const retrieve = (id: string): Effect.Effect<Product, PaymentsError, Products> =>
+  Effect.flatMap(Products, (service) => service.retrieve(id));
 /** Update a product. */
-export const update = accessors.update;
+export const update = (
+  id: string,
+  params: UpdateParams,
+): Effect.Effect<Product, PaymentsError, Products> =>
+  Effect.flatMap(Products, (service) => service.update(id, params));
 /** Delete a product. */
-export const del = accessors.del;
+export const del = (id: string): Effect.Effect<Deleted, PaymentsError, Products> =>
+  Effect.flatMap(Products, (service) => service.del(id));
 /** List products. */
-export const list = accessors.list;
+export const list = (params?: ListParams): Effect.Effect<Page<Product>, PaymentsError, Products> =>
+  Effect.flatMap(Products, (service) => service.list(params));

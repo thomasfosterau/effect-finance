@@ -24,75 +24,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create an issuing card
- */
-interface CreateCardRequest extends Request.Request<Stripe.Issuing.Card, StripeError> {
-  readonly _tag: "CreateCardRequest";
-  readonly params: Stripe.Issuing.CardCreateParams;
-}
-
-const CreateCardRequest = Request.tagged<CreateCardRequest>("CreateCardRequest");
-
-const CreateCardResolver: RequestResolver.RequestResolver<CreateCardRequest, StripeService> =
-  makeStripeResolver<CreateCardRequest>((stripe, request) =>
-    stripe.issuing.cards.create(request.params),
-  );
-
-/**
- * Request to retrieve an issuing card
- */
-interface RetrieveCardRequest extends Request.Request<Stripe.Issuing.Card, StripeError> {
-  readonly _tag: "RetrieveCardRequest";
-  readonly id: string;
-  readonly params?: Stripe.Issuing.CardRetrieveParams | undefined;
-}
-
-const RetrieveCardRequest = Request.tagged<RetrieveCardRequest>("RetrieveCardRequest");
-
-const RetrieveCardResolver: RequestResolver.RequestResolver<RetrieveCardRequest, StripeService> =
-  makeStripeResolver<RetrieveCardRequest>((stripe, request) =>
-    stripe.issuing.cards.retrieve(request.id, request.params),
-  );
-
-/**
- * Request to update an issuing card
- */
-interface UpdateCardRequest extends Request.Request<Stripe.Issuing.Card, StripeError> {
-  readonly _tag: "UpdateCardRequest";
-  readonly id: string;
-  readonly params?: Stripe.Issuing.CardUpdateParams | undefined;
-}
-
-const UpdateCardRequest = Request.tagged<UpdateCardRequest>("UpdateCardRequest");
-
-const UpdateCardResolver: RequestResolver.RequestResolver<UpdateCardRequest, StripeService> =
-  makeStripeResolver<UpdateCardRequest>((stripe, request) =>
-    stripe.issuing.cards.update(request.id, request.params),
-  );
-
-/**
- * Request to list issuing cards
- */
-interface ListCardsRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Issuing.Card>,
-  StripeError
-> {
-  readonly _tag: "ListCardsRequest";
-  readonly params?: Stripe.Issuing.CardListParams | undefined;
-}
-
-const ListCardsRequest = Request.tagged<ListCardsRequest>("ListCardsRequest");
-
-const ListCardsResolver: RequestResolver.RequestResolver<ListCardsRequest, StripeService> =
-  makeStripeResolver<ListCardsRequest>((stripe, request) =>
-    stripe.issuing.cards.list(request.params),
-  );
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create an issuing card
@@ -100,10 +35,7 @@ const ListCardsResolver: RequestResolver.RequestResolver<ListCardsRequest, Strip
 export const create = (
   params: Stripe.Issuing.CardCreateParams,
 ): Effect.Effect<Stripe.Issuing.Card, StripeError, StripeService> =>
-  Effect.request(
-    CreateCardRequest({ params }),
-    RequestResolver.contextFromEffect(CreateCardResolver),
-  );
+  wrapStripeCall((stripe) => stripe.issuing.cards.create(params));
 
 /**
  * Retrieve an issuing card
@@ -112,10 +44,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.Issuing.CardRetrieveParams,
 ): Effect.Effect<Stripe.Issuing.Card, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveCardRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveCardResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.issuing.cards.retrieve(id, params));
 
 /**
  * Update an issuing card
@@ -124,10 +53,7 @@ export const update = (
   id: string,
   params?: Stripe.Issuing.CardUpdateParams,
 ): Effect.Effect<Stripe.Issuing.Card, StripeError, StripeService> =>
-  Effect.request(
-    UpdateCardRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateCardResolver),
-  );
+  wrapStripeCall((stripe) => stripe.issuing.cards.update(id, params));
 
 /**
  * List issuing cards
@@ -135,7 +61,4 @@ export const update = (
 export const list = (
   params?: Stripe.Issuing.CardListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Card>, StripeError, StripeService> =>
-  Effect.request(
-    ListCardsRequest({ params }),
-    RequestResolver.contextFromEffect(ListCardsResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.issuing.cards.list(params));

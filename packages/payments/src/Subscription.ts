@@ -12,7 +12,7 @@ import type { PaymentsError } from "./PaymentsError.js";
 /**
  * The status of a subscription, normalized across providers.
  */
-export const SubscriptionStatus = Schema.Literal(
+export const SubscriptionStatus = Schema.Literals([
   "active",
   "past_due",
   "unpaid",
@@ -21,8 +21,8 @@ export const SubscriptionStatus = Schema.Literal(
   "incomplete_expired",
   "trialing",
   "paused",
-);
-export type SubscriptionStatus = Schema.Schema.Type<typeof SubscriptionStatus>;
+]);
+export type SubscriptionStatus = typeof SubscriptionStatus.Type;
 
 /** A single line item of a subscription, billed against a price. */
 export class SubscriptionItem extends Schema.Class<SubscriptionItem>(
@@ -82,7 +82,7 @@ export interface ListParams {
 /**
  * The subscription capability.
  */
-export class Subscriptions extends Context.Tag("@effect-payments/Subscriptions")<
+export class Subscriptions extends Context.Service<
   Subscriptions,
   {
     readonly create: (params: CreateParams) => Effect.Effect<Subscription, PaymentsError>;
@@ -94,17 +94,27 @@ export class Subscriptions extends Context.Tag("@effect-payments/Subscriptions")
     readonly cancel: (id: string) => Effect.Effect<Subscription, PaymentsError>;
     readonly list: (params?: ListParams) => Effect.Effect<Page<Subscription>, PaymentsError>;
   }
->() {}
-
-const accessors = Effect.serviceFunctions(Subscriptions);
+>()("@effect-payments/Subscriptions") {}
 
 /** Create a subscription. */
-export const create = accessors.create;
+export const create = (
+  params: CreateParams,
+): Effect.Effect<Subscription, PaymentsError, Subscriptions> =>
+  Effect.flatMap(Subscriptions, (service) => service.create(params));
 /** Retrieve a subscription by id. */
-export const retrieve = accessors.retrieve;
+export const retrieve = (id: string): Effect.Effect<Subscription, PaymentsError, Subscriptions> =>
+  Effect.flatMap(Subscriptions, (service) => service.retrieve(id));
 /** Update a subscription. */
-export const update = accessors.update;
+export const update = (
+  id: string,
+  params: UpdateParams,
+): Effect.Effect<Subscription, PaymentsError, Subscriptions> =>
+  Effect.flatMap(Subscriptions, (service) => service.update(id, params));
 /** Cancel a subscription. */
-export const cancel = accessors.cancel;
+export const cancel = (id: string): Effect.Effect<Subscription, PaymentsError, Subscriptions> =>
+  Effect.flatMap(Subscriptions, (service) => service.cancel(id));
 /** List subscriptions. */
-export const list = accessors.list;
+export const list = (
+  params?: ListParams,
+): Effect.Effect<Page<Subscription>, PaymentsError, Subscriptions> =>
+  Effect.flatMap(Subscriptions, (service) => service.list(params));

@@ -8,6 +8,7 @@
  */
 
 import type { Effect, Layer } from "effect";
+import type { HttpClient } from "effect/unstable/http";
 import type Stripe from "stripe";
 import {
   money,
@@ -54,13 +55,13 @@ export const event = Webhook.constructEvent("{}", "t=1,v1=sig", "whsec_123");
  * failing one names itself in the error.
  */
 export type Checks = [
-  /** _createSucceeds */ Assert<Equals<Effect.Effect.Success<typeof created>, Customer.Customer>>,
-  /** _createFails */ Assert<Equals<Effect.Effect.Error<typeof created>, PaymentsError>>,
-  /** _createRequires */ Assert<Equals<Effect.Effect.Context<typeof created>, Customer.Customers>>,
-  /** _listPages */ Assert<Equals<Effect.Effect.Success<typeof listed>, Page<Customer.Customer>>>,
+  /** _createSucceeds */ Assert<Equals<Effect.Success<typeof created>, Customer.Customer>>,
+  /** _createFails */ Assert<Equals<Effect.Error<typeof created>, PaymentsError>>,
+  /** _createRequires */ Assert<Equals<Effect.Services<typeof created>, Customer.Customers>>,
+  /** _listPages */ Assert<Equals<Effect.Success<typeof listed>, Page<Customer.Customer>>>,
   /** _stripeProvides */ Assert<
     Equals<
-      Layer.Layer.Success<typeof stripeLayer>,
+      Layer.Success<typeof stripeLayer>,
       | Customer.Customers
       | Product.Products
       | Price.Prices
@@ -69,23 +70,27 @@ export type Checks = [
       | Refund.Refunds
     >
   >,
-  /** _stripeFailsWithConfig */ Assert<
-    Equals<Layer.Layer.Error<typeof stripeLayer>, PaymentConfigError>
-  >,
+  /** _stripeFailsWithConfig */ Assert<Equals<Layer.Error<typeof stripeLayer>, PaymentConfigError>>,
   /** _paypalProvidesRefunds */ Assert<
-    Refund.Refunds extends Layer.Layer.Success<typeof paypalLayer> ? true : false
+    Refund.Refunds extends Layer.Success<typeof paypalLayer> ? true : false
   >,
   /** _paypalHasNoCustomers */ Assert<
-    Customer.Customers extends Layer.Layer.Success<typeof paypalLayer> ? false : true
+    Customer.Customers extends Layer.Success<typeof paypalLayer> ? false : true
   >,
   /** _airwallexProvidesCustomers */ Assert<
-    Customer.Customers extends Layer.Layer.Success<typeof airwallexLayer> ? true : false
+    Customer.Customers extends Layer.Success<typeof airwallexLayer> ? true : false
   >,
   /** _stripeResourceRequiresClient */ Assert<
-    Equals<Effect.Effect.Context<typeof stripeCustomer>, StripeService>
+    Equals<Effect.Services<typeof stripeCustomer>, StripeService>
   >,
-  /** _webhookEvent */ Assert<Equals<Effect.Effect.Success<typeof event>, Stripe.Event>>,
-  /** _webhookFails */ Assert<
-    Equals<Effect.Effect.Error<typeof event>, SignatureVerificationError>
+  /** _webhookEvent */ Assert<Equals<Effect.Success<typeof event>, Stripe.Event>>,
+  /** _stripeNeedsNothing */ Assert<Equals<Layer.Services<typeof stripeLayer>, never>>,
+  /** _paypalNeedsHttpClient */ Assert<
+    Equals<Layer.Services<typeof paypalLayer>, HttpClient.HttpClient>
   >,
+  /** _airwallexNeedsHttpClient */ Assert<
+    Equals<Layer.Services<typeof airwallexLayer>, HttpClient.HttpClient>
+  >,
+  /** _paypalFailsWithConfig */ Assert<Equals<Layer.Error<typeof paypalLayer>, PaymentConfigError>>,
+  /** _webhookFails */ Assert<Equals<Effect.Error<typeof event>, SignatureVerificationError>>,
 ];

@@ -5,6 +5,7 @@
  * @module
  */
 
+import { Schema } from "effect";
 import {
   PaymentAuthenticationError,
   PaymentInvalidRequestError,
@@ -16,15 +17,20 @@ import {
 /** The provider tag attached to neutral errors raised by this implementation. */
 export const PROVIDER = "paypal";
 
-/** The shape of a PayPal API error body. */
-export interface PayPalErrorBody {
-  readonly name?: string | undefined;
-  readonly message?: string | undefined;
-  readonly details?: ReadonlyArray<{
-    readonly field?: string | undefined;
-    readonly issue?: string | undefined;
-  }>;
-}
+/** The shape of a PayPal API error body (every member optional). */
+export const PayPalErrorBody = Schema.Struct({
+  name: Schema.optional(Schema.String),
+  message: Schema.optional(Schema.String),
+  details: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        field: Schema.optional(Schema.String),
+        issue: Schema.optional(Schema.String),
+      }),
+    ),
+  ),
+});
+export type PayPalErrorBody = typeof PayPalErrorBody.Type;
 
 /**
  * Map a PayPal HTTP status + error body onto a neutral payments error.

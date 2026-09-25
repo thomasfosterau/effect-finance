@@ -330,6 +330,9 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, StripeService> =
               payment_intent: params.paymentIntent,
               charge: params.charge,
               amount: params.amount,
+              // SAFETY: the neutral `reason` is a free-form string that callers
+              // pass through verbatim; Stripe validates it against its enum
+              // and answers an unknown value with an invalid-request error.
               reason: params.reason as Stripe.RefundCreateParams["reason"],
               metadata: params.metadata,
             }),

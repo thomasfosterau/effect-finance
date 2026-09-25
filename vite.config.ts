@@ -15,6 +15,7 @@
 
 import { defineConfig } from "vite-plus";
 import { recommended } from "@effect/tsgo/oxlint-presets";
+import effect from "@mpsuesser/oxlint-plugin-effect";
 
 export default defineConfig({
   // Staged-file checks run by `vp staged` (pre-commit).
@@ -34,14 +35,7 @@ export default defineConfig({
   },
   lint: {
     ignorePatterns: ["**/dist/**", "**/coverage/**", "**/node_modules/**"],
-    // The siblings also extend `@mpsuesser/oxlint-plugin-effect`'s
-    // `configs.recommended` and tune its `effect/*` rules (see the effect-web
-    // library's vite.config.ts). That plugin, and the effect-oxlint it builds
-    // on, import Effect 4 modules at load (`effect/Result`), so it cannot run
-    // in a workspace still on Effect 3 — `vp lint` fails to resolve this
-    // config. It comes back, with the siblings' `effect/*` rule tuning and
-    // overrides, in the v4 migration (#38).
-    extends: [recommended],
+    extends: [recommended, effect.configs.recommended],
     categories: {
       correctness: "error",
     },
@@ -54,12 +48,152 @@ export default defineConfig({
         },
       ],
       "eslint/prefer-const": "warn",
+      // The `Buffer` global is typed `any` wherever a consumer loads
+      // @cloudflare/workers-types next to @types/node (every application this
+      // family serves), so every call on it is unchecked there. Use
+      // Uint8Array / TextEncoder / DataView instead.
+      "eslint/no-restricted-globals": [
+        "error",
+        {
+          name: "Buffer",
+          message:
+            "The `Buffer` global is typed `any` wherever @cloudflare/workers-types is loaded. Use Uint8Array / TextEncoder / DataView.",
+        },
+      ],
+      // `casting-awareness` is an awareness prompt, not a defect rule — it
+      // fires on every `as`, including the narrowings a fake vendor client and
+      // an unchecked vendor JSON body structurally require. Stays visible as a
+      // warning.
+      "effect/casting-awareness": "warn",
+      // Hard-codes abbreviations (`Arr`, `P`, `R`, …) with no options, so it is
+      // unsatisfiable under the full-name convention (`import * as Option from
+      // "effect/Option"`) this family shares with its consumers.
+      "effect/prefer-namespace-imports": "off",
+
+      // ---- Effect preset: ported-code allowances ---------------------------
+      // The modules under packages/*/src predate the Effect oxlint preset
+      // (first written against Effect 3 and the Stripe SDK, ported to Effect 4
+      // in #38, and due to be rewritten onto the fetch-only transport in #39).
+      // The rules below sit at `warn`
+      // so the code stays committable while each site stays reported; a new
+      // site is a defect, not headroom.
+      "effect/imperative-loops": "warn",
+      "effect/avoid-native-object-helpers": "warn",
+      "effect/avoid-non-null-assertion": "warn",
+      "effect/avoid-any": "warn",
+      "effect/avoid-untagged-errors": "warn",
+      "effect/avoid-direct-json": "warn",
+      "effect/prefer-arr-match": "warn",
+      "effect/no-length-comparison": "warn",
+      "effect/prefer-arr-sort": "warn",
+      "effect/avoid-try-catch": "warn",
+      "effect/yield-in-for-loop": "warn",
+      "effect/prefer-effect-is": "warn",
+      "effect/avoid-expect-in-if": "warn",
+      "effect/effect-run-in-body": "warn",
+      "effect/prefer-effect-fn": "warn",
+      "effect/avoid-direct-tag-checks": "warn",
+      "effect/avoid-option-getorthrow": "warn",
+      "effect/no-barrel-imports": "warn",
+      "effect/throw-in-effect-gen": "warn",
+      "effect/prefer-match-over-switch": "warn",
+      "effect/avoid-mutable-state": "warn",
+      "effect/no-conditional-empty-object-spread": "warn",
+      // Fires on `new Date(vendorTimestamp)` / `Date.parse` in the mappers,
+      // which parse a vendor value rather than read the clock.
+      "effect/use-clock-service": "warn",
+      // ---- Effect preset: rules this workspace's conventions cut across ----
+      // `prefer-option-over-null` also fires on `?: T | undefined`, which is
+      // the ONLY spelling of an optional member `exactOptionalPropertyTypes`
+      // lets a caller forward an optional of its own into (AGENTS.md). A bare
+      // `null` / `undefined` in a return type is still a finding to read; the
+      // options-object members are not.
+      "effect/prefer-option-over-null": "warn",
+      // `unknown` is the honest type at the vendor boundary: a thrown SDK
+      // error handed to `handleStripeError`, a vendor error body before it is
+      // mapped onto the neutral channel.
+      "effect/no-unknown-parameters": "warn",
+      // Same boundary, other direction: a vendor response body is `unknown`
+      // until the provider maps it.
+      "effect/no-unknown-returns": "warn",
+      "effect/no-unsafe-dictionary-type": "warn",
+      "effect/no-runtime-typeof": "warn",
       "typescript/no-explicit-any": "off",
       "typescript/no-empty-object-type": "off",
       "typescript/ban-ts-comment": "off",
       "unicorn/no-empty-file": "off",
       "vite-plus/prefer-vite-plus-imports": "error",
     },
+    overrides: [
+      // Build/test configs are evaluated by Vite and Vitest in bare Node,
+      // before any Effect runtime exists — there is no `Config` provider to
+      // read from and no `FileSystem` service to call, so `process.env` and
+      // `node:*` are the only things that work there. The Effect preset's
+      // service rules have no satisfiable fix in these files.
+      {
+        files: ["**/vite.config.ts", "**/vitest.config.ts", "vite.package.ts"],
+        rules: {
+          "effect/avoid-node-imports": "off",
+          "effect/avoid-sync-fs": "off",
+          "effect/avoid-process-env": "off",
+          "effect/use-console-service": "off",
+          "effect/use-filesystem-service": "off",
+          "effect/use-path-service": "off",
+          "effect/avoid-native-fetch": "off",
+          "effect/effect-promise-vs-trypromise": "off",
+          // `...(process.env.X ? { x } : {})` is how a vitest option is left
+          // unset under `exactOptionalPropertyTypes`.
+          "effect/no-conditional-empty-object-spread": "off",
+        },
+      },
+      // Type-level tests: the expect-error directives ARE the assertions
+      // (a statement that must fail to compile), and every binding exists to
+      // be asserted against, never to be read.
+      {
+        files: ["**/tests/**/*.types.ts"],
+        rules: {
+          "eslint/no-unused-vars": "off",
+          "effect/avoid-ts-ignore": "off",
+        },
+      },
+      // The examples are runnable scripts: the process edge, where the
+      // program is run, logs to the terminal and reads its key from the
+      // environment.
+      {
+        files: ["**/examples/**/*.ts"],
+        rules: {
+          "effect/effect-run-in-body": "off",
+          "effect/use-console-service": "off",
+          "effect/avoid-process-env": "off",
+          "effect/use-clock-service": "off",
+          "effect/require-safety-comment-for-type-assertion": "warn",
+        },
+      },
+      // Test suites ARE the runtime boundary: `Effect.runPromise` in a test
+      // body is the harness running the effect under test, and a bare
+      // `new Error("boom")` there is a fixture standing in for whatever a
+      // vendor SDK would have thrown. Fixture casts (a fake SDK client), a
+      // wall-clock `Date` for a token expiry and a stubbed `fetch` stay
+      // visible as warnings.
+      {
+        files: ["**/tests/**/*.ts"],
+        rules: {
+          "effect/effect-run-in-body": "off",
+          "effect/avoid-untagged-errors": "off",
+          "effect/avoid-native-fetch": "warn",
+          // A fake SDK client is `{ … } as unknown as Stripe`: the fixture is
+          // deliberately a partial shape.
+          "effect/no-chained-type-assertions": "warn",
+          // The webhook suite exercises the `Buffer` payload the SDK-based
+          // verifier accepts; the WebCrypto verifier (#41) drops it.
+          "eslint/no-restricted-globals": "warn",
+          "effect/require-safety-comment-for-type-assertion": "warn",
+          "effect/use-clock-service": "warn",
+          "effect/avoid-process-env": "warn",
+          "effect/require-effect-concurrency": "warn",
+        },
+      },
+    ],
     // Type-aware linting is intentionally disabled: type checking stays the
     // `check` tasks' job (native tsc, Effect-patched).
     options: {

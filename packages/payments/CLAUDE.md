@@ -4,10 +4,10 @@ The vendor-neutral core. Peer: `effect` only. No HTTP code, no vendor SDK, no pr
 
 ## Terms
 
-- **Capability** — one `Context` service per resource family (`Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`), with module-level accessors (`Customer.create`, …). A provider supplies a `Layer` per capability; a program depends only on the capabilities it uses, so a provider may implement a subset (PayPal has no `Customers`).
+- **Capability** — one `Context.Service` per resource family (`Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`), with module-level accessors (`Customer.create`, …). A provider supplies a `Layer` per capability; a program depends only on the capabilities it uses, so a provider may implement a subset (PayPal has no `Customers`).
 - **Neutral entity** — a `Schema.Class` (`Customer`, `Product`, `Price`, …) in camelCase with amounts in **minor units** (`Money.amount` in cents for USD). A provider maps its own shape onto it.
 - **Page** — `Page<A>`, the one pagination shape (`data`, `hasMore`; the next page is requested with a `startingAfter` cursor on the list params); `Deleted` for `del` results.
-- **Error channel** — `PaymentsError`, the union of the tagged errors in `PaymentsError.ts` (`PaymentProviderError`, `PaymentAuthenticationError`, `PaymentRateLimitError`, `PaymentInvalidRequestError`, `PaymentNetworkError`, `PaymentConfigError`, `SignatureVerificationError`). Every capability method fails with it and nothing else.
+- **Error channel** — `PaymentsError`, the union of the `Schema.TaggedError` classes in `PaymentsError.ts` (`PaymentProviderError`, `PaymentAuthenticationError`, `PaymentRateLimitError`, `PaymentInvalidRequestError`, `PaymentNetworkError`, `PaymentConfigError`, `SignatureVerificationError`). Every capability method fails with it and nothing else.
 
 ## Local invariants
 

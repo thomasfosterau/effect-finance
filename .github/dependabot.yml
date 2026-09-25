@@ -2,9 +2,10 @@
 # itself from the effect-drizzle-ext library and a subset of the gardeneria
 # application's catalog).
 #
-# `groups` collect dependencies that MUST move together: the Effect release
-# line is a lockstep-versioned singleton set (still Effect 3 here until #38 —
-# a proposed jump to Effect 4 is that issue's work, not a routine bump); the vitest toolchain is pinned to
+# `groups` collect dependencies that MUST move together: the Effect 4 release
+# line is a lockstep-versioned singleton set (moved with the consuming
+# applications, and floated weekly by the Effect Canary workflow); the vitest
+# toolchain is pinned to
 # vite-plus's exact versions, so version updates to any of the three are
 # ignored (they move together by hand, with the @effect/tsgo pin — see
 # pnpm-workspace.yaml) while SECURITY updates stay enabled (the ignore is

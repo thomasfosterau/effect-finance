@@ -20,72 +20,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create a charge
- */
-interface CreateChargeRequest extends Request.Request<Stripe.Charge, StripeError> {
-  readonly _tag: "CreateChargeRequest";
-  readonly params: Stripe.ChargeCreateParams;
-}
-
-const CreateChargeRequest = Request.tagged<CreateChargeRequest>("CreateChargeRequest");
-
-const CreateChargeResolver: RequestResolver.RequestResolver<CreateChargeRequest, StripeService> =
-  makeStripeResolver<CreateChargeRequest>((stripe, request) =>
-    stripe.charges.create(request.params),
-  );
-
-/**
- * Request to retrieve a charge
- */
-interface RetrieveChargeRequest extends Request.Request<Stripe.Charge, StripeError> {
-  readonly _tag: "RetrieveChargeRequest";
-  readonly id: string;
-  readonly params?: Stripe.ChargeRetrieveParams | undefined;
-}
-
-const RetrieveChargeRequest = Request.tagged<RetrieveChargeRequest>("RetrieveChargeRequest");
-
-const RetrieveChargeResolver: RequestResolver.RequestResolver<
-  RetrieveChargeRequest,
-  StripeService
-> = makeStripeResolver<RetrieveChargeRequest>((stripe, request) =>
-  stripe.charges.retrieve(request.id, request.params),
-);
-
-/**
- * Request to update a charge
- */
-interface UpdateChargeRequest extends Request.Request<Stripe.Charge, StripeError> {
-  readonly _tag: "UpdateChargeRequest";
-  readonly id: string;
-  readonly params?: Stripe.ChargeUpdateParams | undefined;
-}
-
-const UpdateChargeRequest = Request.tagged<UpdateChargeRequest>("UpdateChargeRequest");
-
-const UpdateChargeResolver: RequestResolver.RequestResolver<UpdateChargeRequest, StripeService> =
-  makeStripeResolver<UpdateChargeRequest>((stripe, request) =>
-    stripe.charges.update(request.id, request.params),
-  );
-
-/**
- * Request to list charges
- */
-interface ListChargesRequest extends Request.Request<Stripe.ApiList<Stripe.Charge>, StripeError> {
-  readonly _tag: "ListChargesRequest";
-  readonly params?: Stripe.ChargeListParams | undefined;
-}
-
-const ListChargesRequest = Request.tagged<ListChargesRequest>("ListChargesRequest");
-
-const ListChargesResolver: RequestResolver.RequestResolver<ListChargesRequest, StripeService> =
-  makeStripeResolver<ListChargesRequest>((stripe, request) => stripe.charges.list(request.params));
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create a charge
@@ -93,10 +31,7 @@ const ListChargesResolver: RequestResolver.RequestResolver<ListChargesRequest, S
 export const create = (
   params: Stripe.ChargeCreateParams,
 ): Effect.Effect<Stripe.Charge, StripeError, StripeService> =>
-  Effect.request(
-    CreateChargeRequest({ params }),
-    RequestResolver.contextFromEffect(CreateChargeResolver),
-  );
+  wrapStripeCall((stripe) => stripe.charges.create(params));
 
 /**
  * Retrieve a charge
@@ -105,10 +40,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.ChargeRetrieveParams,
 ): Effect.Effect<Stripe.Charge, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveChargeRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveChargeResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.charges.retrieve(id, params));
 
 /**
  * Update a charge
@@ -117,10 +49,7 @@ export const update = (
   id: string,
   params?: Stripe.ChargeUpdateParams,
 ): Effect.Effect<Stripe.Charge, StripeError, StripeService> =>
-  Effect.request(
-    UpdateChargeRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateChargeResolver),
-  );
+  wrapStripeCall((stripe) => stripe.charges.update(id, params));
 
 /**
  * List charges
@@ -128,7 +57,4 @@ export const update = (
 export const list = (
   params?: Stripe.ChargeListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Charge>, StripeError, StripeService> =>
-  Effect.request(
-    ListChargesRequest({ params }),
-    RequestResolver.contextFromEffect(ListChargesResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.charges.list(params));

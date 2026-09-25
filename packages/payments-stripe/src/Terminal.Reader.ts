@@ -24,94 +24,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create a terminal reader
- */
-interface CreateReaderRequest extends Request.Request<Stripe.Terminal.Reader, StripeError> {
-  readonly _tag: "CreateReaderRequest";
-  readonly params: Stripe.Terminal.ReaderCreateParams;
-}
-
-const CreateReaderRequest = Request.tagged<CreateReaderRequest>("CreateReaderRequest");
-
-const CreateReaderResolver: RequestResolver.RequestResolver<CreateReaderRequest, StripeService> =
-  makeStripeResolver<CreateReaderRequest>((stripe, request) =>
-    stripe.terminal.readers.create(request.params),
-  );
-
-/**
- * Request to retrieve a terminal reader
- */
-interface RetrieveReaderRequest extends Request.Request<Stripe.Terminal.Reader, StripeError> {
-  readonly _tag: "RetrieveReaderRequest";
-  readonly id: string;
-  readonly params?: Stripe.Terminal.ReaderRetrieveParams | undefined;
-}
-
-const RetrieveReaderRequest = Request.tagged<RetrieveReaderRequest>("RetrieveReaderRequest");
-
-const RetrieveReaderResolver: RequestResolver.RequestResolver<
-  RetrieveReaderRequest,
-  StripeService
-> = makeStripeResolver<RetrieveReaderRequest>(
-  (stripe, request) =>
-    stripe.terminal.readers.retrieve(request.id, request.params) as Promise<Stripe.Terminal.Reader>,
-);
-
-/**
- * Request to update a terminal reader
- */
-interface UpdateReaderRequest extends Request.Request<Stripe.Terminal.Reader, StripeError> {
-  readonly _tag: "UpdateReaderRequest";
-  readonly id: string;
-  readonly params?: Stripe.Terminal.ReaderUpdateParams | undefined;
-}
-
-const UpdateReaderRequest = Request.tagged<UpdateReaderRequest>("UpdateReaderRequest");
-
-const UpdateReaderResolver: RequestResolver.RequestResolver<UpdateReaderRequest, StripeService> =
-  makeStripeResolver<UpdateReaderRequest>(
-    (stripe, request) =>
-      stripe.terminal.readers.update(request.id, request.params) as Promise<Stripe.Terminal.Reader>,
-  );
-
-/**
- * Request to delete a terminal reader
- */
-interface DeleteReaderRequest extends Request.Request<Stripe.Terminal.DeletedReader, StripeError> {
-  readonly _tag: "DeleteReaderRequest";
-  readonly id: string;
-}
-
-const DeleteReaderRequest = Request.tagged<DeleteReaderRequest>("DeleteReaderRequest");
-
-const DeleteReaderResolver: RequestResolver.RequestResolver<DeleteReaderRequest, StripeService> =
-  makeStripeResolver<DeleteReaderRequest>((stripe, request) =>
-    stripe.terminal.readers.del(request.id),
-  );
-
-/**
- * Request to list terminal readers
- */
-interface ListReadersRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Terminal.Reader>,
-  StripeError
-> {
-  readonly _tag: "ListReadersRequest";
-  readonly params?: Stripe.Terminal.ReaderListParams | undefined;
-}
-
-const ListReadersRequest = Request.tagged<ListReadersRequest>("ListReadersRequest");
-
-const ListReadersResolver: RequestResolver.RequestResolver<ListReadersRequest, StripeService> =
-  makeStripeResolver<ListReadersRequest>((stripe, request) =>
-    stripe.terminal.readers.list(request.params),
-  );
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create a terminal reader
@@ -119,10 +35,7 @@ const ListReadersResolver: RequestResolver.RequestResolver<ListReadersRequest, S
 export const create = (
   params: Stripe.Terminal.ReaderCreateParams,
 ): Effect.Effect<Stripe.Terminal.Reader, StripeError, StripeService> =>
-  Effect.request(
-    CreateReaderRequest({ params }),
-    RequestResolver.contextFromEffect(CreateReaderResolver),
-  );
+  wrapStripeCall((stripe) => stripe.terminal.readers.create(params));
 
 /**
  * Retrieve a terminal reader
@@ -131,10 +44,13 @@ export const retrieve = (
   id: string,
   params?: Stripe.Terminal.ReaderRetrieveParams,
 ): Effect.Effect<Stripe.Terminal.Reader, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveReaderRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveReaderResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  // SAFETY: NOT checked. The SDK types the response `T | Deleted`, and Stripe
+  // can answer a deleted object with its `{ deleted: true }` stub; this
+  // signature (kept from before the v4 migration) does not model that. The
+  // typed transport in #39 replaces the cast with a decoded union.
+  wrapStripeCall(
+    (stripe) => stripe.terminal.readers.retrieve(id, params) as Promise<Stripe.Terminal.Reader>,
+  );
 
 /**
  * Update a terminal reader
@@ -143,9 +59,12 @@ export const update = (
   id: string,
   params?: Stripe.Terminal.ReaderUpdateParams,
 ): Effect.Effect<Stripe.Terminal.Reader, StripeError, StripeService> =>
-  Effect.request(
-    UpdateReaderRequest({ id, params }),
-    RequestResolver.contextFromEffect(UpdateReaderResolver),
+  // SAFETY: NOT checked. The SDK types the response `T | Deleted`, and Stripe
+  // can answer a deleted object with its `{ deleted: true }` stub; this
+  // signature (kept from before the v4 migration) does not model that. The
+  // typed transport in #39 replaces the cast with a decoded union.
+  wrapStripeCall(
+    (stripe) => stripe.terminal.readers.update(id, params) as Promise<Stripe.Terminal.Reader>,
   );
 
 /**
@@ -154,10 +73,7 @@ export const update = (
 export const del = (
   id: string,
 ): Effect.Effect<Stripe.Terminal.DeletedReader, StripeError, StripeService> =>
-  Effect.request(
-    DeleteReaderRequest({ id }),
-    RequestResolver.contextFromEffect(DeleteReaderResolver),
-  );
+  wrapStripeCall((stripe) => stripe.terminal.readers.del(id));
 
 /**
  * List terminal readers
@@ -165,7 +81,4 @@ export const del = (
 export const list = (
   params?: Stripe.Terminal.ReaderListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Terminal.Reader>, StripeError, StripeService> =>
-  Effect.request(
-    ListReadersRequest({ params }),
-    RequestResolver.contextFromEffect(ListReadersResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.terminal.readers.list(params));

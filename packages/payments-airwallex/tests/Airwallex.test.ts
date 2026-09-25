@@ -1,33 +1,64 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
+import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
 import { PaymentAuthenticationError, PaymentConfigError } from "@thomasfosterau/effect-payments";
 import { make, type AirwallexConfig } from "../src/Airwallex.ts";
 
-const jsonResponse = (status: number, body: unknown): Response =>
-  ({
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  }) as unknown as Response;
+const LOGIN_PATH = "/api/v1/authentication/login";
+const LOGIN_RESPONSE = () =>
+  jsonResponse(201, {
+    token: "tok_123",
+    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+  });
 
-/** A stub `fetch` that answers the login handshake then delegates to `handler`. */
-const stubFetch = (
-  handler: (url: string, init: RequestInit) => Response,
-): { fetch: typeof fetch; calls: Array<{ url: string; init: RequestInit }> } => {
-  const calls: Array<{ url: string; init: RequestInit }> = [];
-  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input);
-    const resolvedInit = init ?? {};
-    calls.push({ url, init: resolvedInit });
-    if (url.endsWith("/api/v1/authentication/login")) {
-      return jsonResponse(201, {
-        token: "tok_123",
-        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-      });
+/**
+ * A request as the stubbed `fetch` saw it: the URL, the headers, and the body
+ * decoded to text (`FetchHttpClient` sends a text body as bytes).
+ */
+interface CapturedRequest {
+  readonly url: string;
+  readonly method: string;
+  readonly headers: Headers;
+  readonly body: string | undefined;
+}
+
+const textOf = (raw: BodyInit | null | undefined): string | undefined =>
+  typeof raw === "string"
+    ? raw
+    : raw instanceof Uint8Array
+      ? new TextDecoder().decode(raw)
+      : undefined;
+
+const jsonResponse = (status: number, body: unknown): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+
+/**
+ * A stub `fetch` that answers the LOGIN_PATH handshake then delegates to
+ * `handler`, served to the client as `effect/unstable/http`'s `HttpClient`
+ * through `FetchHttpClient.layer`. No test here reaches the vendor.
+ */
+const stubFetch = (handler: (request: CapturedRequest) => Response) => {
+  const calls: Array<CapturedRequest> = [];
+  const fetchImpl: typeof globalThis.fetch = async (input, init) => {
+    const captured: CapturedRequest = {
+      url: String(input),
+      method: init?.method ?? "GET",
+      headers: new Headers(init?.headers),
+      body: textOf(init?.body),
+    };
+    calls.push(captured);
+    if (captured.url.endsWith(LOGIN_PATH)) {
+      return LOGIN_RESPONSE();
     }
-    return handler(url, resolvedInit);
-  }) as typeof fetch;
-  return { fetch: fetchImpl, calls };
+    return handler(captured);
+  };
+  const http: Layer.Layer<HttpClient.HttpClient> = FetchHttpClient.layer.pipe(
+    Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
+  );
+  return { http, calls };
 };
 
 const config = (over: Partial<AirwallexConfig>): AirwallexConfig => ({
@@ -38,12 +69,10 @@ const config = (over: Partial<AirwallexConfig>): AirwallexConfig => ({
 
 describe("Airwallex client", () => {
   it("logs in once, caches the token, and authorizes requests", async () => {
-    const { fetch: fetchImpl, calls } = stubFetch((_url) =>
-      jsonResponse(200, { id: "cus_1", email: "a@b.com" }),
-    );
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "cus_1", email: "a@b.com" }));
 
     const program = Effect.gen(function* () {
-      const client = yield* make(config({ fetch: fetchImpl }));
+      const client = yield* make(config({}));
       const first = yield* client.request<{ id: string }>({
         method: "GET",
         path: "/api/v1/pa/customers/cus_1",
@@ -55,49 +84,45 @@ describe("Airwallex client", () => {
       return { first, second };
     });
 
-    const result = await Effect.runPromise(program);
+    const result = await Effect.runPromise(program.pipe(Effect.provide(http)));
     expect(result.first.id).toBe("cus_1");
 
     // One login + two resource requests, and the token only fetched once.
-    const logins = calls.filter((c) => c.url.endsWith("/authentication/login"));
+    const logins = calls.filter((c) => c.url.endsWith(LOGIN_PATH));
     expect(logins).toHaveLength(1);
     const resourceCall = calls.find((c) => c.url.includes("/pa/customers"))!;
-    expect((resourceCall.init.headers as Record<string, string>).Authorization).toBe(
-      "Bearer tok_123",
-    );
+    expect(resourceCall.headers.get("authorization")).toBe("Bearer tok_123");
   });
 
   it("sends client credentials on the login request", async () => {
-    const { fetch: fetchImpl, calls } = stubFetch(() =>
-      jsonResponse(200, { items: [], has_more: false }),
-    );
+    const { http, calls } = stubFetch(() => jsonResponse(200, { items: [], has_more: false }));
 
     await Effect.runPromise(
       Effect.gen(function* () {
-        const client = yield* make(config({ fetch: fetchImpl }));
+        const client = yield* make(config({}));
         yield* client.request({ method: "GET", path: "/api/v1/pa/customers" });
-      }),
+      }).pipe(Effect.provide(http)),
     );
 
-    const login = calls.find((c) => c.url.endsWith("/authentication/login"))!;
-    const headers = login.init.headers as Record<string, string>;
-    expect(headers["x-client-id"]).toBe("client_1");
-    expect(headers["x-api-key"]).toBe("key_1");
+    const login = calls.find((c) => c.url.endsWith(LOGIN_PATH))!;
+    expect(login.method).toBe("POST");
+    expect(login.headers.get("x-client-id")).toBe("client_1");
+    expect(login.headers.get("x-api-key")).toBe("key_1");
   });
 
   it("maps an HTTP 401 to a neutral authentication error", async () => {
-    const { fetch: fetchImpl } = stubFetch(() =>
+    const { http } = stubFetch(() =>
       jsonResponse(401, { code: "unauthorized", message: "invalid token" }),
     );
 
     const error = await Effect.runPromise(
       Effect.gen(function* () {
-        const client = yield* make(config({ fetch: fetchImpl }));
+        const client = yield* make(config({}));
         return yield* client.request({
           method: "GET",
           path: "/api/v1/pa/customers/cus_1",
         });
-      }).pipe(Effect.flip),
+      }).pipe(Effect.flip, Effect.provide(http)),
     );
 
     expect(error).toBeInstanceOf(PaymentAuthenticationError);
@@ -105,8 +130,9 @@ describe("Airwallex client", () => {
   });
 
   it("fails with a config error when credentials are missing", async () => {
+    const { http } = stubFetch(() => jsonResponse(200, {}));
     const error = await Effect.runPromise(
-      make(config({ clientId: "", apiKey: "" })).pipe(Effect.flip),
+      make(config({ clientId: "", apiKey: "" })).pipe(Effect.flip, Effect.provide(http)),
     );
     expect(error).toBeInstanceOf(PaymentConfigError);
   });

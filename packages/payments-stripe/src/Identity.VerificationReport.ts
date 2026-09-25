@@ -17,55 +17,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to retrieve a verification report
- */
-interface RetrieveVerificationReportRequest extends Request.Request<
-  Stripe.Identity.VerificationReport,
-  StripeError
-> {
-  readonly _tag: "RetrieveVerificationReportRequest";
-  readonly id: string;
-  readonly params?: Stripe.Identity.VerificationReportRetrieveParams | undefined;
-}
-
-const RetrieveVerificationReportRequest = Request.tagged<RetrieveVerificationReportRequest>(
-  "RetrieveVerificationReportRequest",
-);
-
-const RetrieveVerificationReportResolver: RequestResolver.RequestResolver<
-  RetrieveVerificationReportRequest,
-  StripeService
-> = makeStripeResolver<RetrieveVerificationReportRequest>((stripe, request) =>
-  stripe.identity.verificationReports.retrieve(request.id, request.params),
-);
-
-/**
- * Request to list verification reports
- */
-interface ListVerificationReportsRequest extends Request.Request<
-  Stripe.ApiList<Stripe.Identity.VerificationReport>,
-  StripeError
-> {
-  readonly _tag: "ListVerificationReportsRequest";
-  readonly params?: Stripe.Identity.VerificationReportListParams | undefined;
-}
-
-const ListVerificationReportsRequest = Request.tagged<ListVerificationReportsRequest>(
-  "ListVerificationReportsRequest",
-);
-
-const ListVerificationReportsResolver: RequestResolver.RequestResolver<
-  ListVerificationReportsRequest,
-  StripeService
-> = makeStripeResolver<ListVerificationReportsRequest>((stripe, request) =>
-  stripe.identity.verificationReports.list(request.params),
-);
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Retrieve a verification report
@@ -79,10 +34,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.Identity.VerificationReportRetrieveParams,
 ): Effect.Effect<Stripe.Identity.VerificationReport, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveVerificationReportRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveVerificationReportResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.identity.verificationReports.retrieve(id, params));
 
 /**
  * List verification reports
@@ -98,7 +50,4 @@ export const retrieve = (
 export const list = (
   params?: Stripe.Identity.VerificationReportListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Identity.VerificationReport>, StripeError, StripeService> =>
-  Effect.request(
-    ListVerificationReportsRequest({ params }),
-    RequestResolver.contextFromEffect(ListVerificationReportsResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.identity.verificationReports.list(params));

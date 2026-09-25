@@ -13,17 +13,21 @@ npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-airw
 ## Usage
 
 ```typescript
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
 
 const program = Customer.create({ email: "jane@example.com" });
 
+// The Airwallex layer speaks `effect/unstable/http`: it requires an
+// `HttpClient`, which `FetchHttpClient.layer` supplies on any fetch runtime.
 const layer = AirwallexPayments.layer({
   clientId: process.env.AIRWALLEX_CLIENT_ID!,
   apiKey: process.env.AIRWALLEX_API_KEY!,
-});
-// const layer = AirwallexPayments.layerFromEnv(); // from AIRWALLEX_CLIENT_ID / AIRWALLEX_API_KEY
+}).pipe(Layer.provide(FetchHttpClient.layer));
+// from AIRWALLEX_CLIENT_ID / AIRWALLEX_API_KEY:
+// const layer = AirwallexPayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 
 const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 ```
@@ -44,7 +48,7 @@ Because each capability is an independent Effect service, this provider simply d
 ## Notes
 
 - **Money** — the core uses minor units (e.g. cents); Airwallex uses major-unit decimals. This provider converts in both directions based on each currency's number of decimal places.
-- **`Airwallex`** — the client service performs the token handshake and caches the bearer token. Inject a custom `fetch` via `AirwallexConfig` for testing.
+- **`Airwallex`** — the client service performs the token handshake and caches the bearer token. Every request goes through `effect/unstable/http`'s `HttpClient`, which the layer requires — provide `FetchHttpClient.layer` in production, or a stub `HttpClient` (or a stub `FetchHttpClient.Fetch`) in tests.
 
 See the [repository README](../../README.md) for the full guide.
 

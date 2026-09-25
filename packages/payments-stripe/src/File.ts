@@ -20,52 +20,10 @@
  * ```
  */
 
-import { Effect, Request, RequestResolver } from "effect";
+import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { makeStripeResolver, type StripeError } from "./internal/index.js";
-import { StripeService } from "./Stripe.js";
-
-/**
- * Request to create a file
- */
-interface CreateFileRequest extends Request.Request<Stripe.File, StripeError> {
-  readonly _tag: "CreateFileRequest";
-  readonly params: Stripe.FileCreateParams;
-}
-
-const CreateFileRequest = Request.tagged<CreateFileRequest>("CreateFileRequest");
-
-const CreateFileResolver: RequestResolver.RequestResolver<CreateFileRequest, StripeService> =
-  makeStripeResolver<CreateFileRequest>((stripe, request) => stripe.files.create(request.params));
-
-/**
- * Request to retrieve a file
- */
-interface RetrieveFileRequest extends Request.Request<Stripe.File, StripeError> {
-  readonly _tag: "RetrieveFileRequest";
-  readonly id: string;
-  readonly params?: Stripe.FileRetrieveParams | undefined;
-}
-
-const RetrieveFileRequest = Request.tagged<RetrieveFileRequest>("RetrieveFileRequest");
-
-const RetrieveFileResolver: RequestResolver.RequestResolver<RetrieveFileRequest, StripeService> =
-  makeStripeResolver<RetrieveFileRequest>((stripe, request) =>
-    stripe.files.retrieve(request.id, request.params),
-  );
-
-/**
- * Request to list files
- */
-interface ListFilesRequest extends Request.Request<Stripe.ApiList<Stripe.File>, StripeError> {
-  readonly _tag: "ListFilesRequest";
-  readonly params?: Stripe.FileListParams | undefined;
-}
-
-const ListFilesRequest = Request.tagged<ListFilesRequest>("ListFilesRequest");
-
-const ListFilesResolver: RequestResolver.RequestResolver<ListFilesRequest, StripeService> =
-  makeStripeResolver<ListFilesRequest>((stripe, request) => stripe.files.list(request.params));
+import { type StripeError, wrapStripeCall } from "./internal/index.js";
+import type { StripeService } from "./Stripe.js";
 
 /**
  * Create a file
@@ -73,10 +31,7 @@ const ListFilesResolver: RequestResolver.RequestResolver<ListFilesRequest, Strip
 export const create = (
   params: Stripe.FileCreateParams,
 ): Effect.Effect<Stripe.File, StripeError, StripeService> =>
-  Effect.request(
-    CreateFileRequest({ params }),
-    RequestResolver.contextFromEffect(CreateFileResolver),
-  );
+  wrapStripeCall((stripe) => stripe.files.create(params));
 
 /**
  * Retrieve a file
@@ -85,10 +40,7 @@ export const retrieve = (
   id: string,
   params?: Stripe.FileRetrieveParams,
 ): Effect.Effect<Stripe.File, StripeError, StripeService> =>
-  Effect.request(
-    RetrieveFileRequest({ id, params }),
-    RequestResolver.contextFromEffect(RetrieveFileResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.files.retrieve(id, params));
 
 /**
  * List files
@@ -96,7 +48,4 @@ export const retrieve = (
 export const list = (
   params?: Stripe.FileListParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.File>, StripeError, StripeService> =>
-  Effect.request(
-    ListFilesRequest({ params }),
-    RequestResolver.contextFromEffect(ListFilesResolver),
-  ).pipe(Effect.withRequestCaching(true));
+  wrapStripeCall((stripe) => stripe.files.list(params));

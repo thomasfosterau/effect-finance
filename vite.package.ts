@@ -55,6 +55,8 @@ const entriesFromExports = (exports: Record<string, unknown>): Record<string, st
   );
 
 export const packageConfig = ({ url }: PackageConfigOptions) => {
+  // SAFETY: every package manifest in this workspace carries `name` and an
+  // `exports` map (strict catalog + the release script depend on both).
   const manifest = JSON.parse(readFileSync(new URL("./package.json", url), "utf8")) as {
     readonly name: string;
     readonly exports: Record<string, unknown>;
