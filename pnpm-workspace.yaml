@@ -47,7 +47,7 @@ catalog:
   # The official Stripe SDK. A runtime dependency of
   # @thomasfosterau/effect-payments-stripe until the fetch-only transport
   # (#39) makes it an optional alternative.
-  stripe: ^17.6.0
+  stripe: ^22.6.2
   # TypeScript 6/7 side-by-side: TS7 (the native Go compiler) ships no JS API
   # until 7.1, so JS-API consumers (@effect/language-service, tsdown's
   # declaration bundler) stay on TS6 while native `tsc` type-checks. The alias
