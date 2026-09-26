@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import { Effect, Fiber, Layer } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
 import { PaymentAuthenticationError, PaymentConfigError } from "@thomasfosterau/effect-payments";
 import { make, type PayPalConfig } from "../src/PayPal.ts";
@@ -131,5 +131,125 @@ describe("PayPal client", () => {
       make(config({ clientId: "", clientSecret: "" })).pipe(Effect.flip, Effect.provide(http)),
     );
     expect(error).toBeInstanceOf(PaymentConfigError);
+  });
+  it("sends Content-Type: application/json on a bodyless POST", async () => {
+    const { http, calls } = stubFetch(() => new Response(null, { status: 204 }));
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        yield* client.request({ method: "POST", path: "/v1/billing/plans/P-1/activate" });
+      }).pipe(Effect.provide(http)),
+    );
+
+    const post = calls.find((c) => c.url.endsWith("/v1/billing/plans/P-1/activate"))!;
+    expect(post.method).toBe("POST");
+    expect(post.body).toBeUndefined();
+    expect(post.headers.get("content-type")).toBe("application/json");
+  });
+
+  it("logs in once for concurrent first requests", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        yield* Effect.all(
+          Array.from({ length: 5 }, () =>
+            client.request({ method: "GET", path: "/v1/catalogs/products/PROD-1" }),
+          ),
+          { concurrency: "unbounded" },
+        );
+      }).pipe(Effect.provide(http)),
+    );
+
+    expect(calls.filter((c) => c.url.endsWith(LOGIN_PATH))).toHaveLength(1);
+    expect(calls.filter((c) => c.url.endsWith("/v1/catalogs/products/PROD-1"))).toHaveLength(5);
+  });
+
+  it("forgets the cached token after a 401 and logs in again on the next call", async () => {
+    let resourceCalls = 0;
+    const { http, calls } = stubFetch(() => {
+      resourceCalls += 1;
+      return resourceCalls === 1
+        ? jsonResponse(401, { message: "token revoked" })
+        : jsonResponse(200, { id: "x" });
+    });
+
+    const second = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        const first = yield* Effect.flip(
+          client.request({ method: "GET", path: "/v1/catalogs/products/PROD-1" }),
+        );
+        expect(first).toBeInstanceOf(PaymentAuthenticationError);
+        return yield* client.request<{ id: string }>({
+          method: "GET",
+          path: "/v1/catalogs/products/PROD-1",
+        });
+      }).pipe(Effect.provide(http)),
+    );
+
+    expect(second.id).toBe("x");
+    expect(calls.filter((c) => c.url.endsWith(LOGIN_PATH))).toHaveLength(2);
+  });
+  it("keeps a newer token when a request made with the old one gets a late 401", async () => {
+    // Login 1 hands out a token that is already inside the refresh window, so
+    // the next caller logs in again (login 2) while the first request is
+    // still in flight. The first request's 401 then arrives late.
+    let logins = 0;
+    let releaseSlow!: () => void;
+    const slowReleased = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    let markSlowStarted!: () => void;
+    const slowStarted = new Promise<void>((resolve) => {
+      markSlowStarted = resolve;
+    });
+    const seen: Array<{ url: string; authorization: string | null }> = [];
+    const fetchImpl: typeof globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      const authorization = new Headers(init?.headers).get("authorization");
+      seen.push({ url, authorization });
+      if (url.endsWith("/v1/oauth2/token")) {
+        logins += 1;
+        return logins === 1
+          ? jsonResponse(200, { access_token: "at_1", expires_in: 30 })
+          : jsonResponse(200, { access_token: "at_2", expires_in: 3600 });
+      }
+      if (url.endsWith("/v1/catalogs/products/SLOW")) {
+        markSlowStarted();
+        await slowReleased;
+        return jsonResponse(401, { message: "token revoked" });
+      }
+      return jsonResponse(200, { id: "x" });
+    };
+    const http = FetchHttpClient.layer.pipe(
+      Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
+    );
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        const slow = yield* Effect.forkChild(
+          Effect.flip(client.request({ method: "GET", path: "/v1/catalogs/products/SLOW" })),
+        );
+        yield* Effect.tryPromise(() => slowStarted);
+        // Refreshes the token (login 2) while the T1 request is in flight.
+        yield* client.request({ method: "GET", path: "/v1/catalogs/products/FAST" });
+        releaseSlow();
+        const error = yield* Fiber.join(slow);
+        expect(error).toBeInstanceOf(PaymentAuthenticationError);
+        // T2 must survive T1's late 401: no third login, and T2 is sent.
+        yield* client.request({ method: "GET", path: "/v1/catalogs/products/FAST" });
+      }).pipe(Effect.provide(http)),
+    );
+
+    expect(logins).toBe(2);
+    const fast = seen.filter((c) => c.url.endsWith("/v1/catalogs/products/FAST"));
+    expect(fast.map((c) => c.authorization)).toEqual(["Bearer at_2", "Bearer at_2"]);
+    expect(seen.find((c) => c.url.endsWith("/v1/catalogs/products/SLOW"))!.authorization).toBe(
+      "Bearer at_1",
+    );
   });
 });
