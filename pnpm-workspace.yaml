@@ -40,7 +40,7 @@ catalog:
   "@mpsuesser/oxlint-plugin-effect": ^0.5.0
   "@types/node": ^26.4.1
   "@vitest/coverage-istanbul": 4.1.11
-  effect: 4.0.0-rc.115
+  effect: 4.0.0-rc.117
   effect-solutions: ^0.5.3
   fallow: 3.28.0
   # The official Stripe SDK. A runtime dependency of
