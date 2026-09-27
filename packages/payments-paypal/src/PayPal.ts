@@ -25,7 +25,6 @@ import {
   Redacted,
   Ref,
   Schema,
-  Semaphore,
 } from "effect";
 import {
   HttpClient,
@@ -39,6 +38,7 @@ import {
   PaymentProviderError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
+import { shareLogin } from "./internal/sharedLogin.js";
 import { handlePayPalError, PayPalErrorBody, PROVIDER } from "./internal/error.js";
 
 const DEFAULT_BASE_URL = "https://api-m.paypal.com";
@@ -182,9 +182,6 @@ export const make = (
       Encoding.encodeBase64(`${config.clientId}:${Redacted.value(config.clientSecret)}`),
     );
     const tokenRef = yield* Ref.make(Option.none<TokenState>());
-    // One login at a time: concurrent first calls (or calls racing an expiry)
-    // wait for the in-flight login and then reuse its token.
-    const tokenLock = yield* Semaphore.make(1);
 
     const loginTimeout = yield* timeoutOf(
       "loginTimeout",
@@ -257,18 +254,18 @@ export const make = (
       return body.access_token;
     });
 
-    // Refresh a minute before expiry to avoid using a token mid-rotation. The
-    // check runs under `tokenLock`, so only the first caller logs in.
-    const getToken: Effect.Effect<string, PaymentsError> = tokenLock.withPermits(1)(
-      Effect.gen(function* () {
-        const current = yield* Ref.get(tokenRef);
-        const now = yield* Clock.currentTimeMillis;
-        if (Option.isSome(current) && current.value.expiresAt - 60_000 > now) {
-          return current.value.token;
-        }
-        return yield* login;
-      }),
-    );
+    // Refresh a minute before expiry to avoid using a token mid-rotation.
+    const cachedToken: Effect.Effect<Option.Option<string>> = Effect.gen(function* () {
+      const current = yield* Ref.get(tokenRef);
+      const now = yield* Clock.currentTimeMillis;
+      return Option.filter(current, (stored) => stored.expiresAt - 60_000 > now).pipe(
+        Option.map((stored) => stored.token),
+      );
+    });
+    // One login at a time, and its outcome is shared: concurrent first calls
+    // (or calls racing an expiry) await the in-flight login and reuse its
+    // token — or all fail with its error, after which the next call retries.
+    const getToken = yield* shareLogin(cachedToken, login);
 
     const request = (req: PayPalRequest): Effect.Effect<unknown, PaymentsError> =>
       Effect.gen(function* () {
