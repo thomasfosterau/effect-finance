@@ -11,15 +11,17 @@
  * cleared *before* its outcome is published, so a caller that arrives after a
  * failure starts a fresh attempt; nothing is cached on failure.
  *
- * If the leader is interrupted (its caller gave up), the login it was running
- * is interrupted with it and the slot is cleared; the callers that were
- * waiting on it are told the login was abandoned and try again, so one of them
- * becomes the next leader. Nobody is left waiting on a login no one runs.
+ * If the leader itself is interrupted (its caller gave up), the login it was
+ * running is interrupted with it and the slot is cleared; the callers that
+ * were waiting on it are told the login was abandoned and try again, so one of
+ * them becomes the next leader. Nobody is left waiting on a login no one runs.
+ * A login that fails on its own — whatever its cause — is shared, never
+ * retried by the callers that waited on it.
  *
  * @module
  */
 
-import { Cause, Deferred, Effect, Exit, Option, Ref } from "effect";
+import { Deferred, Effect, Exit, Fiber, Option, Ref } from "effect";
 
 /**
  * What a leader publishes: the login's exit, or `None` when the leader was
@@ -39,25 +41,45 @@ export const shareLogin = <E>(
   login: Effect.Effect<string, E>,
 ): Effect.Effect<Effect.Effect<string, E>> =>
   Effect.map(Ref.make(Option.none<Slot<E>>()), (inFlight) => {
-    // The leader re-checks the cache: a previous leader may have stored a
-    // token between this caller's first check and its taking the slot.
+    const loginUnlessCached: Effect.Effect<string, E> = Effect.flatMap(
+      cached,
+      Option.match({ onNone: () => login, onSome: Effect.succeed }),
+    );
+
+    /**
+     * Run the login as the leader and publish its outcome through `slot`.
+     *
+     * The login runs in a child fiber, so its exit — whatever its cause, even
+     * one containing an interruption of its own — arrives here as a *value*.
+     * The only way awaiting it can fail is this leader being interrupted: that
+     * alone is published as "abandoned" (after interrupting the login, which
+     * aborts its fetch), so waiters retry only when no one is left to finish
+     * the login, never after a login that failed on its own.
+     *
+     * The leader re-checks the cache: a previous leader may have stored a
+     * token between this caller's first check and its taking the slot.
+     */
     const lead = (slot: Slot<E>, restore: Restore): Effect.Effect<string, E> =>
-      restore(
-        Effect.flatMap(cached, Option.match({ onNone: () => login, onSome: Effect.succeed })),
-      ).pipe(
-        Effect.onExit((exit) =>
-          Ref.set(inFlight, Option.none()).pipe(
-            Effect.andThen(
-              Deferred.succeed(
-                slot,
-                Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)
-                  ? Option.none()
-                  : Option.some(exit),
+      Effect.gen(function* () {
+        const running = yield* Effect.forkChild(loginUnlessCached, { startImmediately: true });
+        const exit = yield* restore(Fiber.await(running)).pipe(
+          Effect.onInterrupt(() => Fiber.interrupt(running)),
+          // Clear the slot BEFORE publishing, so a caller that arrives after
+          // the outcome (even one resumed synchronously by the publish) never
+          // joins a settled login: it sees the token, or logs in afresh.
+          Effect.onExit((awaited) =>
+            Ref.set(inFlight, Option.none()).pipe(
+              Effect.andThen(
+                Deferred.succeed(
+                  slot,
+                  Exit.isSuccess(awaited) ? Option.some(awaited.value) : Option.none(),
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
+        return yield* exit;
+      });
 
     /** Take the slot for `fresh`, or return the login already in it. */
     const join = (fresh: Slot<E>): Effect.Effect<Option.Option<Slot<E>>> =>
