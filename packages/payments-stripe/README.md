@@ -10,7 +10,7 @@ It provides `Layer`s that satisfy the neutral capabilities over a fetch-only Str
 npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe effect
 ```
 
-`stripe` is an optional peer: add it (as a dev dependency) for the types the resource modules return, and at runtime only for the SDK transport (`./Stripe`) or the SDK-based `Webhook` verifier.
+`stripe` is an optional peer: add it (as a dev dependency) for the types the resource modules return, and at runtime only for the SDK transport (`./Stripe`) or the SDK-based `Webhook.constructEvent*` verifier.
 
 ## Usage
 
@@ -38,7 +38,7 @@ const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 - **`StripeHttp`** — the fetch-only transport: form-encoded bodies, pinned `Stripe-Version`, `Redacted` key, redirects refused, the SDK's retry policy with idempotency keys, and Stripe's error envelope decoded onto the neutral errors. `layer` / `layerFromEnv` / `make`.
 - **`Stripe`** — the optional SDK transport: an SDK client (`StripeService`) and `StripeHttp` over it (`layer` / `layerFromEnv` / `make`). Needs the `stripe` peer.
 - **Raw resource modules** — full-fidelity Stripe coverage typed with the `stripe` package's declarations, for resources with no vendor-neutral equivalent (`Treasury`, `Issuing.*`, `Terminal.*`, `Identity.*`, `Invoice`, `Charge`, `Payout`, and many more), and as the full-fidelity alternative where a neutral capability exists: the raw `CheckoutSession` module takes every Stripe Checkout parameter (embedded mode, `setup` mode, discounts, …) where `StripePayments.checkoutSessionsLayer` takes only the neutral ones. Some raw modules share a name with a neutral core module — `@thomasfosterau/effect-payments-stripe/Customer` and `@thomasfosterau/effect-payments/Customer`, `@thomasfosterau/effect-payments-stripe/CheckoutSession` and `@thomasfosterau/effect-payments/CheckoutSession` — so alias one of them when a program imports both.
-- **`Webhook`** — signature verification and event construction over the SDK (needs `Stripe.layer`; a WebCrypto default lands in #41).
+- **`Webhook`** — `verify`: Workers-safe WebCrypto signature verification (constant-time compare, ±300 s tolerance by default) and lenient decoders for the handled event types (`decodeHandledEvent`). The SDK-based `constructEvent` / `constructEventAsync` remain as an optional alternative (need `Stripe.layer`).
 
 See the [repository README](../../README.md) and [`examples`](examples) for the full guide.
 
