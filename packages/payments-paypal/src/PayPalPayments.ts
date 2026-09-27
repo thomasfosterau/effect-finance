@@ -135,34 +135,38 @@ export const pricesLayer: Layer.Layer<PriceNS.Prices, never, PayPalClient> = Lay
         if (!params.recurring) {
           return notSupported("one-time prices (plans must be recurring)");
         }
-        return client
-          .request({
-            method: "POST",
-            path: "/v1/billing/plans",
-            body: {
-              product_id: params.product,
-              name: "Plan",
-              billing_cycles: [
-                {
-                  tenure_type: "REGULAR",
-                  sequence: 1,
-                  total_cycles: 0,
-                  frequency: {
-                    interval_unit: params.recurring.interval.toUpperCase(),
-                    interval_count: params.recurring.intervalCount ?? 1,
-                  },
-                  pricing_scheme: {
-                    fixed_price: {
-                      currency_code: params.currency.toUpperCase(),
-                      value: toMajorString(params.unitAmount, params.currency),
+        const recurring = params.recurring;
+        return toMajorString(params.unitAmount, params.currency, "unitAmount").pipe(
+          Effect.flatMap((value) =>
+            client.request({
+              method: "POST",
+              path: "/v1/billing/plans",
+              body: {
+                product_id: params.product,
+                name: "Plan",
+                billing_cycles: [
+                  {
+                    tenure_type: "REGULAR",
+                    sequence: 1,
+                    total_cycles: 0,
+                    frequency: {
+                      interval_unit: recurring.interval.toUpperCase(),
+                      interval_count: recurring.intervalCount ?? 1,
+                    },
+                    pricing_scheme: {
+                      fixed_price: {
+                        currency_code: params.currency.toUpperCase(),
+                        value,
+                      },
                     },
                   },
-                },
-              ],
-              payment_preferences: { auto_bill_outstanding: true },
-            },
-          })
-          .pipe(Effect.flatMap(decodePrice));
+                ],
+                payment_preferences: { auto_bill_outstanding: true },
+              },
+            }),
+          ),
+          Effect.flatMap(decodePrice),
+        );
       },
       retrieve: (id) =>
         client
@@ -216,25 +220,28 @@ export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, ne
     Effect.map(PayPalClient, (client) =>
       PaymentIntentNS.PaymentIntents.of({
         create: (params) =>
-          client
-            .request({
-              method: "POST",
-              path: "/v2/checkout/orders",
-              body: {
-                intent: "CAPTURE",
-                purchase_units: [
-                  {
-                    amount: {
-                      currency_code: params.currency.toUpperCase(),
-                      value: toMajorString(params.amount, params.currency),
+          toMajorString(params.amount, params.currency, "amount").pipe(
+            Effect.flatMap((value) =>
+              client.request({
+                method: "POST",
+                path: "/v2/checkout/orders",
+                body: {
+                  intent: "CAPTURE",
+                  purchase_units: [
+                    {
+                      amount: {
+                        currency_code: params.currency.toUpperCase(),
+                        value,
+                      },
+                      description: params.description,
+                      custom_id: params.customer,
                     },
-                    description: params.description,
-                    custom_id: params.customer,
-                  },
-                ],
-              },
-            })
-            .pipe(Effect.flatMap(decodePaymentIntent)),
+                  ],
+                },
+              }),
+            ),
+            Effect.flatMap(decodePaymentIntent),
+          ),
         retrieve: (id) =>
           client
             .request({
@@ -351,7 +358,7 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
               .pipe(Effect.flatMap(decodeCaptureCurrency));
             amount = {
               currency_code: currency,
-              value: toMajorString(params.amount, currency),
+              value: yield* toMajorString(params.amount, currency, "amount"),
             };
           }
 

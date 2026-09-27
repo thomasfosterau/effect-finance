@@ -30,7 +30,7 @@ import {
   type Page,
 } from "@thomasfosterau/effect-payments";
 import { PROVIDER } from "./error.js";
-import { toMinorUnits } from "./money.js";
+import { exponent, parseMinorUnits, toMinorUnits } from "./money.js";
 
 /** The vendor data was decoded just before construction. */
 const TRUSTED: Schema.MakeOptions = { disableChecks: true };
@@ -45,10 +45,28 @@ const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr
 /** A major-unit decimal string, e.g. `"10.00"`. */
 const Decimal = Schema.String.check(Schema.isPattern(/^-?\d+(\.\d+)?$/));
 
+/**
+ * A PayPal `Money` object. The value is checked against its currency: more
+ * fraction digits than the currency allows (e.g. `"10.005"` USD, `"10.5"`
+ * HUF), or an amount beyond the safe-integer range in minor units, fails the
+ * decode rather than being rounded.
+ */
 const PayPalMoney = Schema.Struct({
   currency_code: Schema.String,
   value: Decimal,
-});
+}).check(
+  Schema.makeFilter(
+    (money) =>
+      parseMinorUnits(money.value, money.currency_code) !== undefined ||
+      `value must have at most ${exponent(money.currency_code)} fraction digits for ${money.currency_code} and fit a safe integer in minor units`,
+    {
+      identifier: "PayPalMoneyAmount",
+      title: "PayPal money amount",
+      description:
+        "A decimal value with no more fraction digits than its currency allows, within the safe-integer range in minor units",
+    },
+  ),
+);
 
 const PayPalProduct = Schema.Struct({
   id: Schema.String,
