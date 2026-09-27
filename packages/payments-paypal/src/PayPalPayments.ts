@@ -21,6 +21,8 @@ import {
   PaymentIntent as PaymentIntentNS,
   Subscription as SubscriptionNS,
   Refund as RefundNS,
+  CheckoutSession as CheckoutSessionNS,
+  BillingPortal as BillingPortalNS,
   PaymentInvalidRequestError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
@@ -373,6 +375,39 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
     }),
   ),
 );
+
+// ---------------------------------------------------------------------------
+// Hosted checkout and billing portal (unsupported)
+// ---------------------------------------------------------------------------
+
+/**
+ * The {@link CheckoutSessionNS.CheckoutSessions} capability for PayPal: every
+ * call fails with {@link PaymentInvalidRequestError}, because this provider
+ * does not implement the neutral hosted checkout. It is not part of
+ * {@link capabilities} — a program that needs hosted checkout does not
+ * type-check against PayPal by default — and exists for a program that must
+ * run on several providers and handles the failure itself.
+ */
+export const checkoutSessionsLayer: Layer.Layer<CheckoutSessionNS.CheckoutSessions> = Layer.succeed(
+  CheckoutSessionNS.CheckoutSessions,
+  CheckoutSessionNS.CheckoutSessions.of({
+    create: () => notSupported("hosted checkout sessions"),
+  }),
+);
+
+/**
+ * The {@link BillingPortalNS.BillingPortalSessions} capability for PayPal:
+ * every call fails with {@link PaymentInvalidRequestError}, because this
+ * provider has no hosted billing portal. Like {@link checkoutSessionsLayer}, it
+ * is not part of {@link capabilities}.
+ */
+export const billingPortalSessionsLayer: Layer.Layer<BillingPortalNS.BillingPortalSessions> =
+  Layer.succeed(
+    BillingPortalNS.BillingPortalSessions,
+    BillingPortalNS.BillingPortalSessions.of({
+      create: () => notSupported("billing portal sessions"),
+    }),
+  );
 
 // ---------------------------------------------------------------------------
 // Bundles

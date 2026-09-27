@@ -28,6 +28,8 @@ import {
   PaymentIntent as PaymentIntentNS,
   Subscription as SubscriptionNS,
   Refund as RefundNS,
+  CheckoutSession as CheckoutSessionNS,
+  BillingPortal as BillingPortalNS,
   PaymentProviderError,
   type Page,
 } from "@thomasfosterau/effect-payments";
@@ -143,6 +145,15 @@ const StripeRefund = Schema.Struct({
   metadata: Metadata,
   created: Schema.Number,
 });
+
+/**
+ * A `checkout.session` or `billing_portal.session`, narrowed to its id and the
+ * redirect URL. `url` is required: a session with nothing to redirect to is
+ * useless to the caller (a checkout session only has one in hosted mode, the
+ * only mode the neutral capability creates), so a missing or `null` one fails
+ * the decode rather than pushing that branch into every call site.
+ */
+const StripeHostedSession = Schema.Struct({ id: Schema.String, url: Schema.String });
 
 /** A list page: `{ object: "list", data, has_more }`. */
 const StripeList = <S extends Schema.Top>(item: S) =>
@@ -296,6 +307,16 @@ const toRefund = (refund: typeof StripeRefund.Type): RefundNS.Refund =>
     TRUSTED,
   );
 
+const toCheckoutSession = (
+  session: typeof StripeHostedSession.Type,
+): CheckoutSessionNS.CheckoutSession =>
+  new CheckoutSessionNS.CheckoutSession({ id: session.id, url: session.url }, TRUSTED);
+
+const toBillingPortalSession = (
+  session: typeof StripeHostedSession.Type,
+): BillingPortalNS.BillingPortalSession =>
+  new BillingPortalNS.BillingPortalSession({ id: session.id, url: session.url }, TRUSTED);
+
 // ---------------------------------------------------------------------------
 // Decoders
 // ---------------------------------------------------------------------------
@@ -376,3 +397,15 @@ export const decodeSubscriptionPage = pageDecoder(
 export const decodeRefund = decoder("refund", StripeRefund, toRefund);
 /** A page of refunds. */
 export const decodeRefundPage = pageDecoder("refund", StripeRefund, toRefund);
+/** A checkout session. */
+export const decodeCheckoutSession = decoder(
+  "checkout session",
+  StripeHostedSession,
+  toCheckoutSession,
+);
+/** A billing portal session. */
+export const decodeBillingPortalSession = decoder(
+  "billing portal session",
+  StripeHostedSession,
+  toBillingPortalSession,
+);

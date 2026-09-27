@@ -23,12 +23,16 @@ import {
   PaymentIntent as PaymentIntentNS,
   Subscription as SubscriptionNS,
   Refund as RefundNS,
+  CheckoutSession as CheckoutSessionNS,
+  BillingPortal as BillingPortalNS,
   type PaymentConfigError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
 import type { StripeParams } from "./internal/params.js";
 import { path, type RequestPath, withPath } from "./internal/index.js";
 import {
+  decodeBillingPortalSession,
+  decodeCheckoutSession,
   decodeCustomer,
   decodeCustomerPage,
   decodeDeleted,
@@ -336,6 +340,79 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, StripeHttp> = La
 );
 
 // ---------------------------------------------------------------------------
+// CheckoutSessions
+// ---------------------------------------------------------------------------
+
+/**
+ * Stripe implementation of the {@link CheckoutSessionNS.CheckoutSessions}
+ * capability: a hosted Checkout session (`POST /v1/checkout/sessions`). Each
+ * line item names a price, with a quantity of 1 unless given; no amount is
+ * ever sent. `subscriptionMetadata` becomes `subscription_data[metadata]`, so
+ * it lands on the subscription Stripe creates.
+ */
+export const checkoutSessionsLayer: Layer.Layer<
+  CheckoutSessionNS.CheckoutSessions,
+  never,
+  StripeHttp
+> = Layer.effect(
+  CheckoutSessionNS.CheckoutSessions,
+  Effect.map(StripeHttp, (http) => {
+    const request = call(http);
+    return CheckoutSessionNS.CheckoutSessions.of({
+      create: (params) =>
+        request(
+          "POST",
+          "/v1/checkout/sessions",
+          {
+            mode: params.mode,
+            customer: params.customer,
+            line_items: params.lineItems.map((item) => ({
+              price: item.price,
+              quantity: item.quantity ?? 1,
+            })),
+            success_url: params.successUrl,
+            cancel_url: params.cancelUrl,
+            metadata: params.metadata,
+            subscription_data: params.subscriptionMetadata && {
+              metadata: params.subscriptionMetadata,
+            },
+          },
+          decodeCheckoutSession,
+        ),
+    });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// BillingPortalSessions
+// ---------------------------------------------------------------------------
+
+/**
+ * Stripe implementation of the {@link BillingPortalNS.BillingPortalSessions}
+ * capability: a customer portal session (`POST /v1/billing_portal/sessions`),
+ * using the account's default portal configuration.
+ */
+export const billingPortalSessionsLayer: Layer.Layer<
+  BillingPortalNS.BillingPortalSessions,
+  never,
+  StripeHttp
+> = Layer.effect(
+  BillingPortalNS.BillingPortalSessions,
+  Effect.map(StripeHttp, (http) => {
+    const request = call(http);
+    return BillingPortalNS.BillingPortalSessions.of({
+      create: (params) =>
+        request(
+          "POST",
+          "/v1/billing_portal/sessions",
+          { customer: params.customer, return_url: params.returnUrl },
+          decodeBillingPortalSession,
+        ),
+    });
+  }),
+);
+
+// ---------------------------------------------------------------------------
 // Bundles
 // ---------------------------------------------------------------------------
 
@@ -350,7 +427,9 @@ export const capabilities: Layer.Layer<
   | PriceNS.Prices
   | PaymentIntentNS.PaymentIntents
   | SubscriptionNS.Subscriptions
-  | RefundNS.Refunds,
+  | RefundNS.Refunds
+  | CheckoutSessionNS.CheckoutSessions
+  | BillingPortalNS.BillingPortalSessions,
   never,
   StripeHttp
 > = Layer.mergeAll(
@@ -360,6 +439,8 @@ export const capabilities: Layer.Layer<
   paymentIntentsLayer,
   subscriptionsLayer,
   refundsLayer,
+  checkoutSessionsLayer,
+  billingPortalSessionsLayer,
 );
 
 /**

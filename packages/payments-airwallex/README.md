@@ -42,6 +42,7 @@ Airwallex's payment-acceptance API maps onto a subset of the core capabilities:
 | `PaymentIntents` | ✅ (no `update` — confirm/cancel instead) |
 | `Refunds` | ✅ (no `update`; refunds reference a payment intent, not a charge) |
 | `Products` / `Prices` / `Subscriptions` | ❌ not provided |
+| `CheckoutSessions` / `BillingPortalSessions` | ❌ not in `capabilities`; `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs fail every call with `PaymentInvalidRequestError` |
 
 Because each capability is an independent Effect service, this provider simply doesn't supply layers for the capabilities Airwallex lacks. A program that only uses the supported capabilities is fully satisfied; one that needs, say, `Subscriptions` will not type-check against the Airwallex layer alone. The few individual operations without an Airwallex equivalent fail with a neutral `PaymentInvalidRequestError` rather than pretending to succeed.
 

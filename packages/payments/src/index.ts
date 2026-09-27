@@ -4,7 +4,8 @@
  * A vendor-neutral payments core for Effect. It defines:
  *
  * - **Capabilities** — abstract services (`Customers`, `Products`, `Prices`,
- *   `PaymentIntents`, `Subscriptions`, `Refunds`) that programs depend on.
+ *   `PaymentIntents`, `Subscriptions`, `Refunds`, `CheckoutSessions`,
+ *   `BillingPortalSessions`) that programs depend on.
  * - **Domain types** — provider-agnostic entities (`Customer`, `Product`,
  *   `Price`, `PaymentIntent`, `Subscription`, `Refund`, `Money`).
  * - **Errors** — a neutral error channel (`PaymentsError` and friends).
@@ -46,3 +47,5 @@ export * as Price from "./Price.js";
 export * as PaymentIntent from "./PaymentIntent.js";
 export * as Subscription from "./Subscription.js";
 export * as Refund from "./Refund.js";
+export * as CheckoutSession from "./CheckoutSession.js";
+export * as BillingPortal from "./BillingPortal.js";

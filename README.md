@@ -78,14 +78,16 @@ npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stri
 
 Each resource is an abstract Effect service (a `Context.Service`). A program that calls `Customer.create(...)` requires the `Customers` capability in its environment; nothing more.
 
-| Module          | Capability       | Operations                                                  |
-| --------------- | ---------------- | ----------------------------------------------------------- |
-| `Customer`      | `Customers`      | `create`, `retrieve`, `update`, `del`, `list`               |
-| `Product`       | `Products`       | `create`, `retrieve`, `update`, `del`, `list`               |
-| `Price`         | `Prices`         | `create`, `retrieve`, `update`, `list`                      |
+| Module | Capability | Operations |
+| --- | --- | --- |
+| `Customer` | `Customers` | `create`, `retrieve`, `update`, `del`, `list` |
+| `Product` | `Products` | `create`, `retrieve`, `update`, `del`, `list` |
+| `Price` | `Prices` | `create`, `retrieve`, `update`, `list` |
 | `PaymentIntent` | `PaymentIntents` | `create`, `retrieve`, `update`, `confirm`, `cancel`, `list` |
-| `Subscription`  | `Subscriptions`  | `create`, `retrieve`, `update`, `cancel`, `list`            |
-| `Refund`        | `Refunds`        | `create`, `retrieve`, `update`, `list`                      |
+| `Subscription` | `Subscriptions` | `create`, `retrieve`, `update`, `cancel`, `list` |
+| `Refund` | `Refunds` | `create`, `retrieve`, `update`, `list` |
+| `CheckoutSession` | `CheckoutSessions` | `create` (a hosted checkout page → its `url`) |
+| `BillingPortal` | `BillingPortalSessions` | `create` (a hosted billing portal page → its `url`) |
 
 Every operation returns `Effect<Entity, PaymentsError, Capability>`. List operations return a neutral `Page<Entity>` (`{ data, hasMore }`); deletions return `Deleted` (`{ id, deleted: true }`).
 

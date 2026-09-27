@@ -34,7 +34,7 @@ const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 
 ## What's included
 
-- **`StripePayments`** — `layer` / `layerFromEnv` (fetch transport + every capability), `capabilities` (every capability over an existing `StripeHttp`), and individual capability layers (`customersLayer`, `productsLayer`, …). Responses are decoded with `Schema`; a malformed one fails with `PaymentProviderError`.
+- **`StripePayments`** — `layer` / `layerFromEnv` (fetch transport + every capability), `capabilities` (every capability over an existing `StripeHttp`), and individual capability layers (`customersLayer`, `productsLayer`, …, `checkoutSessionsLayer`, `billingPortalSessionsLayer`). Responses are decoded with `Schema`; a malformed one fails with `PaymentProviderError`.
 - **`StripeHttp`** — the fetch-only transport: form-encoded bodies, pinned `Stripe-Version`, `Redacted` key, redirects refused, the SDK's retry policy with idempotency keys, and Stripe's error envelope decoded onto the neutral errors. `layer` / `layerFromEnv` / `make`.
 - **`Stripe`** — the optional SDK transport: an SDK client (`StripeService`) and `StripeHttp` over it (`layer` / `layerFromEnv` / `make`). Needs the `stripe` peer.
 - **Raw resource modules** — full-fidelity Stripe coverage typed with the `stripe` package's declarations, for resources with no vendor-neutral equivalent (`Treasury`, `Issuing.*`, `Terminal.*`, `Identity.*`, `Invoice`, `Charge`, `Payout`, `CheckoutSession`, and many more).
