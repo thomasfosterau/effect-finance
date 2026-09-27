@@ -44,7 +44,7 @@ import {
   decodeRefund,
   decodeSubscription,
 } from "./internal/mapping.js";
-import { toMajorString } from "./internal/money.js";
+import { checkMinorUnits, toMajorString } from "./internal/money.js";
 
 /** Fail with a neutral error for an operation PayPal does not support. */
 const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
@@ -329,6 +329,8 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
     RefundNS.Refunds.of({
       create: (params) =>
         Effect.gen(function* () {
+          // Refuse a bad partial amount before any lookup or refund is sent.
+          if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
           // PayPal refunds a capture. Accept a capture id directly (`charge`)
           // or resolve the first capture of an order (`paymentIntent`).
           let captureId = params.charge ?? null;
