@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as Dispute from "@thomasfosterau/effect-payments-stripe/Dispute";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const updateDispute = (id: string, evidence: object) =>
  *   Dispute.update(id, { evidence });
@@ -15,15 +16,17 @@
  *   return dispute;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a dispute
@@ -31,8 +34,8 @@ import type { StripeService } from "./Stripe.js";
 export const retrieve = (
   id: string,
   params?: Stripe.DisputeRetrieveParams,
-): Effect.Effect<Stripe.Dispute, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.disputes.retrieve(id, params));
+): Effect.Effect<Stripe.Dispute, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/disputes/${id}`, params);
 
 /**
  * Update a dispute
@@ -40,13 +43,13 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.DisputeUpdateParams,
-): Effect.Effect<Stripe.Dispute, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.disputes.update(id, params));
+): Effect.Effect<Stripe.Dispute, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/disputes/${id}`, params);
 
 /**
  * List disputes
  */
 export const list = (
   params?: Stripe.DisputeListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Dispute>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.disputes.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Dispute>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/disputes", params);

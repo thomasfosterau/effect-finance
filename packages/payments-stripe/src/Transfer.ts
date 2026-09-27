@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as Transfer from "@thomasfosterau/effect-payments-stripe/Transfer";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createTransfer = (amount: number, destination: string) =>
  *   Transfer.create({
@@ -19,23 +20,25 @@
  *   return transfer;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a transfer
  */
 export const create = (
   params: Stripe.TransferCreateParams,
-): Effect.Effect<Stripe.Transfer, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.transfers.create(params));
+): Effect.Effect<Stripe.Transfer, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/transfers", params);
 
 /**
  * Retrieve a transfer
@@ -43,8 +46,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.TransferRetrieveParams,
-): Effect.Effect<Stripe.Transfer, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.transfers.retrieve(id, params));
+): Effect.Effect<Stripe.Transfer, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/transfers/${id}`, params);
 
 /**
  * Update a transfer
@@ -52,13 +55,13 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.TransferUpdateParams,
-): Effect.Effect<Stripe.Transfer, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.transfers.update(id, params));
+): Effect.Effect<Stripe.Transfer, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/transfers/${id}`, params);
 
 /**
  * List transfers
  */
 export const list = (
   params?: Stripe.TransferListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Transfer>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.transfers.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Transfer>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/transfers", params);

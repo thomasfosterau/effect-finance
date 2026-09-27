@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as BalanceTransaction from "@thomasfosterau/effect-payments-stripe/BalanceTransaction";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const getTransaction = (id: string) =>
  *   BalanceTransaction.retrieve(id);
@@ -15,15 +16,17 @@
  *   return transaction;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a balance transaction
@@ -31,13 +34,13 @@ import type { StripeService } from "./Stripe.js";
 export const retrieve = (
   id: string,
   params?: Stripe.BalanceTransactionRetrieveParams,
-): Effect.Effect<Stripe.BalanceTransaction, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.balanceTransactions.retrieve(id, params));
+): Effect.Effect<Stripe.BalanceTransaction, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/balance_transactions/${id}`, params);
 
 /**
  * List balance transactions
  */
 export const list = (
   params?: Stripe.BalanceTransactionListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.BalanceTransaction>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.balanceTransactions.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.BalanceTransaction>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/balance_transactions", params);

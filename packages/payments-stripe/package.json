@@ -39,6 +39,10 @@
       "types": "./dist/Stripe.d.ts",
       "default": "./dist/Stripe.js"
     },
+    "./StripeHttp": {
+      "types": "./dist/StripeHttp.d.ts",
+      "default": "./dist/StripeHttp.js"
+    },
     "./StripePayments": {
       "types": "./dist/StripePayments.d.ts",
       "default": "./dist/StripePayments.js"
@@ -232,17 +236,23 @@
     "access": "public"
   },
   "dependencies": {
-    "@thomasfosterau/effect-payments": "workspace:^",
-    "stripe": "catalog:"
+    "@thomasfosterau/effect-payments": "workspace:^"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-istanbul": "catalog:",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "stripe": "catalog:"
   },
   "peerDependencies": {
-    "effect": "catalog:peers"
+    "effect": "catalog:peers",
+    "stripe": "catalog:peers"
+  },
+  "peerDependenciesMeta": {
+    "stripe": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22"

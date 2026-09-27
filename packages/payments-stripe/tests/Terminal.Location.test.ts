@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import { describe, it, expect } from "vite-plus/test";
+import { Effect } from "effect";
 import type Stripe from "stripe";
 import * as TerminalLocation from "../src/Terminal.Location.ts";
-import { StripeService } from "../src/Stripe.ts";
+import type { StripeRequest } from "../src/StripeHttp.ts";
+import { fakeStripeHttp } from "./support.ts";
 
 describe("Terminal.Location", () => {
   const createMockStripe = () => {
@@ -26,30 +27,25 @@ describe("Terminal.Location", () => {
       deleted: true,
     };
 
-    return {
-      terminal: {
-        locations: {
-          create: vi.fn().mockResolvedValue(mockLocation),
-          retrieve: vi.fn().mockResolvedValue(mockLocation),
-          update: vi.fn().mockResolvedValue(mockLocation),
-          del: vi.fn().mockResolvedValue(mockDeletedLocation),
-          list: vi.fn().mockResolvedValue({
-            object: "list",
-            data: [mockLocation],
-            has_more: false,
-            url: "/v1/terminal/locations",
-          }),
-        },
-      },
-    } as unknown as Stripe;
+    return (request: StripeRequest) => {
+      if (request.method === "DELETE") return mockDeletedLocation;
+      if (request.method === "GET" && request.path === "/v1/terminal/locations") {
+        return {
+          object: "list",
+          data: [mockLocation],
+          has_more: false,
+          url: "/v1/terminal/locations",
+        };
+      }
+      return mockLocation;
+    };
   };
 
-  const createTestLayer = (mockStripe: Stripe) => Layer.succeed(StripeService, mockStripe);
+  const createTestLayer = (answer: (request: StripeRequest) => unknown) => fakeStripeHttp(answer);
 
   describe("create", () => {
-    it("should call stripe.terminal.locations.create with correct params", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should create through the transport with correct params", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const params = {
         display_name: "HQ",
@@ -66,30 +62,32 @@ describe("Terminal.Location", () => {
         TerminalLocation.create(params).pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.locations.create).toHaveBeenCalledWith(params);
+      expect(calls[0]).toEqual({ method: "POST", path: "/v1/terminal/locations", params });
       expect(result.id).toBe("tml_123");
       expect(result.display_name).toBe("HQ");
     });
   });
 
   describe("retrieve", () => {
-    it("should call stripe.terminal.locations.retrieve with correct id", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should retrieve through the transport with correct id", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const result = await Effect.runPromise(
         TerminalLocation.retrieve("tml_123").pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.locations.retrieve).toHaveBeenCalledWith("tml_123", undefined);
+      expect(calls[0]).toEqual({
+        method: "GET",
+        path: "/v1/terminal/locations/tml_123",
+        params: undefined,
+      });
       expect(result.id).toBe("tml_123");
     });
   });
 
   describe("update", () => {
-    it("should call stripe.terminal.locations.update with correct params", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should update through the transport with correct params", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const params = { display_name: "Updated HQ" };
 
@@ -97,46 +95,47 @@ describe("Terminal.Location", () => {
         TerminalLocation.update("tml_123", params).pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.locations.update).toHaveBeenCalledWith("tml_123", params);
+      expect(calls[0]).toEqual({ method: "POST", path: "/v1/terminal/locations/tml_123", params });
       expect(result.id).toBe("tml_123");
     });
   });
 
   describe("del", () => {
-    it("should call stripe.terminal.locations.del with correct id", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should delete through the transport with correct id", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const result = await Effect.runPromise(
         TerminalLocation.del("tml_123").pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.locations.del).toHaveBeenCalledWith("tml_123");
+      expect(calls[0]).toEqual({ method: "DELETE", path: "/v1/terminal/locations/tml_123" });
       expect(result.deleted).toBe(true);
     });
   });
 
   describe("list", () => {
-    it("should call stripe.terminal.locations.list with no params", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should list through the transport with no params", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const result = await Effect.runPromise(TerminalLocation.list().pipe(Effect.provide(layer)));
 
-      expect(mockStripe.terminal.locations.list).toHaveBeenCalledWith(undefined);
+      expect(calls[0]).toEqual({
+        method: "GET",
+        path: "/v1/terminal/locations",
+        params: undefined,
+      });
       expect(result.data).toHaveLength(1);
       expect(result.data[0].id).toBe("tml_123");
     });
 
-    it("should call stripe.terminal.locations.list with params", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should list through the transport with params", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const params = { limit: 10 };
 
       await Effect.runPromise(TerminalLocation.list(params).pipe(Effect.provide(layer)));
 
-      expect(mockStripe.terminal.locations.list).toHaveBeenCalledWith(params);
+      expect(calls[0]).toEqual({ method: "GET", path: "/v1/terminal/locations", params });
     });
   });
 });

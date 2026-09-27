@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as PaymentIntent from "@thomasfosterau/effect-payments-stripe/PaymentIntent";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createPaymentIntent = (amount: number, currency: string) =>
  *   PaymentIntent.create({ amount, currency });
@@ -15,23 +16,25 @@
  *   return intent;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a payment intent
  */
 export const create = (
   params: Stripe.PaymentIntentCreateParams,
-): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentIntents.create(params));
+): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/payment_intents", params);
 
 /**
  * Retrieve a payment intent
@@ -39,8 +42,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.PaymentIntentRetrieveParams,
-): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentIntents.retrieve(id, params));
+): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/payment_intents/${id}`, params);
 
 /**
  * Update a payment intent
@@ -48,8 +51,8 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.PaymentIntentUpdateParams,
-): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentIntents.update(id, params));
+): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/payment_intents/${id}`, params);
 
 /**
  * Confirm a payment intent
@@ -57,8 +60,8 @@ export const update = (
 export const confirm = (
   id: string,
   params?: Stripe.PaymentIntentConfirmParams,
-): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentIntents.confirm(id, params));
+): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/payment_intents/${id}/confirm`, params);
 
 /**
  * Cancel a payment intent
@@ -66,13 +69,13 @@ export const confirm = (
 export const cancel = (
   id: string,
   params?: Stripe.PaymentIntentCancelParams,
-): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentIntents.cancel(id, params));
+): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/payment_intents/${id}/cancel`, params);
 
 /**
  * List payment intents
  */
 export const list = (
   params?: Stripe.PaymentIntentListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.PaymentIntent>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.paymentIntents.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.PaymentIntent>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/payment_intents", params);

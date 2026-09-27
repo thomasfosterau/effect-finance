@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as Charge from "@thomasfosterau/effect-payments-stripe/Charge";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createCharge = (amount: number, currency: string, source: string) =>
  *   Charge.create({ amount, currency, source });
@@ -15,23 +16,25 @@
  *   return charge;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a charge
  */
 export const create = (
   params: Stripe.ChargeCreateParams,
-): Effect.Effect<Stripe.Charge, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.charges.create(params));
+): Effect.Effect<Stripe.Charge, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/charges", params);
 
 /**
  * Retrieve a charge
@@ -39,8 +42,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.ChargeRetrieveParams,
-): Effect.Effect<Stripe.Charge, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.charges.retrieve(id, params));
+): Effect.Effect<Stripe.Charge, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/charges/${id}`, params);
 
 /**
  * Update a charge
@@ -48,13 +51,13 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.ChargeUpdateParams,
-): Effect.Effect<Stripe.Charge, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.charges.update(id, params));
+): Effect.Effect<Stripe.Charge, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/charges/${id}`, params);
 
 /**
  * List charges
  */
 export const list = (
   params?: Stripe.ChargeListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Charge>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.charges.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.Charge>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/charges", params);

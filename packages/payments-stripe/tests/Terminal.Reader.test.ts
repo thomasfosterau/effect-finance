@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import { describe, it, expect } from "vite-plus/test";
+import { Effect } from "effect";
 import type Stripe from "stripe";
 import * as TerminalReader from "../src/Terminal.Reader.ts";
-import { StripeService } from "../src/Stripe.ts";
+import type { StripeRequest } from "../src/StripeHttp.ts";
+import { fakeStripeHttp } from "./support.ts";
 
 describe("Terminal.Reader", () => {
   const createMockStripe = () => {
@@ -22,30 +23,20 @@ describe("Terminal.Reader", () => {
       deleted: true,
     };
 
-    return {
-      terminal: {
-        readers: {
-          create: vi.fn().mockResolvedValue(mockReader),
-          retrieve: vi.fn().mockResolvedValue(mockReader),
-          update: vi.fn().mockResolvedValue(mockReader),
-          del: vi.fn().mockResolvedValue(mockDeletedReader),
-          list: vi.fn().mockResolvedValue({
-            object: "list",
-            data: [mockReader],
-            has_more: false,
-            url: "/v1/terminal/readers",
-          }),
-        },
-      },
-    } as unknown as Stripe;
+    return (request: StripeRequest) => {
+      if (request.method === "DELETE") return mockDeletedReader;
+      if (request.method === "GET" && request.path === "/v1/terminal/readers") {
+        return { object: "list", data: [mockReader], has_more: false, url: "/v1/terminal/readers" };
+      }
+      return mockReader;
+    };
   };
 
-  const createTestLayer = (mockStripe: Stripe) => Layer.succeed(StripeService, mockStripe);
+  const createTestLayer = (answer: (request: StripeRequest) => unknown) => fakeStripeHttp(answer);
 
   describe("create", () => {
-    it("should call stripe.terminal.readers.create with correct params", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should create through the transport with correct params", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const params = {
         registration_code: "simulated-wpe",
@@ -57,29 +48,31 @@ describe("Terminal.Reader", () => {
         TerminalReader.create(params).pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.readers.create).toHaveBeenCalledWith(params);
+      expect(calls[0]).toEqual({ method: "POST", path: "/v1/terminal/readers", params });
       expect(result.id).toBe("tmr_123");
     });
   });
 
   describe("retrieve", () => {
-    it("should call stripe.terminal.readers.retrieve with correct id", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should retrieve through the transport with correct id", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const result = await Effect.runPromise(
         TerminalReader.retrieve("tmr_123").pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.readers.retrieve).toHaveBeenCalledWith("tmr_123", undefined);
+      expect(calls[0]).toEqual({
+        method: "GET",
+        path: "/v1/terminal/readers/tmr_123",
+        params: undefined,
+      });
       expect(result.id).toBe("tmr_123");
     });
   });
 
   describe("update", () => {
-    it("should call stripe.terminal.readers.update with correct params", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should update through the transport with correct params", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const params = { label: "Updated Reader" };
 
@@ -87,46 +80,43 @@ describe("Terminal.Reader", () => {
         TerminalReader.update("tmr_123", params).pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.readers.update).toHaveBeenCalledWith("tmr_123", params);
+      expect(calls[0]).toEqual({ method: "POST", path: "/v1/terminal/readers/tmr_123", params });
       expect(result.id).toBe("tmr_123");
     });
   });
 
   describe("del", () => {
-    it("should call stripe.terminal.readers.del with correct id", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should delete through the transport with correct id", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const result = await Effect.runPromise(
         TerminalReader.del("tmr_123").pipe(Effect.provide(layer)),
       );
 
-      expect(mockStripe.terminal.readers.del).toHaveBeenCalledWith("tmr_123");
+      expect(calls[0]).toEqual({ method: "DELETE", path: "/v1/terminal/readers/tmr_123" });
       expect(result.deleted).toBe(true);
     });
   });
 
   describe("list", () => {
-    it("should call stripe.terminal.readers.list with no params", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should list through the transport with no params", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const result = await Effect.runPromise(TerminalReader.list().pipe(Effect.provide(layer)));
 
-      expect(mockStripe.terminal.readers.list).toHaveBeenCalledWith(undefined);
+      expect(calls[0]).toEqual({ method: "GET", path: "/v1/terminal/readers", params: undefined });
       expect(result.data).toHaveLength(1);
       expect(result.data[0].id).toBe("tmr_123");
     });
 
-    it("should call stripe.terminal.readers.list with params", async () => {
-      const mockStripe = createMockStripe();
-      const layer = createTestLayer(mockStripe);
+    it("should list through the transport with params", async () => {
+      const { layer, calls } = createTestLayer(createMockStripe());
 
       const params = { limit: 10 };
 
       await Effect.runPromise(TerminalReader.list(params).pipe(Effect.provide(layer)));
 
-      expect(mockStripe.terminal.readers.list).toHaveBeenCalledWith(params);
+      expect(calls[0]).toEqual({ method: "GET", path: "/v1/terminal/readers", params });
     });
   });
 });

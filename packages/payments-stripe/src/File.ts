@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as File from "@thomasfosterau/effect-payments-stripe/File";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createFile = (file: Buffer, purpose: string) =>
  *   File.create({ file, purpose });
@@ -15,23 +16,24 @@
  *   return fileObj;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest, stripeUpload } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a file
  */
 export const create = (
   params: Stripe.FileCreateParams,
-): Effect.Effect<Stripe.File, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.files.create(params));
+): Effect.Effect<Stripe.File, StripeError, StripeHttp> => stripeUpload("/v1/files", params);
 
 /**
  * Retrieve a file
@@ -39,13 +41,13 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.FileRetrieveParams,
-): Effect.Effect<Stripe.File, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.files.retrieve(id, params));
+): Effect.Effect<Stripe.File, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/files/${id}`, params);
 
 /**
  * List files
  */
 export const list = (
   params?: Stripe.FileListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.File>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.files.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.File>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/files", params);

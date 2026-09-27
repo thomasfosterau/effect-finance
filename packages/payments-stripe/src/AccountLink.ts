@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as AccountLink from "@thomasfosterau/effect-payments-stripe/AccountLink";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const createAccountLink = (accountId: string) =>
  *   AccountLink.create({
@@ -20,20 +21,22 @@
  *   return accountLink;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create an account link
  */
 export const create = (
   params: Stripe.AccountLinkCreateParams,
-): Effect.Effect<Stripe.AccountLink, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.accountLinks.create(params));
+): Effect.Effect<Stripe.AccountLink, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/account_links", params);

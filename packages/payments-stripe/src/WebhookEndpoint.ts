@@ -3,9 +3,10 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
  * import * as WebhookEndpoint from "@thomasfosterau/effect-payments-stripe/WebhookEndpoint";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
  * const program = Effect.gen(function* () {
  *   const endpoint = yield* WebhookEndpoint.create({
@@ -18,23 +19,25 @@
  *   return updated;
  * });
  *
- * const layer = Stripe.layer({ apiKey: "sk_test_..." });
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
  * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 
 import type { Effect } from "effect";
 import type Stripe from "stripe";
-import { type StripeError, wrapStripeCall } from "./internal/index.js";
-import type { StripeService } from "./Stripe.js";
+import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import type { StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a webhook endpoint
  */
 export const create = (
   params: Stripe.WebhookEndpointCreateParams,
-): Effect.Effect<Stripe.WebhookEndpoint, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.webhookEndpoints.create(params));
+): Effect.Effect<Stripe.WebhookEndpoint, StripeError, StripeHttp> =>
+  stripeRequest("POST", "/v1/webhook_endpoints", params);
 
 /**
  * Retrieve a webhook endpoint
@@ -42,8 +45,8 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.WebhookEndpointRetrieveParams,
-): Effect.Effect<Stripe.WebhookEndpoint, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.webhookEndpoints.retrieve(id, params));
+): Effect.Effect<Stripe.WebhookEndpoint, StripeError, StripeHttp> =>
+  stripeRequest("GET", path`/v1/webhook_endpoints/${id}`, params);
 
 /**
  * Update a webhook endpoint
@@ -51,21 +54,21 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.WebhookEndpointUpdateParams,
-): Effect.Effect<Stripe.WebhookEndpoint, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.webhookEndpoints.update(id, params));
+): Effect.Effect<Stripe.WebhookEndpoint, StripeError, StripeHttp> =>
+  stripeRequest("POST", path`/v1/webhook_endpoints/${id}`, params);
 
 /**
  * Delete a webhook endpoint
  */
 export const del = (
   id: string,
-): Effect.Effect<Stripe.DeletedWebhookEndpoint, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.webhookEndpoints.del(id));
+): Effect.Effect<Stripe.DeletedWebhookEndpoint, StripeError, StripeHttp> =>
+  stripeRequest("DELETE", path`/v1/webhook_endpoints/${id}`);
 
 /**
  * List webhook endpoints
  */
 export const list = (
   params?: Stripe.WebhookEndpointListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.WebhookEndpoint>, StripeError, StripeService> =>
-  wrapStripeCall((stripe) => stripe.webhookEndpoints.list(params));
+): Effect.Effect<Stripe.ApiList<Stripe.WebhookEndpoint>, StripeError, StripeHttp> =>
+  stripeRequest("GET", "/v1/webhook_endpoints", params);

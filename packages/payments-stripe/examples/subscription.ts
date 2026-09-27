@@ -1,4 +1,5 @@
-import { Effect, Console } from "effect";
+import { Console, Effect, Layer } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as Product from "@thomasfosterau/effect-payments/Product";
 import * as Price from "@thomasfosterau/effect-payments/Price";
@@ -49,9 +50,9 @@ const program = Effect.gen(function* () {
   return { customer, product, price, subscription };
 });
 
-const layer = StripePayments.layer({
-  apiKey: process.env.STRIPE_API_KEY || "sk_test_...",
-});
+// The key comes from STRIPE_API_KEY, read through `Config` as a `Redacted`;
+// the fetch transport needs an `HttpClient`.
+const layer = StripePayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 
 Effect.runPromise(program.pipe(Effect.provide(layer)))
   .then((result) => {
