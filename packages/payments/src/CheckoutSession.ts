@@ -57,25 +57,40 @@ export interface LineItemParams {
   readonly quantity?: number | undefined;
 }
 
-/** Parameters for creating a checkout session. */
-export interface CreateParams {
-  readonly mode: CheckoutMode;
+/** At least one line item: a checkout with nothing to buy is not a checkout. */
+export type LineItems = readonly [LineItemParams, ...ReadonlyArray<LineItemParams>];
+
+/** The parameters every checkout session takes, whatever its mode. */
+export interface CommonParams {
   /** The customer to bill. Omitted, the provider collects the buyer's details. */
   readonly customer?: string | undefined;
-  readonly lineItems: ReadonlyArray<LineItemParams>;
+  readonly lineItems: LineItems;
   /** Where the provider sends the buyer after a completed checkout. */
   readonly successUrl: string;
   /** Where the provider sends the buyer after abandoning the checkout. */
   readonly cancelUrl: string;
   /** Metadata stored on the checkout session itself. */
   readonly metadata?: Record<string, string> | undefined;
+}
+
+/** A checkout for a one-off payment. */
+export interface PaymentParams extends CommonParams {
+  readonly mode: "payment";
+}
+
+/** A checkout that starts a subscription when the buyer completes it. */
+export interface SubscriptionParams extends CommonParams {
+  readonly mode: "subscription";
   /**
-   * Metadata stored on the subscription the checkout creates (`mode:
-   * "subscription"` only), so a webhook for that subscription can be
-   * attributed without reading the checkout session back.
+   * Metadata stored on the subscription the checkout creates, so a webhook
+   * for that subscription can be attributed without reading the checkout
+   * session back.
    */
   readonly subscriptionMetadata?: Record<string, string> | undefined;
 }
+
+/** Parameters for creating a checkout session, keyed on its `mode`. */
+export type CreateParams = PaymentParams | SubscriptionParams;
 
 /**
  * The hosted checkout capability. A provider supplies a `Layer` implementing

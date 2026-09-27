@@ -148,12 +148,12 @@ const StripeRefund = Schema.Struct({
 
 /**
  * A `checkout.session` or `billing_portal.session`, narrowed to its id and the
- * redirect URL. `url` is required: a session with nothing to redirect to is
+ * redirect URL. `url` is required and non-empty: a session with nothing to redirect to is
  * useless to the caller (a checkout session only has one in hosted mode, the
  * only mode the neutral capability creates), so a missing or `null` one fails
  * the decode rather than pushing that branch into every call site.
  */
-const StripeHostedSession = Schema.Struct({ id: Schema.String, url: Schema.String });
+const StripeHostedSession = Schema.Struct({ id: Schema.String, url: Schema.NonEmptyString });
 
 /** A list page: `{ object: "list", data, has_more }`. */
 const StripeList = <S extends Schema.Top>(item: S) =>

@@ -15,7 +15,7 @@ import { fakeStripeHttp, jsonResponse, stubFetch, withTestClock } from "./suppor
  * 2xx with no URL a failure rather than an invented redirect.
  */
 
-const checkout: CheckoutSession.CreateParams = {
+const checkout: CheckoutSession.SubscriptionParams = {
   mode: "subscription",
   customer: "cus_1",
   lineItems: [{ price: "price_monthly" }],
@@ -97,7 +97,7 @@ describe("StripePayments checkoutSessionsLayer", () => {
     });
   });
 
-  it.each([{ id: "cs_1" }, { id: "cs_1", url: null }])(
+  it.each([{ id: "cs_1" }, { id: "cs_1", url: null }, { id: "cs_1", url: "" }])(
     "fails rather than inventing a URL when a 2xx carries none (%o)",
     async (body) => {
       const error = await run(Effect.flip(CheckoutSession.create(checkout)), {
@@ -107,6 +107,17 @@ describe("StripePayments checkoutSessionsLayer", () => {
       expect(error.message).toBe("Stripe returned a malformed checkout session response");
     },
   );
+
+  it("never sends subscription data for a payment checkout, even from an untyped caller", async () => {
+    // SAFETY: deliberately ill-typed — `subscriptionMetadata` is not a
+    // `PaymentParams` field — to model a caller outside the type system.
+    const untyped = { ...checkout, mode: "payment" } as unknown as CheckoutSession.CreateParams;
+    const { result, calls } = run(CheckoutSession.create(untyped), {
+      "POST /v1/checkout/sessions": { id: "cs_3", url: "https://checkout.stripe.com/cs_3" },
+    });
+    await result;
+    expect(calls[0]?.params).toMatchObject({ mode: "payment", subscription_data: undefined });
+  });
 
   it("passes a Stripe rejection through the neutral channel", async () => {
     const error = await run(Effect.flip(CheckoutSession.create(checkout)), {
@@ -139,13 +150,16 @@ describe("StripePayments billingPortalSessionsLayer", () => {
     });
   });
 
-  it("fails rather than inventing a URL when a 2xx carries none", async () => {
-    const error = await run(Effect.flip(BillingPortal.create(portal)), {
-      "POST /v1/billing_portal/sessions": { id: "bps_1" },
-    }).result;
-    expect(error).toBeInstanceOf(PaymentProviderError);
-    expect(error.message).toBe("Stripe returned a malformed billing portal session response");
-  });
+  it.each([{ id: "bps_1" }, { id: "bps_1", url: "" }])(
+    "fails rather than inventing a URL when a 2xx carries none (%o)",
+    async (body) => {
+      const error = await run(Effect.flip(BillingPortal.create(portal)), {
+        "POST /v1/billing_portal/sessions": body,
+      }).result;
+      expect(error).toBeInstanceOf(PaymentProviderError);
+      expect(error.message).toBe("Stripe returned a malformed billing portal session response");
+    },
+  );
 });
 
 describe("hosted sessions over the fetch transport", () => {
@@ -176,6 +190,29 @@ describe("hosted sessions over the fetch transport", () => {
     expect(form.get("cancel_url")).toBe(checkout.cancelUrl);
     expect(form.get("subscription_data[metadata][user_id]")).toBe("user-1");
     expect([...form.keys()].some((key) => key.includes("amount"))).toBe(false);
+  });
+
+  it("form-encodes a payment checkout's metadata and sends no subscription data", async () => {
+    const { layer, calls } = wire({ id: "cs_2", url: "https://checkout.stripe.com/cs_2" });
+    await Effect.runPromise(
+      withTestClock(
+        CheckoutSession.create({
+          mode: "payment",
+          lineItems: [{ price: "price_a", quantity: 3 }, { price: "price_b" }],
+          successUrl: "https://example.test/ok",
+          cancelUrl: "https://example.test/no",
+          metadata: { order: "o-1" },
+        }).pipe(Effect.provide(layer)),
+      ),
+    );
+    const form = new URLSearchParams(calls[0]?.body);
+    expect(form.get("mode")).toBe("payment");
+    expect(form.get("metadata[order]")).toBe("o-1");
+    expect(form.get("line_items[0][quantity]")).toBe("3");
+    expect(form.get("line_items[1][price]")).toBe("price_b");
+    expect(form.get("line_items[1][quantity]")).toBe("1");
+    expect(form.has("customer")).toBe(false);
+    expect([...form.keys()].some((key) => key.startsWith("subscription_data"))).toBe(false);
   });
 
   it("form-encodes a portal session", async () => {

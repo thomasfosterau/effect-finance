@@ -7,7 +7,8 @@
  *   `PaymentIntents`, `Subscriptions`, `Refunds`, `CheckoutSessions`,
  *   `BillingPortalSessions`) that programs depend on.
  * - **Domain types** — provider-agnostic entities (`Customer`, `Product`,
- *   `Price`, `PaymentIntent`, `Subscription`, `Refund`, `Money`).
+ *   `Price`, `PaymentIntent`, `Subscription`, `Refund`, `CheckoutSession`,
+ *   `BillingPortalSession`, `Money`).
  * - **Errors** — a neutral error channel (`PaymentsError` and friends).
  *
  * A concrete provider package (e.g.

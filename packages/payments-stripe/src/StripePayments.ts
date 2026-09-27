@@ -373,9 +373,10 @@ export const checkoutSessionsLayer: Layer.Layer<
             success_url: params.successUrl,
             cancel_url: params.cancelUrl,
             metadata: params.metadata,
-            subscription_data: params.subscriptionMetadata && {
-              metadata: params.subscriptionMetadata,
-            },
+            subscription_data:
+              params.mode === "subscription" && params.subscriptionMetadata
+                ? { metadata: params.subscriptionMetadata }
+                : undefined,
           },
           decodeCheckoutSession,
         ),

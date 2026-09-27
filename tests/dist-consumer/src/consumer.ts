@@ -107,6 +107,7 @@ export type Checks = [
   /** _portalSucceeds */ Assert<
     Equals<Effect.Success<typeof portal>, BillingPortal.BillingPortalSession>
   >,
+  /** _checkoutFails */ Assert<Equals<Effect.Error<typeof checkout>, PaymentsError>>,
   /** _portalFails */ Assert<Equals<Effect.Error<typeof portal>, PaymentsError>>,
   /** _paypalHasNoCheckoutByDefault */ Assert<
     CheckoutSession.CheckoutSessions extends Layer.Success<typeof paypalLayer> ? false : true
