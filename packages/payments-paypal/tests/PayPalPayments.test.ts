@@ -5,7 +5,7 @@ import * as Price from "@thomasfosterau/effect-payments/Price";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
-import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
+import { PaymentInvalidRequestError, PaymentProviderError } from "@thomasfosterau/effect-payments";
 import { PayPalClient, type PayPalRequest } from "../src/PayPal.ts";
 import * as PayPalPayments from "../src/PayPalPayments.ts";
 
@@ -17,9 +17,9 @@ import * as PayPalPayments from "../src/PayPalPayments.ts";
 const makeFakeClient = (responder: (req: PayPalRequest) => unknown) => {
   const calls: PayPalRequest[] = [];
   const client = PayPalClient.of({
-    request: <A>(req: PayPalRequest) => {
+    request: (req: PayPalRequest) => {
       calls.push(req);
-      return Effect.succeed(responder(req) as A);
+      return Effect.succeed(responder(req));
     },
   });
   return { client, calls };
@@ -235,5 +235,86 @@ describe("PayPalPayments capabilities", () => {
       PaymentIntent.cancel("ORD-1").pipe(Effect.provide(provide(client)), Effect.flip),
     );
     expect(cancelError).toBeInstanceOf(PaymentInvalidRequestError);
+  });
+});
+
+describe("PayPalPayments decoding", () => {
+  /** Run `effect` against a client answering `body`, to its failure. */
+  const failure = <E>(
+    effect: Effect.Effect<unknown, E, Layer.Success<typeof PayPalPayments.capabilities>>,
+    body: (req: PayPalRequest) => unknown,
+  ): Promise<E> =>
+    Effect.runPromise(
+      Effect.flip(effect).pipe(Effect.provide(provide(makeFakeClient(body).client))),
+    );
+
+  it("fails a product missing its name with a provider error", async () => {
+    const error = await failure(Product.retrieve("PROD-1"), () => ({ id: "PROD-1" }));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({
+      provider: "paypal",
+      message: "PayPal returned a malformed product response",
+    });
+  });
+
+  it("fails a plan whose price is not a decimal string with a provider error", async () => {
+    const error = await failure(Price.retrieve("P-1"), () => ({
+      id: "P-1",
+      billing_cycles: [
+        {
+          tenure_type: "REGULAR",
+          pricing_scheme: { fixed_price: { currency_code: "USD", value: "ten" } },
+        },
+      ],
+    }));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({ message: "PayPal returned a malformed plan response" });
+  });
+
+  it("fails a product list without its collection with a provider error", async () => {
+    const error = await failure(Product.list(), () => ({ items: [] }));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({ message: "PayPal returned a malformed product list response" });
+  });
+
+  it("fails an order whose status is not a string with a provider error", async () => {
+    const error = await failure(PaymentIntent.retrieve("ORD-1"), () => ({
+      id: "ORD-1",
+      status: 1,
+    }));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({ message: "PayPal returned a malformed order response" });
+  });
+
+  it("fails a subscription and a refund answered with an empty body with a provider error", async () => {
+    const subscription = await failure(Subscription.retrieve("I-1"), () => ({}));
+    expect(subscription).toBeInstanceOf(PaymentProviderError);
+    const refund = await failure(Refund.retrieve("REF-1"), () => ({}));
+    expect(refund).toBeInstanceOf(PaymentProviderError);
+  });
+
+  it("fails a refund whose order lookup is malformed, before refunding anything", async () => {
+    const { client, calls } = makeFakeClient(() => ({ id: "ORD-1" }));
+    const error = await Effect.runPromise(
+      Refund.create({ paymentIntent: "ORD-1" }).pipe(Effect.provide(provide(client)), Effect.flip),
+    );
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(calls.map((call) => call.path)).toEqual(["/v2/checkout/orders/ORD-1"]);
+  });
+
+  it("fails a partial refund whose capture lookup is malformed, before refunding anything", async () => {
+    const { client, calls } = makeFakeClient(() => ({
+      id: "CAP-1",
+      amount: { currency_code: "USD" },
+    }));
+    const error = await Effect.runPromise(
+      Refund.create({ charge: "CAP-1", amount: 500 }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({ message: "PayPal returned a malformed capture response" });
+    expect(calls.map((call) => call.path)).toEqual(["/v2/payments/captures/CAP-1"]);
   });
 });

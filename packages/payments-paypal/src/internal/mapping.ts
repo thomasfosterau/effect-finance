@@ -7,105 +7,125 @@
  * `PaymentIntents` and `Refunds` capabilities. PayPal has no first-class
  * customer resource, so this provider does not implement `Customers`.
  *
- * PayPal is the source of truth here, so entities are constructed with schema
- * validation disabled — we trust the API's shapes rather than re-decoding them.
+ * Each PayPal object a capability layer reads is **decoded** with a `Schema`
+ * narrowed to the fields the mapping uses — the response is not trusted, and a
+ * 2xx whose body does not decode fails with {@link PaymentProviderError}
+ * rather than producing an entity built from `undefined`. Unknown fields are
+ * ignored. Statuses decode as strings and are normalised by the `to*Status`
+ * functions below (an unrecognised one maps to a neutral fallback, as before).
+ * Entities are then constructed with schema checks disabled: the vendor data
+ * has just been decoded.
  *
  * @module
  */
 
-import type { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import {
   Product as ProductNS,
   Price as PriceNS,
   PaymentIntent as PaymentIntentNS,
   Subscription as SubscriptionNS,
   Refund as RefundNS,
+  PaymentProviderError,
   type Page,
 } from "@thomasfosterau/effect-payments";
+import { PROVIDER } from "./error.js";
 import { toMinorUnits } from "./money.js";
 
-/**
- * Construct entities from trusted PayPal data without re-running the schema
- * checks (the provider's own response is the source of truth).
- */
+/** The vendor data was decoded just before construction. */
 const TRUSTED: Schema.MakeOptions = { disableChecks: true };
 
 // ---------------------------------------------------------------------------
-// Wire types (the subset of PayPal fields the neutral mapping reads)
+// Wire shapes (the subset of PayPal fields the neutral mapping reads)
 // ---------------------------------------------------------------------------
 
-export interface PayPalMoney {
-  readonly currency_code: string;
-  readonly value: string;
-}
+/** An optional, nullable field. */
+const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema));
 
-export interface PayPalProduct {
-  readonly id: string;
-  readonly name: string;
-  readonly description?: string | null | undefined;
-  readonly create_time?: string | null | undefined;
-}
+/** A major-unit decimal string, e.g. `"10.00"`. */
+const Decimal = Schema.String.check(Schema.isPattern(/^-?\d+(\.\d+)?$/));
 
-export interface PayPalBillingCycle {
-  readonly tenure_type?: string | undefined;
-  readonly frequency?: {
-    readonly interval_unit?: string | undefined;
-    readonly interval_count?: number | undefined;
-  };
-  readonly pricing_scheme?: { readonly fixed_price?: PayPalMoney } | undefined;
-}
+const PayPalMoney = Schema.Struct({
+  currency_code: Schema.String,
+  value: Decimal,
+});
 
-export interface PayPalPlan {
-  readonly id: string;
-  readonly product_id?: string | null | undefined;
-  readonly status?: string | undefined;
-  readonly billing_cycles?: ReadonlyArray<PayPalBillingCycle> | undefined;
-  readonly create_time?: string | null | undefined;
-}
+const PayPalProduct = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  description: Maybe(Schema.String),
+  create_time: Maybe(Schema.String),
+});
 
-export interface PayPalCapture {
-  readonly id: string;
-  readonly amount?: PayPalMoney | undefined;
-  readonly status?: string | undefined;
-}
+const PayPalBillingCycle = Schema.Struct({
+  tenure_type: Maybe(Schema.String),
+  frequency: Maybe(
+    Schema.Struct({
+      interval_unit: Maybe(Schema.String),
+      interval_count: Maybe(Schema.Finite),
+    }),
+  ),
+  pricing_scheme: Maybe(Schema.Struct({ fixed_price: Maybe(PayPalMoney) })),
+});
 
-export interface PayPalPurchaseUnit {
-  readonly amount?: PayPalMoney | undefined;
-  readonly description?: string | null | undefined;
-  readonly custom_id?: string | null | undefined;
-  readonly payments?: { readonly captures?: ReadonlyArray<PayPalCapture> } | undefined;
-}
+const PayPalPlan = Schema.Struct({
+  id: Schema.String,
+  product_id: Maybe(Schema.String),
+  status: Maybe(Schema.String),
+  billing_cycles: Maybe(Schema.Array(PayPalBillingCycle)),
+  create_time: Maybe(Schema.String),
+});
 
-export interface PayPalOrder {
-  readonly id: string;
-  readonly status: string;
-  readonly purchase_units?: ReadonlyArray<PayPalPurchaseUnit> | undefined;
-  readonly create_time?: string | null | undefined;
-}
+const PayPalCapture = Schema.Struct({
+  id: Schema.String,
+  amount: Maybe(PayPalMoney),
+  status: Maybe(Schema.String),
+});
 
-export interface PayPalSubscription {
-  readonly id: string;
-  readonly status: string;
-  readonly plan_id?: string | null | undefined;
-  readonly custom_id?: string | null | undefined;
-  readonly quantity?: string | null | undefined;
-  readonly start_time?: string | null | undefined;
-  readonly create_time?: string | null | undefined;
-  readonly billing_info?: { readonly next_billing_time?: string | null } | undefined;
-}
+const PayPalPurchaseUnit = Schema.Struct({
+  amount: Maybe(PayPalMoney),
+  description: Maybe(Schema.String),
+  custom_id: Maybe(Schema.String),
+  payments: Maybe(Schema.Struct({ captures: Maybe(Schema.Array(PayPalCapture)) })),
+});
 
-export interface PayPalRefund {
-  readonly id: string;
-  readonly status?: string | undefined;
-  readonly amount?: PayPalMoney | undefined;
-  readonly create_time?: string | null | undefined;
-}
+const PayPalOrder = Schema.Struct({
+  id: Schema.String,
+  status: Schema.String,
+  purchase_units: Maybe(Schema.Array(PayPalPurchaseUnit)),
+  create_time: Maybe(Schema.String),
+});
+
+const PayPalSubscription = Schema.Struct({
+  id: Schema.String,
+  status: Schema.String,
+  plan_id: Maybe(Schema.String),
+  custom_id: Maybe(Schema.String),
+  quantity: Maybe(Schema.String),
+  start_time: Maybe(Schema.String),
+  create_time: Maybe(Schema.String),
+  billing_info: Maybe(Schema.Struct({ next_billing_time: Maybe(Schema.String) })),
+});
+
+const PayPalRefund = Schema.Struct({
+  id: Schema.String,
+  status: Maybe(Schema.String),
+  amount: Maybe(PayPalMoney),
+  create_time: Maybe(Schema.String),
+});
 
 /** A PayPal list link, used to detect further pages. */
-export interface PayPalLink {
-  readonly rel: string;
-  readonly href: string;
-}
+const PayPalLinks = Maybe(Schema.Array(Schema.Struct({ rel: Schema.String })));
+
+const PayPalProductList = Schema.Struct({
+  products: Schema.Array(PayPalProduct),
+  links: PayPalLinks,
+});
+
+const PayPalPlanList = Schema.Struct({
+  plans: Schema.Array(PayPalPlan),
+  links: PayPalLinks,
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -117,7 +137,7 @@ const toEpochSeconds = (value: string | null | undefined): number => {
   return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
 };
 
-const toInterval = (unit: string | undefined): PriceNS.RecurringInterval => {
+const toInterval = (unit: string | null | undefined): PriceNS.RecurringInterval => {
   switch ((unit ?? "").toUpperCase()) {
     case "DAY":
       return "day";
@@ -169,7 +189,7 @@ export const toSubscriptionStatus = (status: string): SubscriptionNS.Subscriptio
 };
 
 /** Normalize a PayPal refund status to the neutral status. */
-export const toRefundStatus = (status: string | undefined): RefundNS.RefundStatus => {
+export const toRefundStatus = (status: string | null | undefined): RefundNS.RefundStatus => {
   switch (status) {
     case "COMPLETED":
       return "succeeded";
@@ -188,7 +208,7 @@ export const toRefundStatus = (status: string | undefined): RefundNS.RefundStatu
 // ---------------------------------------------------------------------------
 
 /** Map a PayPal catalog product to the neutral entity. */
-export const toProduct = (product: PayPalProduct): ProductNS.Product =>
+const toProduct = (product: typeof PayPalProduct.Type): ProductNS.Product =>
   new ProductNS.Product(
     {
       id: product.id,
@@ -202,7 +222,7 @@ export const toProduct = (product: PayPalProduct): ProductNS.Product =>
   );
 
 /** Map a PayPal billing plan to the neutral price entity. */
-export const toPrice = (plan: PayPalPlan): PriceNS.Price => {
+const toPrice = (plan: typeof PayPalPlan.Type): PriceNS.Price => {
   const cycle =
     plan.billing_cycles?.find((c) => c.tenure_type === "REGULAR") ?? plan.billing_cycles?.[0];
   const price = cycle?.pricing_scheme?.fixed_price;
@@ -232,7 +252,7 @@ export const toPrice = (plan: PayPalPlan): PriceNS.Price => {
 };
 
 /** Map a PayPal order to the neutral payment intent entity. */
-export const toPaymentIntent = (order: PayPalOrder): PaymentIntentNS.PaymentIntent => {
+const toPaymentIntent = (order: typeof PayPalOrder.Type): PaymentIntentNS.PaymentIntent => {
   const unit = order.purchase_units?.[0];
   const currency = (unit?.amount?.currency_code ?? "").toLowerCase();
   return new PaymentIntentNS.PaymentIntent(
@@ -253,7 +273,9 @@ export const toPaymentIntent = (order: PayPalOrder): PaymentIntentNS.PaymentInte
 };
 
 /** Map a PayPal subscription to the neutral entity. */
-export const toSubscription = (subscription: PayPalSubscription): SubscriptionNS.Subscription =>
+const toSubscription = (
+  subscription: typeof PayPalSubscription.Type,
+): SubscriptionNS.Subscription =>
   new SubscriptionNS.Subscription(
     {
       id: subscription.id,
@@ -279,7 +301,7 @@ export const toSubscription = (subscription: PayPalSubscription): SubscriptionNS
   );
 
 /** Map a PayPal refund to the neutral entity. */
-export const toRefund = (refund: PayPalRefund): RefundNS.Refund => {
+const toRefund = (refund: typeof PayPalRefund.Type): RefundNS.Refund => {
   const currency = (refund.amount?.currency_code ?? "").toLowerCase();
   return new RefundNS.Refund(
     {
@@ -297,11 +319,69 @@ export const toRefund = (refund: PayPalRefund): RefundNS.Refund => {
   );
 };
 
-/** Build a neutral page from a PayPal collection field and its links. */
-export const toPage = <A>(
+/** A neutral page from a PayPal collection and its links. */
+const toPage = <A>(
   items: ReadonlyArray<A>,
-  links: ReadonlyArray<PayPalLink> | undefined,
+  links: ReadonlyArray<{ readonly rel: string }> | null | undefined,
 ): Page<A> => ({
   data: items,
   hasMore: links?.some((link) => link.rel === "next") ?? false,
 });
+
+// ---------------------------------------------------------------------------
+// Decoders
+// ---------------------------------------------------------------------------
+
+const malformed = (what: string, cause: unknown): PaymentProviderError =>
+  new PaymentProviderError({
+    message: `PayPal returned a malformed ${what} response`,
+    provider: PROVIDER,
+    cause,
+  });
+
+/**
+ * Decode a response body with `schema` and map it, failing with
+ * {@link PaymentProviderError} when it does not decode.
+ */
+const decoder =
+  <S extends Schema.Codec<unknown, unknown>, A>(
+    what: string,
+    schema: S,
+    map: (value: S["Type"]) => A,
+  ) =>
+  (body: unknown): Effect.Effect<A, PaymentProviderError> =>
+    Schema.decodeUnknownEffect(schema)(body).pipe(
+      Effect.mapError((cause) => malformed(what, cause)),
+      Effect.map(map),
+    );
+
+/** A catalog product. */
+export const decodeProduct = decoder("product", PayPalProduct, toProduct);
+/** A page of catalog products. */
+export const decodeProductPage = decoder("product list", PayPalProductList, (list) =>
+  toPage(list.products.map(toProduct), list.links),
+);
+/** A billing plan, as a neutral price. */
+export const decodePrice = decoder("plan", PayPalPlan, toPrice);
+/** A page of billing plans, as neutral prices. */
+export const decodePricePage = decoder("plan list", PayPalPlanList, (list) =>
+  toPage(list.plans.map(toPrice), list.links),
+);
+/** An order, as a neutral payment intent. */
+export const decodePaymentIntent = decoder("order", PayPalOrder, toPaymentIntent);
+/** The id of an order's first capture, if it has been captured. */
+export const decodeOrderCaptureId = decoder(
+  "order",
+  PayPalOrder,
+  (order) => order.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? null,
+);
+/** The currency of a capture, if it carries an amount. */
+export const decodeCaptureCurrency = decoder(
+  "capture",
+  PayPalCapture,
+  (capture) => capture.amount?.currency_code ?? null,
+);
+/** A subscription. */
+export const decodeSubscription = decoder("subscription", PayPalSubscription, toSubscription);
+/** A capture refund. */
+export const decodeRefund = decoder("refund", PayPalRefund, toRefund);

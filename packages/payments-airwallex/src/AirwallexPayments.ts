@@ -33,14 +33,13 @@ import {
   type AirwallexConfig,
 } from "./Airwallex.js";
 import {
-  toCustomer,
-  toPage,
-  toPaymentIntent,
-  toRefund,
-  type AirwallexCustomer,
-  type AirwallexList,
-  type AirwallexPaymentIntent,
-  type AirwallexRefund,
+  decodeCustomer,
+  decodeCustomerPage,
+  decodePaymentIntent,
+  decodePaymentIntentCurrency,
+  decodePaymentIntentPage,
+  decodeRefund,
+  decodeRefundPage,
 } from "./internal/mapping.js";
 import { toMajorUnits } from "./internal/money.js";
 
@@ -67,7 +66,7 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
       CustomerNS.Customers.of({
         create: (params) =>
           client
-            .request<AirwallexCustomer>({
+            .request({
               method: "POST",
               path: "/api/v1/pa/customers",
               body: {
@@ -78,17 +77,17 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
                 metadata: params.metadata,
               },
             })
-            .pipe(Effect.map(toCustomer)),
+            .pipe(Effect.flatMap(decodeCustomer)),
         retrieve: (id) =>
           client
-            .request<AirwallexCustomer>({
+            .request({
               method: "GET",
               path: `/api/v1/pa/customers/${id}`,
             })
-            .pipe(Effect.map(toCustomer)),
+            .pipe(Effect.flatMap(decodeCustomer)),
         update: (id, params) =>
           client
-            .request<AirwallexCustomer>({
+            .request({
               method: "POST",
               path: `/api/v1/pa/customers/${id}/update`,
               body: {
@@ -99,16 +98,16 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
                 metadata: params.metadata,
               },
             })
-            .pipe(Effect.map(toCustomer)),
+            .pipe(Effect.flatMap(decodeCustomer)),
         del: () => notSupported("deleting customers"),
         list: (params) =>
           client
-            .request<AirwallexList<AirwallexCustomer>>({
+            .request({
               method: "GET",
               path: "/api/v1/pa/customers",
               query: { page_size: params?.limit },
             })
-            .pipe(Effect.map((list) => toPage(list, toCustomer))),
+            .pipe(Effect.flatMap(decodeCustomerPage)),
       }),
     ),
   );
@@ -128,7 +127,7 @@ export const paymentIntentsLayer: Layer.Layer<
     PaymentIntentNS.PaymentIntents.of({
       create: (params) =>
         client
-          .request<AirwallexPaymentIntent>({
+          .request({
             method: "POST",
             path: "/api/v1/pa/payment_intents",
             body: {
@@ -140,18 +139,18 @@ export const paymentIntentsLayer: Layer.Layer<
               metadata: params.metadata,
             },
           })
-          .pipe(Effect.map(toPaymentIntent)),
+          .pipe(Effect.flatMap(decodePaymentIntent)),
       retrieve: (id) =>
         client
-          .request<AirwallexPaymentIntent>({
+          .request({
             method: "GET",
             path: `/api/v1/pa/payment_intents/${id}`,
           })
-          .pipe(Effect.map(toPaymentIntent)),
+          .pipe(Effect.flatMap(decodePaymentIntent)),
       update: () => notSupported("updating payment intents"),
       confirm: (id, params) =>
         client
-          .request<AirwallexPaymentIntent>({
+          .request({
             method: "POST",
             path: `/api/v1/pa/payment_intents/${id}/confirm`,
             body: {
@@ -159,23 +158,23 @@ export const paymentIntentsLayer: Layer.Layer<
               ...(params?.paymentMethod ? { payment_method: { id: params.paymentMethod } } : {}),
             },
           })
-          .pipe(Effect.map(toPaymentIntent)),
+          .pipe(Effect.flatMap(decodePaymentIntent)),
       cancel: (id) =>
         client
-          .request<AirwallexPaymentIntent>({
+          .request({
             method: "POST",
             path: `/api/v1/pa/payment_intents/${id}/cancel`,
             body: { request_id: requestId() },
           })
-          .pipe(Effect.map(toPaymentIntent)),
+          .pipe(Effect.flatMap(decodePaymentIntent)),
       list: (params) =>
         client
-          .request<AirwallexList<AirwallexPaymentIntent>>({
+          .request({
             method: "GET",
             path: "/api/v1/pa/payment_intents",
             query: { page_size: params?.limit, customer_id: params?.customer },
           })
-          .pipe(Effect.map((list) => toPage(list, toPaymentIntent))),
+          .pipe(Effect.flatMap(decodePaymentIntentPage)),
     }),
   ),
 );
@@ -201,36 +200,39 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient>
           // payment intent when a partial amount is requested.
           let amount: number | undefined;
           if (params.amount != null) {
-            const intent = yield* client.request<AirwallexPaymentIntent>({
-              method: "GET",
-              path: `/api/v1/pa/payment_intents/${params.paymentIntent}`,
-            });
-            amount = toMajorUnits(params.amount, intent.currency);
+            const currency = yield* client
+              .request({
+                method: "GET",
+                path: `/api/v1/pa/payment_intents/${params.paymentIntent}`,
+              })
+              .pipe(Effect.flatMap(decodePaymentIntentCurrency));
+            amount = toMajorUnits(params.amount, currency);
           }
-          const refund = yield* client.request<AirwallexRefund>({
-            method: "POST",
-            path: "/api/v1/pa/refunds",
-            body: {
-              request_id: requestId(),
-              payment_intent_id: params.paymentIntent,
-              amount,
-              reason: params.reason,
-              metadata: params.metadata,
-            },
-          });
-          return toRefund(refund);
+          return yield* client
+            .request({
+              method: "POST",
+              path: "/api/v1/pa/refunds",
+              body: {
+                request_id: requestId(),
+                payment_intent_id: params.paymentIntent,
+                amount,
+                reason: params.reason,
+                metadata: params.metadata,
+              },
+            })
+            .pipe(Effect.flatMap(decodeRefund));
         }),
       retrieve: (id) =>
         client
-          .request<AirwallexRefund>({
+          .request({
             method: "GET",
             path: `/api/v1/pa/refunds/${id}`,
           })
-          .pipe(Effect.map(toRefund)),
+          .pipe(Effect.flatMap(decodeRefund)),
       update: () => notSupported("updating refunds"),
       list: (params) =>
         client
-          .request<AirwallexList<AirwallexRefund>>({
+          .request({
             method: "GET",
             path: "/api/v1/pa/refunds",
             query: {
@@ -238,7 +240,7 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient>
               payment_intent_id: params?.paymentIntent,
             },
           })
-          .pipe(Effect.map((list) => toPage(list, toRefund))),
+          .pipe(Effect.flatMap(decodeRefundPage)),
     }),
   ),
 );

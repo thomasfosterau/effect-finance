@@ -22,11 +22,17 @@ import {
   Effect,
   Layer,
   Option,
+  Redacted,
   Ref,
   Schema,
   Semaphore,
 } from "effect";
-import { HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/unstable/http";
+import {
+  HttpClient,
+  type HttpClientError,
+  HttpClientRequest,
+  type HttpClientResponse,
+} from "effect/unstable/http";
 import {
   PaymentConfigError,
   PaymentNetworkError,
@@ -44,7 +50,8 @@ const DEFAULT_TIMEOUT_MS = 80_000;
 /** Configuration for the Airwallex client. */
 export interface AirwallexConfig {
   readonly clientId: string;
-  readonly apiKey: string;
+  /** The API key, kept `Redacted` so it never reaches a log line or an error. */
+  readonly apiKey: Redacted.Redacted<string>;
   /** Override the API base URL (defaults to the production endpoint). */
   readonly baseUrl?: string | undefined;
   /**
@@ -83,7 +90,12 @@ export interface AirwallexRequest {
 export class AirwallexClient extends Context.Service<
   AirwallexClient,
   {
-    readonly request: <A>(request: AirwallexRequest) => Effect.Effect<A, PaymentsError>;
+    /**
+     * Send `request` and succeed with the response's JSON body (`{}` when it
+     * is empty), unchecked: each capability layer decodes the body with the
+     * `Schema` for the shape it reads (`internal/mapping.ts`).
+     */
+    readonly request: (request: AirwallexRequest) => Effect.Effect<unknown, PaymentsError>;
   }
 >()("@effect-payments-airwallex/AirwallexClient") {}
 
@@ -111,6 +123,13 @@ interface Reply {
   readonly status: number;
   readonly json: unknown;
 }
+
+/**
+ * The underlying failure of an `HttpClientError`, without the request it
+ * carries — whose headers hold the credentials.
+ */
+const causeOf = (error: HttpClientError.HttpClientError): unknown =>
+  "cause" in error.reason ? error.reason.cause : undefined;
 
 const isOk = (status: number): boolean => status >= 200 && status < 300;
 
@@ -151,7 +170,7 @@ export const make = (
   config: AirwallexConfig,
 ): Effect.Effect<AirwallexClient["Service"], PaymentConfigError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
-    if (!config.clientId || !config.apiKey) {
+    if (!config.clientId || !Redacted.value(config.apiKey)) {
       return yield* new PaymentConfigError({
         message: "Airwallex clientId and apiKey are required",
       });
@@ -184,7 +203,11 @@ export const make = (
         Effect.flatMap((response) =>
           Effect.map(readJson(response), (json): Reply => ({ status: response.status, json })),
         ),
-        Effect.mapError((cause) => new PaymentNetworkError({ message: cause.message, cause })),
+        Effect.mapError(
+          // The error's request carries the credentials in its headers:
+          // keep only the underlying failure.
+          (error) => new PaymentNetworkError({ message: error.message, cause: causeOf(error) }),
+        ),
         Effect.timeoutOption(limit),
         Effect.flatMap(
           Option.match({
@@ -205,7 +228,7 @@ export const make = (
           HttpClientRequest.setHeaders({
             "Content-Type": "application/json",
             "x-client-id": config.clientId,
-            "x-api-key": config.apiKey,
+            "x-api-key": Redacted.value(config.apiKey),
           }),
         ),
         loginTimeout,
@@ -248,7 +271,7 @@ export const make = (
       }),
     );
 
-    const request = <A>(req: AirwallexRequest): Effect.Effect<A, PaymentsError> =>
+    const request = (req: AirwallexRequest): Effect.Effect<unknown, PaymentsError> =>
       Effect.gen(function* () {
         const token = yield* getToken;
         const base = HttpClientRequest.make(req.method)(
@@ -277,10 +300,7 @@ export const make = (
         if (!isOk(reply.status)) {
           return yield* handleAirwallexError(reply.status, errorBodyOf(reply.json));
         }
-        // SAFETY: NOT checked — `request<A>` is the client's untyped escape
-        // hatch, and each capability layer names the Airwallex shape it
-        // expects (see internal/mapping.ts).
-        return reply.json as A;
+        return reply.json;
       });
 
     return { request };
@@ -305,7 +325,7 @@ export const layerFromEnv = (
     AirwallexClient,
     Effect.gen(function* () {
       const clientId = yield* Config.String(clientIdVar).pipe(Config.withDefault(""));
-      const apiKey = yield* Config.String(apiKeyVar).pipe(Config.withDefault(""));
+      const apiKey = yield* Config.Redacted(apiKeyVar).pipe(Config.withDefault(Redacted.make("")));
       const baseUrl = yield* Config.option(Config.String("AIRWALLEX_BASE_URL"));
       return yield* make({ clientId, apiKey, baseUrl: Option.getOrUndefined(baseUrl) });
     }).pipe(

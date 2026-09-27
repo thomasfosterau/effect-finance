@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Cause, Effect, Fiber, Layer } from "effect";
+import { Cause, ConfigProvider, Effect, Fiber, Layer, Predicate, Redacted } from "effect";
 import { TestClock } from "effect/testing";
 import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
 import {
@@ -7,7 +7,7 @@ import {
   PaymentConfigError,
   PaymentNetworkError,
 } from "@thomasfosterau/effect-payments";
-import { make, type AirwallexConfig } from "../src/Airwallex.ts";
+import { AirwallexClient, layerFromEnv, make, type AirwallexConfig } from "../src/Airwallex.ts";
 
 const LOGIN_PATH = "/api/v1/authentication/login";
 const LOGIN_RESPONSE = () =>
@@ -68,7 +68,7 @@ const stubFetch = (handler: (request: CapturedRequest) => Response) => {
 
 const config = (over: Partial<AirwallexConfig>): AirwallexConfig => ({
   clientId: "client_1",
-  apiKey: "key_1",
+  apiKey: Redacted.make("key_1"),
   ...over,
 });
 
@@ -78,11 +78,11 @@ describe("Airwallex client", () => {
 
     const program = Effect.gen(function* () {
       const client = yield* make(config({}));
-      const first = yield* client.request<{ id: string }>({
+      const first = yield* client.request({
         method: "GET",
         path: "/api/v1/pa/customers/cus_1",
       });
-      const second = yield* client.request<{ id: string }>({
+      const second = yield* client.request({
         method: "GET",
         path: "/api/v1/pa/customers/cus_1",
       });
@@ -90,7 +90,7 @@ describe("Airwallex client", () => {
     });
 
     const result = await Effect.runPromise(program.pipe(Effect.provide(http)));
-    expect(result.first.id).toBe("cus_1");
+    expect(result.first).toMatchObject({ id: "cus_1" });
 
     // One login + two resource requests, and the token only fetched once.
     const logins = calls.filter((c) => c.url.endsWith(LOGIN_PATH));
@@ -137,7 +137,10 @@ describe("Airwallex client", () => {
   it("fails with a config error when credentials are missing", async () => {
     const { http } = stubFetch(() => jsonResponse(200, {}));
     const error = await Effect.runPromise(
-      make(config({ clientId: "", apiKey: "" })).pipe(Effect.flip, Effect.provide(http)),
+      make(config({ clientId: "", apiKey: Redacted.make("") })).pipe(
+        Effect.flip,
+        Effect.provide(http),
+      ),
     );
     expect(error).toBeInstanceOf(PaymentConfigError);
   });
@@ -192,14 +195,14 @@ describe("Airwallex client", () => {
           client.request({ method: "GET", path: "/api/v1/pa/customers/cus_1" }),
         );
         expect(first).toBeInstanceOf(PaymentAuthenticationError);
-        return yield* client.request<{ id: string }>({
+        return yield* client.request({
           method: "GET",
           path: "/api/v1/pa/customers/cus_1",
         });
       }).pipe(Effect.provide(http)),
     );
 
-    expect(second.id).toBe("x");
+    expect(second).toMatchObject({ id: "x" });
     expect(calls.filter((c) => c.url.endsWith(LOGIN_PATH))).toHaveLength(2);
   });
   it("keeps a newer token when a request made with the old one gets a late 401", async () => {
@@ -339,7 +342,7 @@ describe("Airwallex client timeouts", () => {
         const first = yield* Effect.forkChild(Effect.flip(client.request(get)));
         yield* macrotask;
         // Queued on the token lock behind the hung login.
-        const second = yield* Effect.forkChild(client.request<{ id: string }>(get));
+        const second = yield* Effect.forkChild(client.request(get));
         yield* macrotask;
         yield* TestClock.adjust("10 seconds");
         return { first: yield* Fiber.join(first), second: yield* Fiber.join(second) };
@@ -347,7 +350,7 @@ describe("Airwallex client timeouts", () => {
     );
 
     expect(first).toBeInstanceOf(PaymentNetworkError);
-    expect(second.id).toBe("x");
+    expect(second).toMatchObject({ id: "x" });
     expect(state.logins).toBe(2);
     expect(state.resources).toEqual(["Bearer tok_123"]);
   });
@@ -364,7 +367,7 @@ describe("Airwallex client timeouts", () => {
           Effect.flip(client.request(get).pipe(Effect.timeout("2 seconds"))),
         );
         yield* macrotask;
-        const second = yield* Effect.forkChild(client.request<{ id: string }>(get));
+        const second = yield* Effect.forkChild(client.request(get));
         yield* macrotask;
         yield* TestClock.adjust("2 seconds");
         return { first: yield* Fiber.join(first), second: yield* Fiber.join(second) };
@@ -372,7 +375,7 @@ describe("Airwallex client timeouts", () => {
     );
 
     expect(Cause.isTimeoutError(first)).toBe(true);
-    expect(second.id).toBe("x");
+    expect(second).toMatchObject({ id: "x" });
     expect(state.logins).toBe(2);
     expect(state.aborted).toBe(1);
   });
@@ -397,10 +400,10 @@ describe("Airwallex client timeouts", () => {
     const result = await Effect.runPromise(
       Effect.flatMap(
         make(config({ loginTimeout: Number.POSITIVE_INFINITY, timeout: Number.POSITIVE_INFINITY })),
-        (client) => client.request<{ id: string }>(get),
+        (client) => client.request(get),
       ).pipe(Effect.provide(http)),
     );
-    expect(result.id).toBe("x");
+    expect(result).toMatchObject({ id: "x" });
   });
 
   it("fails a resource request that never answers with a network error after the timeout", async () => {
@@ -420,5 +423,81 @@ describe("Airwallex client timeouts", () => {
     expect(error).toBeInstanceOf(PaymentNetworkError);
     expect(error.message).toBe("Airwallex request timed out after 5000 ms");
     expect(state.aborted).toBe(1);
+  });
+});
+
+describe("Airwallex client secrets", () => {
+  const SECRET = "key_1";
+  const get = { method: "GET", path: "/api/v1/pa/customers/cus_1" } as const;
+
+  it("reads the apiKey from configuration as a Redacted", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+    await Effect.runPromise(
+      Effect.flatMap(AirwallexClient, (client) => client.request(get)).pipe(
+        Effect.provide(layerFromEnv()),
+        Effect.provide(http),
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromUnknown({
+              AIRWALLEX_CLIENT_ID: "client_env",
+              AIRWALLEX_API_KEY: "secret_env",
+            }),
+          ),
+        ),
+      ),
+    );
+    const login = calls.find((c) => c.url.endsWith(LOGIN_PATH))!;
+    expect(login.headers.get("x-client-id")).toBe("client_env");
+    expect(login.headers.get("x-api-key")).toBe("secret_env");
+  });
+
+  it("fails with PaymentConfigError when the apiKey variable is absent", async () => {
+    const { http } = stubFetch(() => jsonResponse(200, {}));
+    const error = await Effect.runPromise(
+      Effect.flip(
+        Layer.build(layerFromEnv()).pipe(
+          Effect.scoped,
+          Effect.provide(http),
+          Effect.provide(
+            ConfigProvider.layer(ConfigProvider.fromUnknown({ AIRWALLEX_CLIENT_ID: "client_env" })),
+          ),
+        ),
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentConfigError);
+  });
+
+  it("keeps the apiKey out of the config's string and JSON forms", () => {
+    const { apiKey } = config({});
+    expect(String(apiKey)).not.toContain(SECRET);
+    expect(JSON.stringify(config({}))).not.toContain(SECRET);
+  });
+
+  it("never carries the apiKey in an error", async () => {
+    const answers: ReadonlyArray<() => Response> = [
+      () => jsonResponse(401, { code: "credentials_invalid", message: "Invalid credentials" }),
+      () => {
+        throw new TypeError("fetch failed");
+      },
+      () => jsonResponse(201, { token: 42 }),
+    ];
+    for (const answer of answers) {
+      const fetchImpl: typeof globalThis.fetch = async () => answer();
+      const http = FetchHttpClient.layer.pipe(
+        Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
+      );
+      const error = await Effect.runPromise(
+        Effect.flatMap(make(config({})), (client) => Effect.flip(client.request(get))).pipe(
+          Effect.provide(http),
+        ),
+      );
+      // The request (whose headers carry the credentials) is never kept.
+      expect(Predicate.hasProperty(error.cause, "request")).toBe(false);
+      for (const leak of [SECRET]) {
+        expect(JSON.stringify(error)).not.toContain(leak);
+        expect(String(error)).not.toContain(leak);
+        expect(JSON.stringify(error.cause ?? null)).not.toContain(leak);
+      }
+    }
   });
 });

@@ -17,13 +17,16 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Redacted } from "effect";
  * import * as Customer from "@thomasfosterau/effect-payments/Customer";
  * import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
  *
  * const program = Customer.create({ email: "jane@example.com" });
  *
- * const layer = AirwallexPayments.layer({ clientId: "...", apiKey: "..." });
+ * const layer = AirwallexPayments.layer({
+ *   clientId: "...",
+ *   apiKey: Redacted.make("..."),
+ * });
  * const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  *

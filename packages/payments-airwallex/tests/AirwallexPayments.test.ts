@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
-import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
+import { PaymentInvalidRequestError, PaymentProviderError } from "@thomasfosterau/effect-payments";
 import { AirwallexClient, type AirwallexRequest } from "../src/Airwallex.ts";
 import * as AirwallexPayments from "../src/AirwallexPayments.ts";
 
@@ -15,9 +15,9 @@ import * as AirwallexPayments from "../src/AirwallexPayments.ts";
 const makeFakeClient = (responder: (req: AirwallexRequest) => unknown) => {
   const calls: AirwallexRequest[] = [];
   const client = AirwallexClient.of({
-    request: <A>(req: AirwallexRequest) => {
+    request: (req: AirwallexRequest) => {
       calls.push(req);
-      return Effect.succeed(responder(req) as A);
+      return Effect.succeed(responder(req));
     },
   });
   return { client, calls };
@@ -134,5 +134,64 @@ describe("AirwallexPayments capabilities", () => {
       PaymentIntent.update("int_aw", {}).pipe(Effect.provide(provide(client)), Effect.flip),
     );
     expect(updateError).toBeInstanceOf(PaymentInvalidRequestError);
+  });
+});
+
+describe("AirwallexPayments decoding", () => {
+  /** Run `effect` against a client answering `body`, to its failure. */
+  const failure = <E>(
+    effect: Effect.Effect<unknown, E, Layer.Success<typeof AirwallexPayments.capabilities>>,
+    body: (req: AirwallexRequest) => unknown,
+  ): Promise<E> =>
+    Effect.runPromise(
+      Effect.flip(effect).pipe(Effect.provide(provide(makeFakeClient(body).client))),
+    );
+
+  it("fails a customer missing its id with a provider error", async () => {
+    const error = await failure(Customer.retrieve("cus_aw"), () => ({ email: "a@b.com" }));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({
+      provider: "airwallex",
+      message: "Airwallex returned a malformed customer response",
+    });
+  });
+
+  it("fails a payment intent whose amount is a string with a provider error", async () => {
+    const error = await failure(PaymentIntent.retrieve("int_aw"), () => ({
+      id: "int_aw",
+      amount: "10.00",
+      currency: "USD",
+      status: "SUCCEEDED",
+    }));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({
+      message: "Airwallex returned a malformed payment intent response",
+    });
+  });
+
+  it("fails a list without has_more with a provider error", async () => {
+    const error = await failure(Refund.list(), () => ({ items: [] }));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({ message: "Airwallex returned a malformed refund list response" });
+  });
+
+  it("fails a whole page when one item is malformed", async () => {
+    const error = await failure(Customer.list(), () => ({
+      items: [{ id: "cus_1" }, { email: "no-id@example.com" }],
+      has_more: false,
+    }));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+  });
+
+  it("fails a partial refund whose payment intent lookup is malformed, before refunding", async () => {
+    const { client, calls } = makeFakeClient(() => ({ id: "int_aw" }));
+    const error = await Effect.runPromise(
+      Refund.create({ paymentIntent: "int_aw", amount: 500 }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(calls.map((call) => call.path)).toEqual(["/api/v1/pa/payment_intents/int_aw"]);
   });
 });

@@ -13,7 +13,7 @@ npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-payp
 ## Usage
 
 ```typescript
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import * as Product from "@thomasfosterau/effect-payments/Product";
 import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
@@ -24,7 +24,7 @@ const program = Product.create({ name: "Premium" });
 // which `FetchHttpClient.layer` supplies on Node, Bun, Deno and Workers alike.
 const layer = PayPalPayments.layer({
   clientId: process.env.PAYPAL_CLIENT_ID!,
-  clientSecret: process.env.PAYPAL_CLIENT_SECRET!,
+  clientSecret: Redacted.make(process.env.PAYPAL_CLIENT_SECRET!),
   // baseUrl: "https://api-m.sandbox.paypal.com", // for sandbox
 }).pipe(Layer.provide(FetchHttpClient.layer));
 // const layer = PayPalPayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
@@ -55,6 +55,8 @@ Because each capability is an independent Effect service, a program that only us
 - **Timeouts** — the token login fails with `PaymentNetworkError` after `loginTimeout` ms (default 30 000) and any other request after `timeout` ms (default 80 000, as in the Stripe transport). Logins are serialised, so without a bound one hung login would stall every request on the client; after a timeout the next caller logs in afresh. `layerFromEnv` uses the defaults; pass `loginTimeout` / `timeout` to `layer` to change them (`Infinity` disables one; `0`, a negative number or `NaN` fails with `PaymentConfigError`). Two things to know:
   - `timeout` covers the resource request only, not getting a token. Callers queued behind a failing login each make their own login attempt, so the k-th queued caller can wait about k × `loginTimeout` in the worst case (sharing one login's failure with the whole queue is #65).
   - A **non-GET that times out has an unknown outcome**: the vendor may have applied the write. Don't blindly retry a create, capture or refund. Idempotency keys that make that safe are #66.
+- **Secrets** — `clientSecret` is a `Redacted<string>` (`Redacted.make(...)`; `layerFromEnv` reads it with `Config.Redacted`), so the client secret never reaches a log line or an error.
+- **Decoded responses** — every PayPal response the capabilities read is decoded with a `Schema` at the boundary; a response that does not match fails with `PaymentProviderError` instead of producing a half-built entity. `PayPalClient.request` returns `unknown`.
 
 See the [repository README](../../README.md) for the full guide.
 

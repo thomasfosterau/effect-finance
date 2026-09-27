@@ -22,11 +22,17 @@ import {
   Encoding,
   Layer,
   Option,
+  Redacted,
   Ref,
   Schema,
   Semaphore,
 } from "effect";
-import { HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/unstable/http";
+import {
+  HttpClient,
+  type HttpClientError,
+  HttpClientRequest,
+  type HttpClientResponse,
+} from "effect/unstable/http";
 import {
   PaymentConfigError,
   PaymentNetworkError,
@@ -44,7 +50,8 @@ const DEFAULT_TIMEOUT_MS = 80_000;
 /** Configuration for the PayPal client. */
 export interface PayPalConfig {
   readonly clientId: string;
-  readonly clientSecret: string;
+  /** The client secret, kept `Redacted` so it never reaches a log line or an error. */
+  readonly clientSecret: Redacted.Redacted<string>;
   /**
    * Override the API base URL. Defaults to the production endpoint; use
    * `https://api-m.sandbox.paypal.com` for sandbox.
@@ -86,7 +93,12 @@ export interface PayPalRequest {
 export class PayPalClient extends Context.Service<
   PayPalClient,
   {
-    readonly request: <A>(request: PayPalRequest) => Effect.Effect<A, PaymentsError>;
+    /**
+     * Send `request` and succeed with the response's JSON body (`{}` when it
+     * is empty), unchecked: each capability layer decodes the body with the
+     * `Schema` for the shape it reads (`internal/mapping.ts`).
+     */
+    readonly request: (request: PayPalRequest) => Effect.Effect<unknown, PaymentsError>;
   }
 >()("@effect-payments-paypal/PayPalClient") {}
 
@@ -114,6 +126,13 @@ interface Reply {
   readonly status: number;
   readonly json: unknown;
 }
+
+/**
+ * The underlying failure of an `HttpClientError`, without the request it
+ * carries — whose headers hold the credentials.
+ */
+const causeOf = (error: HttpClientError.HttpClientError): unknown =>
+  "cause" in error.reason ? error.reason.cause : undefined;
 
 const isOk = (status: number): boolean => status >= 200 && status < 300;
 
@@ -151,7 +170,7 @@ export const make = (
   config: PayPalConfig,
 ): Effect.Effect<PayPalClient["Service"], PaymentConfigError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
-    if (!config.clientId || !config.clientSecret) {
+    if (!config.clientId || !Redacted.value(config.clientSecret)) {
       return yield* new PaymentConfigError({
         message: "PayPal clientId and clientSecret are required",
       });
@@ -159,7 +178,9 @@ export const make = (
 
     const http = yield* HttpClient.HttpClient;
     const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
-    const basicAuth = Encoding.encodeBase64(`${config.clientId}:${config.clientSecret}`);
+    const basicAuth = Redacted.make(
+      Encoding.encodeBase64(`${config.clientId}:${Redacted.value(config.clientSecret)}`),
+    );
     const tokenRef = yield* Ref.make(Option.none<TokenState>());
     // One login at a time: concurrent first calls (or calls racing an expiry)
     // wait for the in-flight login and then reuse its token.
@@ -185,7 +206,11 @@ export const make = (
         Effect.flatMap((response) =>
           Effect.map(readJson(response), (json): Reply => ({ status: response.status, json })),
         ),
-        Effect.mapError((cause) => new PaymentNetworkError({ message: cause.message, cause })),
+        Effect.mapError(
+          // The error's request carries the credentials in its headers:
+          // keep only the underlying failure.
+          (error) => new PaymentNetworkError({ message: error.message, cause: causeOf(error) }),
+        ),
         Effect.timeoutOption(limit),
         Effect.flatMap(
           Option.match({
@@ -203,7 +228,7 @@ export const make = (
     const login: Effect.Effect<string, PaymentsError> = Effect.gen(function* () {
       const reply = yield* send(
         HttpClientRequest.post(`${baseUrl}/v1/oauth2/token`).pipe(
-          HttpClientRequest.setHeader("Authorization", `Basic ${basicAuth}`),
+          HttpClientRequest.setHeader("Authorization", `Basic ${Redacted.value(basicAuth)}`),
           HttpClientRequest.bodyText(
             "grant_type=client_credentials",
             "application/x-www-form-urlencoded",
@@ -245,7 +270,7 @@ export const make = (
       }),
     );
 
-    const request = <A>(req: PayPalRequest): Effect.Effect<A, PaymentsError> =>
+    const request = (req: PayPalRequest): Effect.Effect<unknown, PaymentsError> =>
       Effect.gen(function* () {
         const token = yield* getToken;
         const base = HttpClientRequest.make(req.method)(
@@ -274,10 +299,7 @@ export const make = (
         if (!isOk(reply.status)) {
           return yield* handlePayPalError(reply.status, errorBodyOf(reply.json));
         }
-        // SAFETY: NOT checked — `request<A>` is the client's untyped escape
-        // hatch, and each capability layer names the PayPal shape it expects
-        // (see internal/mapping.ts). Decoding each resource is #39-era work.
-        return reply.json as A;
+        return reply.json;
       });
 
     return { request };
@@ -302,7 +324,9 @@ export const layerFromEnv = (
     PayPalClient,
     Effect.gen(function* () {
       const clientId = yield* Config.String(clientIdVar).pipe(Config.withDefault(""));
-      const clientSecret = yield* Config.String(clientSecretVar).pipe(Config.withDefault(""));
+      const clientSecret = yield* Config.Redacted(clientSecretVar).pipe(
+        Config.withDefault(Redacted.make("")),
+      );
       const baseUrl = yield* Config.option(Config.String("PAYPAL_BASE_URL"));
       return yield* make({ clientId, clientSecret, baseUrl: Option.getOrUndefined(baseUrl) });
     }).pipe(
