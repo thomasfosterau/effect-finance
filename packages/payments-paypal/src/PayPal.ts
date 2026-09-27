@@ -17,6 +17,7 @@ import {
   Clock,
   Config,
   Context,
+  Duration,
   Effect,
   Encoding,
   Layer,
@@ -35,6 +36,10 @@ import {
 import { handlePayPalError, PayPalErrorBody, PROVIDER } from "./internal/error.js";
 
 const DEFAULT_BASE_URL = "https://api-m.paypal.com";
+/** A login that has not answered after 30 s is abandoned. */
+const DEFAULT_LOGIN_TIMEOUT_MS = 30_000;
+/** A resource request is abandoned after 80 s, the Stripe transport default. */
+const DEFAULT_TIMEOUT_MS = 80_000;
 
 /** Configuration for the PayPal client. */
 export interface PayPalConfig {
@@ -45,6 +50,24 @@ export interface PayPalConfig {
    * `https://api-m.sandbox.paypal.com` for sandbox.
    */
   readonly baseUrl?: string | undefined;
+  /**
+   * How long the token login may take, in milliseconds, before it fails with
+   * `PaymentNetworkError`. Defaults to 30 000; `Infinity` disables it, and
+   * `0`, a negative number or `NaN` fails with `PaymentConfigError`. Logins are
+   * serialised, so a login that never answers would otherwise stall every
+   * request on the client. A caller queued behind a failed login makes its own
+   * attempt, so the k-th queued caller can wait about k × `loginTimeout` (#65).
+   */
+  readonly loginTimeout?: number | undefined;
+  /**
+   * How long a resource request may take (response headers and body), in
+   * milliseconds, before it fails with `PaymentNetworkError`. Defaults to
+   * 80 000, the Stripe transport's per-attempt timeout; `Infinity` disables it.
+   * It does not include acquiring a token (see `loginTimeout`). A non-GET that
+   * times out has an unknown outcome — the vendor may have applied it — so do
+   * not blindly retry a write (#66).
+   */
+  readonly timeout?: number | undefined;
 }
 
 /** A request issued through the PayPal client. */
@@ -86,6 +109,12 @@ const buildUrl = (baseUrl: string, path: string, query: PayPalRequest["query"]):
 const readJson = (response: HttpClientResponse.HttpClientResponse): Effect.Effect<unknown> =>
   response.json.pipe(Effect.orElseSucceed(() => ({})));
 
+/** A response reduced to its status and JSON body. */
+interface Reply {
+  readonly status: number;
+  readonly json: unknown;
+}
+
 const isOk = (status: number): boolean => status >= 200 && status < 300;
 
 /** The OAuth token response, decoded rather than trusted. */
@@ -97,6 +126,23 @@ const TokenResponse = Schema.Struct({
 /** A vendor error body, decoded leniently: an unexpected shape maps as absent. */
 const errorBodyOf = (json: unknown): PayPalErrorBody | undefined =>
   Option.getOrUndefined(Schema.decodeUnknownOption(PayPalErrorBody)(json));
+
+/**
+ * A configured timeout as a `Duration`: a positive, finite number of
+ * milliseconds, or `Infinity` for no timeout. Anything else — `0`, a negative
+ * number, `NaN` — fails with {@link PaymentConfigError}.
+ */
+const timeoutOf = (
+  name: string,
+  millis: number,
+): Effect.Effect<Duration.Duration, PaymentConfigError> =>
+  millis === Number.POSITIVE_INFINITY || (Number.isFinite(millis) && millis > 0)
+    ? Effect.succeed(Duration.millis(millis))
+    : Effect.fail(
+        new PaymentConfigError({
+          message: `PayPal ${name} must be a positive number of milliseconds, or Infinity for none (got ${millis})`,
+        }),
+      );
 
 /**
  * Build a PayPal client from configuration.
@@ -119,17 +165,43 @@ export const make = (
     // wait for the in-flight login and then reuse its token.
     const tokenLock = yield* Semaphore.make(1);
 
-    const execute = (
+    const loginTimeout = yield* timeoutOf(
+      "loginTimeout",
+      config.loginTimeout ?? DEFAULT_LOGIN_TIMEOUT_MS,
+    );
+    const timeout = yield* timeoutOf("timeout", config.timeout ?? DEFAULT_TIMEOUT_MS);
+
+    /**
+     * Send `request` and read its JSON body, all within `limit`. A request that
+     * has not finished by then is interrupted (which aborts the fetch) and
+     * fails with {@link PaymentNetworkError}.
+     */
+    const send = (
       request: HttpClientRequest.HttpClientRequest,
-    ): Effect.Effect<HttpClientResponse.HttpClientResponse, PaymentNetworkError> =>
-      http
-        .execute(request)
-        .pipe(
-          Effect.mapError((cause) => new PaymentNetworkError({ message: cause.message, cause })),
-        );
+      limit: Duration.Duration,
+      what: string,
+    ): Effect.Effect<Reply, PaymentNetworkError> =>
+      http.execute(request).pipe(
+        Effect.flatMap((response) =>
+          Effect.map(readJson(response), (json): Reply => ({ status: response.status, json })),
+        ),
+        Effect.mapError((cause) => new PaymentNetworkError({ message: cause.message, cause })),
+        Effect.timeoutOption(limit),
+        Effect.flatMap(
+          Option.match({
+            onSome: Effect.succeed,
+            onNone: () =>
+              Effect.fail(
+                new PaymentNetworkError({
+                  message: `PayPal ${what} timed out after ${Duration.toMillis(limit)} ms`,
+                }),
+              ),
+          }),
+        ),
+      );
 
     const login: Effect.Effect<string, PaymentsError> = Effect.gen(function* () {
-      const response = yield* execute(
+      const reply = yield* send(
         HttpClientRequest.post(`${baseUrl}/v1/oauth2/token`).pipe(
           HttpClientRequest.setHeader("Authorization", `Basic ${basicAuth}`),
           HttpClientRequest.bodyText(
@@ -137,17 +209,19 @@ export const make = (
             "application/x-www-form-urlencoded",
           ),
         ),
+        loginTimeout,
+        "login",
       );
-      if (!isOk(response.status)) {
-        return yield* handlePayPalError(response.status, errorBodyOf(yield* readJson(response)));
+      if (!isOk(reply.status)) {
+        return yield* handlePayPalError(reply.status, errorBodyOf(reply.json));
       }
-      const body = yield* Schema.decodeUnknownEffect(TokenResponse)(yield* readJson(response)).pipe(
+      const body = yield* Schema.decodeUnknownEffect(TokenResponse)(reply.json).pipe(
         Effect.mapError(
           (cause) =>
             new PaymentProviderError({
               message: "PayPal returned a malformed OAuth token response",
               provider: PROVIDER,
-              statusCode: response.status,
+              statusCode: reply.status,
               cause,
             }),
         ),
@@ -180,12 +254,14 @@ export const make = (
         // `Content-Type: application/json` goes on EVERY request, body or not,
         // as it did before the move to HttpClient: PayPal answers a bodyless
         // POST (`/v1/billing/plans/{id}/activate`) without it with 415.
-        const response = yield* execute(
+        const reply = yield* send(
           req.body != null
             ? HttpClientRequest.bodyJsonUnsafe(base, req.body)
             : HttpClientRequest.setHeader(base, "Content-Type", "application/json"),
+          timeout,
+          "request",
         );
-        if (response.status === 401) {
+        if (reply.status === 401) {
           // A revoked or rotated token: forget it, so the next call logs in
           // again instead of replaying the rejected token until it expires —
           // but only if it is still the stored one. A late 401 for a token
@@ -195,13 +271,13 @@ export const make = (
             Option.filter((stored) => stored.token !== token),
           );
         }
-        if (!isOk(response.status)) {
-          return yield* handlePayPalError(response.status, errorBodyOf(yield* readJson(response)));
+        if (!isOk(reply.status)) {
+          return yield* handlePayPalError(reply.status, errorBodyOf(reply.json));
         }
         // SAFETY: NOT checked — `request<A>` is the client's untyped escape
         // hatch, and each capability layer names the PayPal shape it expects
         // (see internal/mapping.ts). Decoding each resource is #39-era work.
-        return (yield* readJson(response)) as A;
+        return reply.json as A;
       });
 
     return { request };
