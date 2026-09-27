@@ -41,7 +41,7 @@ import {
   decodeRefund,
   decodeRefundPage,
 } from "./internal/mapping.js";
-import { toMajorUnits } from "./internal/money.js";
+import { toMajorNumber } from "./internal/money.js";
 
 /** A fresh idempotency key for a write request. */
 const requestId = (): string => globalThis.crypto.randomUUID();
@@ -126,20 +126,23 @@ export const paymentIntentsLayer: Layer.Layer<
   Effect.map(AirwallexClient, (client) =>
     PaymentIntentNS.PaymentIntents.of({
       create: (params) =>
-        client
-          .request({
-            method: "POST",
-            path: "/api/v1/pa/payment_intents",
-            body: {
-              request_id: requestId(),
-              amount: toMajorUnits(params.amount, params.currency),
-              currency: params.currency,
-              customer_id: params.customer,
-              descriptor: params.description,
-              metadata: params.metadata,
-            },
-          })
-          .pipe(Effect.flatMap(decodePaymentIntent)),
+        toMajorNumber(params.amount, params.currency, "amount").pipe(
+          Effect.flatMap((amount) =>
+            client.request({
+              method: "POST",
+              path: "/api/v1/pa/payment_intents",
+              body: {
+                request_id: requestId(),
+                amount,
+                currency: params.currency,
+                customer_id: params.customer,
+                descriptor: params.description,
+                metadata: params.metadata,
+              },
+            }),
+          ),
+          Effect.flatMap(decodePaymentIntent),
+        ),
       retrieve: (id) =>
         client
           .request({
@@ -206,7 +209,7 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient>
                 path: `/api/v1/pa/payment_intents/${params.paymentIntent}`,
               })
               .pipe(Effect.flatMap(decodePaymentIntentCurrency));
-            amount = toMajorUnits(params.amount, currency);
+            amount = yield* toMajorNumber(params.amount, currency, "amount");
           }
           return yield* client
             .request({

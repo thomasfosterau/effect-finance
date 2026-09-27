@@ -23,7 +23,7 @@ import {
   type Page,
 } from "@thomasfosterau/effect-payments";
 import { PROVIDER } from "./error.js";
-import { toMinorUnits } from "./money.js";
+import { exponent, parseMinorUnits, toMinorUnits } from "./money.js";
 
 /** The vendor data was decoded just before construction. */
 const TRUSTED: Schema.MakeOptions = { disableChecks: true };
@@ -34,6 +34,24 @@ const TRUSTED: Schema.MakeOptions = { disableChecks: true };
 
 /** An optional, nullable field. */
 const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema));
+
+/**
+ * An Airwallex amount (a major-unit JSON number) checked against its currency:
+ * more fraction digits than the currency allows (e.g. `10.005` USD), or an
+ * amount beyond the safe-integer range in minor units, fails the decode rather
+ * than being rounded.
+ */
+const amountInCurrency = Schema.makeFilter(
+  (money: { readonly amount: number; readonly currency: string }) =>
+    parseMinorUnits(money.amount, money.currency) !== undefined ||
+    `amount must have at most ${exponent(money.currency)} fraction digits for ${money.currency} and fit a safe integer in minor units`,
+  {
+    identifier: "AirwallexAmount",
+    title: "Airwallex amount",
+    description:
+      "A major-unit amount with no more fraction digits than its currency allows, within the safe-integer range in minor units",
+  },
+);
 
 /** Metadata values of any type decode; only the string ones are kept. */
 const Metadata = Maybe(Schema.Record(Schema.String, Schema.Unknown));
@@ -59,7 +77,7 @@ const AirwallexPaymentIntent = Schema.Struct({
   descriptor: Maybe(Schema.String),
   metadata: Metadata,
   created_at: Maybe(Schema.String),
-});
+}).check(amountInCurrency);
 
 const AirwallexRefund = Schema.Struct({
   id: Schema.String,
@@ -70,7 +88,7 @@ const AirwallexRefund = Schema.Struct({
   reason: Maybe(Schema.String),
   metadata: Metadata,
   created_at: Maybe(Schema.String),
-});
+}).check(amountInCurrency);
 
 /** An Airwallex list response. */
 const AirwallexList = <S extends Schema.Top>(item: S) =>

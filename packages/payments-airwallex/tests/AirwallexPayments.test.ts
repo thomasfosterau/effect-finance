@@ -206,3 +206,119 @@ describe("AirwallexPayments decoding", () => {
     expect(customer.metadata).toEqual({ tier: "pro" });
   });
 });
+
+describe("AirwallexPayments money (#68)", () => {
+  const intent =
+    (amount: number, currency = "USD") =>
+    () => ({
+      id: "int_aw",
+      amount,
+      currency,
+      status: "SUCCEEDED",
+    });
+
+  const retrieveFailure = (body: () => unknown) =>
+    Effect.runPromise(
+      PaymentIntent.retrieve("int_aw").pipe(
+        Effect.provide(provide(makeFakeClient(body).client)),
+        Effect.flip,
+      ),
+    );
+
+  it("fails a payment intent with more decimals than its currency allows (10.005 USD)", async () => {
+    const error = await retrieveFailure(intent(10.005));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({
+      message: "Airwallex returned a malformed payment intent response",
+    });
+  });
+
+  it("fails a refund with more decimals than its currency allows", async () => {
+    const error = await Effect.runPromise(
+      Refund.retrieve("rfd_aw").pipe(
+        Effect.provide(
+          provide(
+            makeFakeClient(() => ({
+              id: "rfd_aw",
+              amount: 10.5,
+              currency: "JPY",
+              status: "SUCCEEDED",
+            })).client,
+          ),
+        ),
+        Effect.flip,
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({ message: "Airwallex returned a malformed refund response" });
+  });
+
+  it("decodes a large amount exactly (45035996273704.95 USD)", async () => {
+    const { client } = makeFakeClient(intent(45035996273704.95));
+    const result = await Effect.runPromise(
+      PaymentIntent.retrieve("int_aw").pipe(Effect.provide(provide(client))),
+    );
+    expect(result.amount).toBe(4503599627370495);
+  });
+
+  it("fails amounts in exponent notation instead of rounding them", async () => {
+    for (const [amount, currency] of [
+      [1e-7, "USD"],
+      [1e21, "JPY"],
+    ] as const) {
+      const error = await retrieveFailure(intent(amount, currency));
+      expect(error).toBeInstanceOf(PaymentProviderError);
+    }
+  });
+
+  it("fails an amount beyond the safe-integer range in minor units", async () => {
+    const error = await retrieveFailure(intent(90071992547410));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+  });
+
+  it("sends a large amount as a number whose JSON text is the exact decimal", async () => {
+    const { client, calls } = makeFakeClient((req) => ({
+      id: "int_aw",
+      amount: (req.body as { amount: number }).amount,
+      currency: "USD",
+      status: "REQUIRES_PAYMENT_METHOD",
+    }));
+    const result = await Effect.runPromise(
+      PaymentIntent.create({ amount: 4503599627370495, currency: "usd" }).pipe(
+        Effect.provide(provide(client)),
+      ),
+    );
+    expect(JSON.stringify(calls[0].body)).toContain('"amount":45035996273704.95,');
+    expect(result.amount).toBe(4503599627370495);
+  });
+
+  it("rejects a negative, fractional or inexact payment intent amount before sending anything", async () => {
+    const { client, calls } = makeFakeClient(intent(1));
+    for (const amount of [-100, 10.5, Number.MAX_SAFE_INTEGER]) {
+      const error = await Effect.runPromise(
+        PaymentIntent.create({ amount, currency: "usd" }).pipe(
+          Effect.provide(provide(client)),
+          Effect.flip,
+        ),
+      );
+      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+      expect(error).toMatchObject({ param: "amount" });
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects a negative or fractional partial-refund amount before refunding anything", async () => {
+    for (const amount of [-500, 10.5]) {
+      const { client, calls } = makeFakeClient(intent(20));
+      const error = await Effect.runPromise(
+        Refund.create({ paymentIntent: "int_aw", amount }).pipe(
+          Effect.provide(provide(client)),
+          Effect.flip,
+        ),
+      );
+      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+      expect(error).toMatchObject({ param: "amount" });
+      expect(calls.map((call) => call.path)).toEqual(["/api/v1/pa/payment_intents/int_aw"]);
+    }
+  });
+});
