@@ -5,6 +5,7 @@ import {
   PaymentConfigError,
   PaymentProviderError,
   PaymentRateLimitError,
+  PaymentsUnavailable,
   SignatureVerificationError,
 } from "@thomasfosterau/effect-payments";
 
@@ -40,6 +41,12 @@ describe("PaymentsError", () => {
   it("tags a config error", () => {
     const error = new PaymentConfigError({ message: "missing key" });
     expect(error._tag).toBe("PaymentConfigError");
+  });
+
+  it("tags an unavailable error and carries the provider", () => {
+    const error = new PaymentsUnavailable({ message: "not configured", provider: "stripe" });
+    expect(error._tag).toBe("PaymentsUnavailable");
+    expect(error.provider).toBe("stripe");
   });
 
   it("tags a signature verification error", () => {

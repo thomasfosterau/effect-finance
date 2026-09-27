@@ -23,6 +23,7 @@ import {
   Refund as RefundNS,
   CheckoutSession as CheckoutSessionNS,
   BillingPortal as BillingPortalNS,
+  Stub,
   PaymentInvalidRequestError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
@@ -388,12 +389,8 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
  * type-check against PayPal by default — and exists for a program that must
  * run on several providers and handles the failure itself.
  */
-export const checkoutSessionsLayer: Layer.Layer<CheckoutSessionNS.CheckoutSessions> = Layer.succeed(
-  CheckoutSessionNS.CheckoutSessions,
-  CheckoutSessionNS.CheckoutSessions.of({
-    create: () => notSupported("hosted checkout sessions"),
-  }),
-);
+export const checkoutSessionsLayer: Layer.Layer<CheckoutSessionNS.CheckoutSessions> =
+  Stub.checkoutSessions(notSupported("hosted checkout sessions"));
 
 /**
  * The {@link BillingPortalNS.BillingPortalSessions} capability for PayPal:
@@ -402,12 +399,7 @@ export const checkoutSessionsLayer: Layer.Layer<CheckoutSessionNS.CheckoutSessio
  * is not part of {@link capabilities}.
  */
 export const billingPortalSessionsLayer: Layer.Layer<BillingPortalNS.BillingPortalSessions> =
-  Layer.succeed(
-    BillingPortalNS.BillingPortalSessions,
-    BillingPortalNS.BillingPortalSessions.of({
-      create: () => notSupported("billing portal sessions"),
-    }),
-  );
+  Stub.billingPortalSessions(notSupported("billing portal sessions"));
 
 // ---------------------------------------------------------------------------
 // Bundles

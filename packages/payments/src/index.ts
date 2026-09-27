@@ -10,6 +10,8 @@
  *   `Price`, `PaymentIntent`, `Subscription`, `Refund`, `CheckoutSession`,
  *   `BillingPortalSession`, `Money`).
  * - **Errors** — a neutral error channel (`PaymentsError` and friends).
+ * - **Stubs** — capability layers whose every call fails with one error
+ *   (`Stub`), including the "not configured ≡ down" `Stub.unavailable`.
  *
  * A concrete provider package (e.g.
  * `@thomasfosterau/effect-payments-stripe`) supplies `Layer`s that implement
@@ -50,3 +52,4 @@ export * as Subscription from "./Subscription.js";
 export * as Refund from "./Refund.js";
 export * as CheckoutSession from "./CheckoutSession.js";
 export * as BillingPortal from "./BillingPortal.js";
+export * as Stub from "./Stub.js";
