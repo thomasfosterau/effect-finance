@@ -41,7 +41,7 @@ import {
   decodeRefund,
   decodeRefundPage,
 } from "./internal/mapping.js";
-import { toMajorNumber } from "./internal/money.js";
+import { checkMinorUnits, toMajorNumber } from "./internal/money.js";
 
 /** A fresh idempotency key for a write request. */
 const requestId = (): string => globalThis.crypto.randomUUID();
@@ -198,6 +198,8 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient>
               "refunds without a payment intent (charges are not supported)",
             );
           }
+          // Refuse a negative or fractional amount before the currency lookup.
+          if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
           // The neutral amount is in minor units; Airwallex needs major units,
           // and the conversion depends on the currency, so resolve it from the
           // payment intent when a partial amount is requested.

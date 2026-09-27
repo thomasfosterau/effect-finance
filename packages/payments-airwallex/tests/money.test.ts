@@ -2,6 +2,7 @@ import { describe, it, expect } from "vite-plus/test";
 import { Effect } from "effect";
 import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 import {
+  checkMinorUnits,
   exponent,
   formatMinorUnits,
   parseMinorUnits,
@@ -56,10 +57,36 @@ describe("Airwallex money: parse", () => {
     expect(() => toMinorUnits(10.005, "usd")).toThrow(RangeError);
   });
 
-  it("parses a large amount exactly (#68: 45035996273704.95 USD)", () => {
-    expect(parseMinorUnits(45035996273704.95, "usd")).toBe(4503599627370495);
-    expect(toMinorUnits(45035996273704.95, "usd")).toBe(4503599627370495);
-    expect(parseMinorUnits(90071992547409.9, "usd")).toBe(9007199254740990);
+  it("parses a large unambiguous amount exactly", () => {
+    // Below 2^45 major units, doubles are finer than half a cent, so every
+    // two-decimal USD amount has a double of its own.
+    expect(parseMinorUnits(35184372088831.99, "usd")).toBe(3518437208883199);
+    expect(toMinorUnits(35184372088831.99, "usd")).toBe(3518437208883199);
+    expect(parseMinorUnits(45035996273704.96, "usd")).toBe(4503599627370496);
+    expect(parseMinorUnits(9007199254740991, "jpy")).toBe(9007199254740991);
+  });
+
+  it("rejects a double that more than one wire amount could have produced (#68: 45035996273704.95 USD)", () => {
+    // `45035996273704.95` and `45035996273704.955` parse to the same double,
+    // so the amount cannot be told apart from one with excess decimals. The
+    // float conversion this replaces read it as 4503599627370496.
+    expect(Number("45035996273704.955")).toBe(Number("45035996273704.95"));
+    expect(parseMinorUnits(Number("45035996273704.95"), "usd")).toBeUndefined();
+    expect(parseMinorUnits(Number("45035996273704.955"), "usd")).toBeUndefined();
+    expect(() => toMinorUnits(45035996273704.95, "usd")).toThrow(RangeError);
+    // `90071992547409.91` and `90071992547409.9` parse to the same double: a
+    // shortest-form read would decode the former one cent short.
+    expect(Number("90071992547409.91")).toBe(Number("90071992547409.9"));
+    expect(parseMinorUnits(Number("90071992547409.91"), "usd")).toBeUndefined();
+    expect(parseMinorUnits(Number("90071992547409.9"), "usd")).toBeUndefined();
+  });
+
+  it("never decodes an amount near the top of the safe range to the wrong minor units", () => {
+    for (let minor = Number.MAX_SAFE_INTEGER; minor > Number.MAX_SAFE_INTEGER - 20000; minor--) {
+      const text = String(minor);
+      const parsed = parseMinorUnits(Number(`${text.slice(0, -2)}.${text.slice(-2)}`), "usd");
+      if (parsed !== undefined) expect(parsed).toBe(minor);
+    }
   });
 
   it("rejects an amount outside the safe-integer range in minor units", () => {
@@ -96,13 +123,17 @@ describe("Airwallex money: format", () => {
   });
 
   for (const { code, digits } of CURRENCIES) {
-    it(`minor units -> number -> minor units is the identity whenever it formats, for ${code}`, () => {
+    it(`minor units -> number -> minor units never changes the amount, for ${code}`, () => {
       const next = prng(0x5eed + digits);
       for (let i = 0; i < 2000; i++) {
         const minor = safeInteger(next);
         const major = formatMinorUnits(minor, code);
         if (major === undefined) continue;
-        expect(parseMinorUnits(JSON.parse(JSON.stringify(major)) as number, code)).toBe(minor);
+        const parsed = parseMinorUnits(JSON.parse(JSON.stringify(major)) as number, code);
+        // Up to 15 digits every amount reads back; above, it reads back or is
+        // refused as ambiguous, but it never reads back as another amount.
+        if (minor < 1e15) expect(parsed).toBe(minor);
+        else if (parsed !== undefined) expect(parsed).toBe(minor);
       }
     });
   }
@@ -140,6 +171,16 @@ describe("Airwallex money: request amounts", () => {
   it("toMajorNumber fails with an invalid-request error naming the parameter", async () => {
     for (const minor of [10.5, -1, Number.MAX_SAFE_INTEGER, 2 ** 53]) {
       const error = await Effect.runPromise(Effect.flip(toMajorNumber(minor, "usd", "amount")));
+      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+      expect(error.param).toBe("amount");
+    }
+  });
+
+  it("checkMinorUnits needs no currency and refuses a negative or non-safe-integer amount", async () => {
+    await Effect.runPromise(checkMinorUnits(0, "amount"));
+    await Effect.runPromise(checkMinorUnits(Number.MAX_SAFE_INTEGER, "amount"));
+    for (const minor of [-1, 10.5, 2 ** 53, Number.NaN]) {
+      const error = await Effect.runPromise(Effect.flip(checkMinorUnits(minor, "amount")));
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error.param).toBe("amount");
     }

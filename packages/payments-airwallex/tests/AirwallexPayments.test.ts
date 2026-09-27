@@ -253,12 +253,17 @@ describe("AirwallexPayments money (#68)", () => {
     expect(error).toMatchObject({ message: "Airwallex returned a malformed refund response" });
   });
 
-  it("decodes a large amount exactly (45035996273704.95 USD)", async () => {
-    const { client } = makeFakeClient(intent(45035996273704.95));
+  it("decodes a large unambiguous amount exactly (35184372088831.99 USD)", async () => {
+    const { client } = makeFakeClient(intent(35184372088831.99));
     const result = await Effect.runPromise(
       PaymentIntent.retrieve("int_aw").pipe(Effect.provide(provide(client))),
     );
-    expect(result.amount).toBe(4503599627370495);
+    expect(result.amount).toBe(3518437208883199);
+  });
+
+  it("fails an amount whose double is ambiguous (45035996273704.95 USD) instead of guessing", async () => {
+    const error = await retrieveFailure(intent(45035996273704.95));
+    expect(error).toBeInstanceOf(PaymentProviderError);
   });
 
   it("fails amounts in exponent notation instead of rounding them", async () => {
@@ -284,12 +289,12 @@ describe("AirwallexPayments money (#68)", () => {
       status: "REQUIRES_PAYMENT_METHOD",
     }));
     const result = await Effect.runPromise(
-      PaymentIntent.create({ amount: 4503599627370495, currency: "usd" }).pipe(
+      PaymentIntent.create({ amount: 3518437208883199, currency: "usd" }).pipe(
         Effect.provide(provide(client)),
       ),
     );
-    expect(JSON.stringify(calls[0].body)).toContain('"amount":45035996273704.95,');
-    expect(result.amount).toBe(4503599627370495);
+    expect(JSON.stringify(calls[0].body)).toContain('"amount":35184372088831.99,');
+    expect(result.amount).toBe(3518437208883199);
   });
 
   it("rejects a negative, fractional or inexact payment intent amount before sending anything", async () => {
@@ -307,7 +312,7 @@ describe("AirwallexPayments money (#68)", () => {
     expect(calls).toEqual([]);
   });
 
-  it("rejects a negative or fractional partial-refund amount before refunding anything", async () => {
+  it("rejects a negative or fractional partial-refund amount before any request", async () => {
     for (const amount of [-500, 10.5]) {
       const { client, calls } = makeFakeClient(intent(20));
       const error = await Effect.runPromise(
@@ -318,7 +323,7 @@ describe("AirwallexPayments money (#68)", () => {
       );
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error).toMatchObject({ param: "amount" });
-      expect(calls.map((call) => call.path)).toEqual(["/api/v1/pa/payment_intents/int_aw"]);
+      expect(calls).toEqual([]);
     }
   });
 });
