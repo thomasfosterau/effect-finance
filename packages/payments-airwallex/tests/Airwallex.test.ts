@@ -296,7 +296,11 @@ const macrotask = Effect.callback<void>((resume) => {
  * until the client aborts it; every other call answers normally. `aborted`
  * counts the hung requests the client cancelled.
  */
-const hangingFetch = (hung: { logins?: ReadonlyArray<number>; resources?: boolean }) => {
+const hangingFetch = (hung: {
+  logins?: ReadonlyArray<number>;
+  refused?: ReadonlyArray<number>;
+  resources?: boolean;
+}) => {
   const resources: Array<string | null> = [];
   const state = { logins: 0, aborted: 0, resources };
   const hang = (init: RequestInit | undefined) =>
@@ -309,6 +313,11 @@ const hangingFetch = (hung: { logins?: ReadonlyArray<number>; resources?: boolea
   const fetchImpl: typeof globalThis.fetch = async (input, init) => {
     if (String(input).endsWith(LOGIN_PATH)) {
       state.logins += 1;
+      if (hung.refused?.includes(state.logins)) {
+        // Answered on a later macrotask, so concurrent callers queue behind it.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        return jsonResponse(401, { message: "invalid client" });
+      }
       return hung.logins?.includes(state.logins) ? hang(init) : LOGIN_RESPONSE();
     }
     state.resources.push(new Headers(init?.headers).get("authorization"));
@@ -346,49 +355,118 @@ describe("Airwallex client timeouts", () => {
     expect(state.resources).toHaveLength(0);
   });
 
-  it("releases the token lock so a caller queued behind a hung login logs in afresh", async () => {
+  it("fails every caller queued behind a hung login with its error, after one login timeout", async () => {
     const { http, state } = hangingFetch({ logins: [1] });
 
-    const { first, second } = await Effect.runPromise(
+    const { errors, pendingBefore, after } = await Effect.runPromise(
       Effect.gen(function* () {
         const client = yield* make(config({ loginTimeout: 10_000 }));
-        const first = yield* Effect.forkChild(Effect.flip(client.request(get)));
+        const leader = yield* Effect.forkChild(Effect.flip(client.request(get)));
         yield* macrotask;
-        // Queued on the token lock behind the hung login.
-        const second = yield* Effect.forkChild(client.request(get));
+        // Four more callers arrive while the login is in flight.
+        const queued = yield* Effect.forEach(Array.from({ length: 4 }), () =>
+          Effect.forkChild(Effect.flip(client.request(get))),
+        );
         yield* macrotask;
-        yield* TestClock.adjust("10 seconds");
-        return { first: yield* Fiber.join(first), second: yield* Fiber.join(second) };
+        yield* TestClock.adjust("9 seconds");
+        yield* macrotask;
+        const fibers = [leader, ...queued];
+        const pendingBefore = fibers.every((fiber) => fiber.pollUnsafe() === undefined);
+        yield* TestClock.adjust("1 second");
+        const errors = yield* Effect.forEach(fibers, Fiber.join);
+        // A caller arriving after the failure starts a fresh login.
+        const after = yield* client.request(get);
+        return { errors, pendingBefore, after };
       }).pipe(Effect.provide(http), Effect.provide(TestClock.layer())),
     );
 
-    expect(first).toBeInstanceOf(PaymentNetworkError);
-    expect(second).toMatchObject({ id: "x" });
+    expect(pendingBefore).toBe(true);
+    expect(errors).toHaveLength(5);
+    // One login attempt, and every caller sees its very error.
+    for (const error of errors) expect(error).toBe(errors[0]);
+    expect(errors[0]).toBeInstanceOf(PaymentNetworkError);
+    expect(errors[0]?.message).toBe("Airwallex login timed out after 10000 ms");
+    expect(after).toMatchObject({ id: "x" });
+    expect(state.logins).toBe(2);
+    expect(state.aborted).toBe(1);
+    expect(state.resources).toEqual(["Bearer tok_123"]);
+  });
+
+  it("shares a refused login's error with the callers waiting on it, then retries afresh", async () => {
+    const { http, state } = hangingFetch({ refused: [1] });
+
+    const { errors, after } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        const errors = yield* Effect.all(
+          Array.from({ length: 5 }, () => Effect.flip(client.request(get))),
+          { concurrency: "unbounded" },
+        );
+        const after = yield* client.request(get);
+        return { errors, after };
+      }).pipe(Effect.provide(http)),
+    );
+
+    expect(errors).toHaveLength(5);
+    for (const error of errors) expect(error).toBe(errors[0]);
+    expect(errors[0]).toBeInstanceOf(PaymentAuthenticationError);
+    expect(after).toMatchObject({ id: "x" });
+    // One refused login for the five, then one fresh login; nothing cached on failure.
     expect(state.logins).toBe(2);
     expect(state.resources).toEqual(["Bearer tok_123"]);
   });
 
-  it("releases the token lock when an outer timeout interrupts the login it holds", async () => {
+  it("lets a waiter give up without disturbing the login it was waiting on", async () => {
     const { http, state } = hangingFetch({ logins: [1] });
 
-    const { first, second } = await Effect.runPromise(
+    const { leader, waiter } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({ loginTimeout: 10_000 }));
+        const leader = yield* Effect.forkChild(Effect.flip(client.request(get)));
+        yield* macrotask;
+        const waiter = yield* Effect.forkChild(
+          Effect.flip(client.request(get).pipe(Effect.timeout("2 seconds"))),
+        );
+        yield* macrotask;
+        yield* TestClock.adjust("10 seconds");
+        return { leader: yield* Fiber.join(leader), waiter: yield* Fiber.join(waiter) };
+      }).pipe(Effect.provide(http), Effect.provide(TestClock.layer())),
+    );
+
+    expect(Cause.isTimeoutError(waiter)).toBe(true);
+    expect(leader).toBeInstanceOf(PaymentNetworkError);
+    expect(state.logins).toBe(1);
+  });
+
+  it("hands the login on when an outer timeout interrupts the caller running it", async () => {
+    const { http, state } = hangingFetch({ logins: [1] });
+
+    const { first, second, third } = await Effect.runPromise(
       Effect.gen(function* () {
         const client = yield* make(config({ loginTimeout: 10_000 }));
         // The caller gives up after 2 s, well inside the 10 s login timeout,
-        // interrupting the login while it holds the permit.
+        // interrupting the login it is running.
         const first = yield* Effect.forkChild(
           Effect.flip(client.request(get).pipe(Effect.timeout("2 seconds"))),
         );
         yield* macrotask;
+        // Waiting on the leader's login when the leader is interrupted.
         const second = yield* Effect.forkChild(client.request(get));
+        const third = yield* Effect.forkChild(client.request(get));
         yield* macrotask;
         yield* TestClock.adjust("2 seconds");
-        return { first: yield* Fiber.join(first), second: yield* Fiber.join(second) };
+        return {
+          first: yield* Fiber.join(first),
+          second: yield* Fiber.join(second),
+          third: yield* Fiber.join(third),
+        };
       }).pipe(Effect.provide(http), Effect.provide(TestClock.layer())),
     );
 
     expect(Cause.isTimeoutError(first)).toBe(true);
+    // The waiters are not stranded: one of them logs in afresh for both.
     expect(second).toMatchObject({ id: "x" });
+    expect(third).toMatchObject({ id: "x" });
     expect(state.logins).toBe(2);
     expect(state.aborted).toBe(1);
   });
