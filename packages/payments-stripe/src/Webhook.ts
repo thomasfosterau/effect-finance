@@ -13,13 +13,17 @@
  * The scheme: Stripe sends `Stripe-Signature: t=<unix>,v1=<hex>[,v1=<hex>…]`,
  * and `v1` is HMAC-SHA256 with the endpoint's signing secret over
  * `${t}.${rawBody}`. The signature is over the **raw** body bytes, so pass the
- * request body exactly as received (`await request.text()` or the bytes) —
- * never a re-serialised parsed object. Several `v1` values appear during a
- * secret rotation; every one is compared.
+ * request body exactly as received — canonically its bytes,
+ * `new Uint8Array(await request.arrayBuffer())`, and never a re-serialised
+ * parsed object. `await request.text()` is a lossy convenience: it strips a
+ * byte-order mark and replaces invalid UTF-8, so a body that has either will
+ * not verify. Several `v1` values appear during a secret rotation; every one
+ * is compared.
  *
  * Every refusal is a {@link SignatureVerificationError} whose `message` is one
- * of a fixed set (malformed header, timestamp outside the window, no matching
- * signature). The signing secret is taken as a `Redacted` and never reaches an
+ * of a fixed set of exported constants (malformed header, timestamp outside
+ * the window, no matching signature, an unusable tolerance, a signature that
+ * could not be computed). The signing secret is taken as a `Redacted` and never reaches an
  * error; the payload is not copied into the error either. Answer every
  * refusal with a bare 400 — telling a caller which check failed helps forge
  * the next attempt.
@@ -42,7 +46,7 @@
  * const handle = (request: Request, secret: Redacted.Redacted<string>) =>
  *   Effect.gen(function* () {
  *     const event = yield* Webhook.verify({
- *       payload: yield* Effect.promise(() => request.text()),
+ *       payload: new Uint8Array(yield* Effect.promise(() => request.arrayBuffer())),
  *       header: request.headers.get(Webhook.SIGNATURE_HEADER),
  *       secret,
  *     });
@@ -107,7 +111,9 @@ export interface VerifyOptions {
   /**
    * How far the signing time may be from now, either side, in seconds
    * (default {@link DEFAULT_TOLERANCE}). A future-dated timestamp is refused
-   * just like a stale one.
+   * just like a stale one. `0` means "the same second" — unlike the SDK's
+   * {@link constructEvent}, where `0` disables the check. There is no way to
+   * disable it here.
    */
   readonly tolerance?: number | undefined;
 }
@@ -121,6 +127,11 @@ export const MALFORMED_HEADER_MESSAGE = "Missing or malformed Stripe-Signature h
 export const OUTSIDE_TOLERANCE_MESSAGE = "Webhook timestamp is outside the tolerance window";
 /** `message` of a refusal where no `v1` signature matches the payload. */
 export const SIGNATURE_MISMATCH_MESSAGE = "No signature matches the payload";
+/**
+ * `message` of a refusal because the signature could not be computed: an
+ * empty secret, or a runtime whose WebCrypto rejects the HMAC.
+ */
+export const SIGNATURE_UNAVAILABLE_MESSAGE = "Could not compute the webhook signature";
 /** `message` of a refusal because the configured tolerance is not a usable number. */
 export const INVALID_TOLERANCE_MESSAGE =
   "Webhook tolerance must be a finite, non-negative number of seconds";
@@ -157,6 +168,7 @@ export const verifySignature = (
       Redacted.value(options.secret),
       timestamp,
       toBytes(options.payload),
+      () => refuse(SIGNATURE_UNAVAILABLE_MESSAGE, header),
     );
     if (!anyMatches(expected, candidates)) {
       return yield* refuse(SIGNATURE_MISMATCH_MESSAGE, header);
@@ -173,12 +185,17 @@ export const verifySignature = (
 export const verify = (
   options: VerifyOptions,
 ): Effect.Effect<WebhookEvent, SignatureVerificationError | Schema.SchemaError> =>
-  Effect.andThen(verifySignature(options), decodeEvent(options.payload));
+  // The decode is built only once verification has succeeded: nothing touches
+  // an unverified body.
+  Effect.andThen(verifySignature(options), () => decodeEvent(options.payload));
 
 /**
  * Build a `Stripe-Signature` header for `payload` the way Stripe signs it
  * (WebCrypto, no SDK) — for testing a webhook handler. The timestamp defaults
  * to `Clock`'s now.
+ *
+ * For tests and tooling only — never call it in a request handler: a server
+ * that signs is a server that can forge its own deliveries.
  */
 export const signatureHeader = (options: {
   readonly payload: string | Uint8Array;
@@ -192,6 +209,7 @@ export const signatureHeader = (options: {
       Redacted.value(options.secret),
       timestamp,
       toBytes(options.payload),
+      () => refuse(SIGNATURE_UNAVAILABLE_MESSAGE, undefined),
     );
     return `t=${timestamp},v1=${digest}`;
   });
@@ -310,15 +328,38 @@ export const SubscriptionObject = Schema.Struct({
 /** A decoded {@link SubscriptionObject}. */
 export type SubscriptionObject = typeof SubscriptionObject.Type;
 
-/** The `invoice` fields a dunning handler reads: who to tell. */
+/**
+ * The `invoice` fields a dunning handler reads: who to tell.
+ *
+ * The subscription is decoded from both places Stripe has put it: the
+ * top-level `subscription` (API versions up to `2025-02-24.acacia`, the one
+ * this package pins) and `parent.subscription_details.subscription` (from
+ * `2025-03-31.basil`, which removed the top-level field). Read it with
+ * {@link invoiceSubscription}, which prefers the newer location.
+ */
 export const InvoiceObject = Schema.Struct({
   id: Maybe(Schema.String),
   customer: Maybe(Schema.String),
   subscription: Maybe(Schema.String),
+  parent: Maybe(
+    Schema.Struct({
+      subscription_details: Maybe(Schema.Struct({ subscription: Maybe(Schema.String) })),
+    }),
+  ),
 });
 
 /** A decoded {@link InvoiceObject}. */
 export type InvoiceObject = typeof InvoiceObject.Type;
+
+/**
+ * The subscription an invoice bills, wherever the event's API version put it:
+ * `parent.subscription_details.subscription` when present, else the legacy
+ * top-level `subscription`; `none` for an invoice outside any subscription.
+ */
+export const invoiceSubscription = (invoice: InvoiceObject): Option.Option<string> =>
+  Option.orElse(Option.fromNullishOr(invoice.parent?.subscription_details?.subscription), () =>
+    Option.fromNullishOr(invoice.subscription),
+  );
 
 const eventOf = <T extends Schema.Top, O extends Schema.Top>(type: T, object: O) =>
   Schema.Struct({ id: Schema.String, type, data: Schema.Struct({ object }) });
@@ -642,6 +683,8 @@ export const generateTestHeaderStringAsync = (
 /**
  * The default tolerance, in seconds, between a signature's timestamp and now
  * (either side) — Stripe's own default — for {@link verify} and the SDK-based
- * verifier alike.
+ * verifier alike. The two differ on a tolerance of `0`: {@link verify} reads
+ * it as "the same second", {@link constructEvent} / {@link constructEventAsync}
+ * (the SDK) as "no timestamp check at all".
  */
 export const DEFAULT_TOLERANCE: number = 300;

@@ -11,7 +11,7 @@
  * weakening the check. "Now" comes from `TestClock`.
  */
 
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { Effect, Option, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
@@ -203,6 +203,40 @@ describe("Webhook.verifySignature", () => {
     ).toBeUndefined();
   });
 
+  it("takes the last t when the header repeats it", async () => {
+    // Signed at NOW, but a second `t` wins, so the MAC no longer matches.
+    const genuine = await digest(BODY, NOW);
+    expect(await refusal(BODY, `t=${NOW},t=${NOW - 1},v1=${genuine}`)).toBe(
+      Webhook.SIGNATURE_MISMATCH_MESSAGE,
+    );
+  });
+
+  it("refuses an uppercase-hex v1 (Stripe sends lowercase)", async () => {
+    const genuine = await digest(BODY, NOW);
+    expect(await refusal(BODY, `t=${NOW},v1=${genuine.toUpperCase()}`)).toBe(
+      Webhook.SIGNATURE_MISMATCH_MESSAGE,
+    );
+  });
+
+  it("refuses an absurdly long timestamp as outside the window", async () => {
+    expect(await refusal(BODY, `t=${"9".repeat(400)},v1=${"0".repeat(64)}`)).toBe(
+      Webhook.OUTSIDE_TOLERANCE_MESSAGE,
+    );
+  });
+
+  it("fails closed on an empty secret, keeping the header", async () => {
+    // Node's WebCrypto will not even import a zero-length key, so no genuine
+    // header exists; the verifier must refuse before comparing anything.
+    const header = `t=${NOW},v1=${"0".repeat(64)}`;
+    const error = await at(
+      NOW,
+      Effect.flip(Webhook.verifySignature({ payload: BODY, header, secret: Redacted.make("") })),
+    );
+    expect(error).toBeInstanceOf(SignatureVerificationError);
+    expect(error.message).toBe(Webhook.SIGNATURE_UNAVAILABLE_MESSAGE);
+    expect(error.header).toBe(header);
+  });
+
   it("never puts the secret or the payload in the error", async () => {
     const header = await sign(BODY, NOW, "whsec_other");
     const result = await verifySignature(BODY, header);
@@ -243,6 +277,52 @@ describe("Webhook.verify", () => {
       ),
     );
     expect(error._tag).toBe("SignatureVerificationError");
+  });
+
+  it("refuses a valid-JSON event with a bad signature as a signature failure", async () => {
+    const error = await at(
+      NOW,
+      Effect.flip(
+        Webhook.verify({
+          payload: BODY,
+          header: await sign(BODY, NOW, "whsec_other"),
+          secret: Redacted.make(SECRET),
+        }),
+      ),
+    );
+    expect(error).toBeInstanceOf(SignatureVerificationError);
+    expect(Schema.isSchemaError(error)).toBe(false);
+  });
+
+  it("never decodes an unverified body", async () => {
+    const decode = vi.spyOn(TextDecoder.prototype, "decode");
+    try {
+      const bytes = new TextEncoder().encode(BODY);
+      const error = await at(
+        NOW,
+        Effect.flip(
+          Webhook.verify({
+            payload: bytes,
+            header: await sign(BODY, NOW, "whsec_other"),
+            secret: Redacted.make(SECRET),
+          }),
+        ),
+      );
+      expect(error.message).toBe(Webhook.SIGNATURE_MISMATCH_MESSAGE);
+      expect(decode).not.toHaveBeenCalled();
+      // …and does decode once the body verifies.
+      await at(
+        NOW,
+        Webhook.verify({
+          payload: bytes,
+          header: await sign(BODY, NOW),
+          secret: Redacted.make(SECRET),
+        }),
+      );
+      expect(decode).toHaveBeenCalledTimes(1);
+    } finally {
+      decode.mockRestore();
+    }
   });
 
   it("fails, rather than throwing, on a signed body that is not an event", async () => {
@@ -324,6 +404,39 @@ describe("the event vocabulary", () => {
     );
     expect(invoice.customer).toBe("cus_1");
     expect(invoice.subscription).toBeNull();
+    expect(Webhook.invoiceSubscription(invoice)).toStrictEqual(Option.none());
+  });
+
+  it("reads an invoice's subscription from the legacy top-level field", async () => {
+    const invoice = await Effect.runPromise(
+      Webhook.decodeInvoice({ customer: "cus_1", subscription: "sub_old" }),
+    );
+    expect(Webhook.invoiceSubscription(invoice)).toStrictEqual(Option.some("sub_old"));
+  });
+
+  it("prefers the invoice's parent.subscription_details (2025-03-31.basil and later)", async () => {
+    const basil = await Effect.runPromise(
+      Webhook.decodeInvoice({
+        customer: "cus_1",
+        parent: {
+          type: "subscription_details",
+          quote_details: null,
+          subscription_details: { subscription: "sub_new", metadata: {} },
+        },
+      }),
+    );
+    expect(Webhook.invoiceSubscription(basil)).toStrictEqual(Option.some("sub_new"));
+    const both = await Effect.runPromise(
+      Webhook.decodeInvoice({
+        subscription: "sub_old",
+        parent: { subscription_details: { subscription: "sub_new" } },
+      }),
+    );
+    expect(Webhook.invoiceSubscription(both)).toStrictEqual(Option.some("sub_new"));
+    const detached = await Effect.runPromise(
+      Webhook.decodeInvoice({ subscription: "sub_old", parent: null }),
+    );
+    expect(Webhook.invoiceSubscription(detached)).toStrictEqual(Option.some("sub_old"));
   });
 
   const subscription = {

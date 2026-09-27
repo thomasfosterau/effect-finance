@@ -8,7 +8,6 @@
  */
 
 import { Effect, Option } from "effect";
-import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
 
 /** The parsed `Stripe-Signature` header: `t=<unix>,v1=<hex>[,v1=<hex>…]`. */
 export interface ParsedSignature {
@@ -92,32 +91,35 @@ const toHex = (buffer: ArrayBuffer): string => {
  * Stripe's `v1` digest: HMAC-SHA256 with `secret` over `${timestamp}.` followed
  * by the raw payload bytes, hex-encoded.
  *
- * WebCrypto only rejects here on inputs this module never builds (an HMAC key
- * from raw bytes always imports); should it reject anyway (a runtime without
- * `crypto.subtle`), the delivery is refused — the verifier fails closed. The
- * cause is dropped: it could describe the key material.
+ * An empty secret is refused before WebCrypto sees it (runtimes differ on
+ * whether a zero-length HMAC key imports, and a MAC under an empty key is one
+ * anybody can compute). Any WebCrypto rejection — a runtime without
+ * `crypto.subtle` — fails with `onFailure()`: the verifier fails closed. The
+ * cause is dropped, since it could describe the key material.
  */
-export const signatureDigest = (
+export const signatureDigest = <E>(
   secret: string,
   timestamp: number,
   payload: Uint8Array,
-): Effect.Effect<string, SignatureVerificationError> =>
-  Effect.tryPromise({
-    try: async () => {
-      const encoder = new TextEncoder();
-      const prefix = encoder.encode(`${timestamp}.`);
-      const signed = new Uint8Array(prefix.length + payload.length);
-      signed.set(prefix, 0);
-      signed.set(payload, prefix.length);
-      const key = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-      );
-      return toHex(await crypto.subtle.sign("HMAC", key, signed));
-    },
-    catch: () =>
-      new SignatureVerificationError({ message: "Could not compute the webhook signature" }),
-  });
+  onFailure: () => E,
+): Effect.Effect<string, E> =>
+  secret === ""
+    ? Effect.fail(onFailure())
+    : Effect.tryPromise({
+        try: async () => {
+          const encoder = new TextEncoder();
+          const prefix = encoder.encode(`${timestamp}.`);
+          const signed = new Uint8Array(prefix.length + payload.length);
+          signed.set(prefix, 0);
+          signed.set(payload, prefix.length);
+          const key = await crypto.subtle.importKey(
+            "raw",
+            encoder.encode(secret),
+            { name: "HMAC", hash: "SHA-256" },
+            false,
+            ["sign"],
+          );
+          return toHex(await crypto.subtle.sign("HMAC", key, signed));
+        },
+        catch: onFailure,
+      });

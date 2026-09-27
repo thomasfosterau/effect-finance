@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { Option } from "effect";
-import { parseSignatureHeader, timingSafeEqual } from "../src/internal/signature.ts";
+import { Effect, Option } from "effect";
+import {
+  parseSignatureHeader,
+  signatureDigest,
+  timingSafeEqual,
+} from "../src/internal/signature.ts";
 
 describe("timingSafeEqual", () => {
   it("is true only for identical strings", () => {
@@ -30,5 +34,24 @@ describe("parseSignatureHeader", () => {
     expect(parseSignatureHeader("junk,t=10,,v1=aa")).toStrictEqual(
       Option.some({ timestamp: 10, candidates: ["aa"] }),
     );
+  });
+});
+
+describe("signatureDigest", () => {
+  const digestOf = (payload: Uint8Array) =>
+    Effect.runPromise(signatureDigest("whsec_x", 10, payload, () => "failed"));
+
+  it("signs only the bytes a subarray view covers", async () => {
+    const whole = new TextEncoder().encode('xx{"id":1}yy');
+    const view = whole.subarray(2, whole.length - 2);
+    expect(view.byteOffset).toBe(2);
+    expect(await digestOf(view)).toBe(await digestOf(new TextEncoder().encode('{"id":1}')));
+  });
+
+  it("fails with onFailure on an empty secret", async () => {
+    const outcome = await Effect.runPromise(
+      Effect.flip(signatureDigest("", 10, new Uint8Array(), () => "failed")),
+    );
+    expect(outcome).toBe("failed");
   });
 });
