@@ -2,70 +2,79 @@
  * Translation between Airwallex API objects and vendor-neutral payments
  * entities.
  *
- * Airwallex is the source of truth here, so entities are constructed with schema
- * validation disabled — we trust the API's shapes rather than re-decoding them.
+ * Each Airwallex object a capability layer reads is **decoded** with a
+ * `Schema` narrowed to the fields the mapping uses — the response is not
+ * trusted, and a 2xx whose body does not decode fails with
+ * {@link PaymentProviderError} rather than producing an entity built from
+ * `undefined`. Unknown fields are ignored. Statuses decode as strings and are
+ * normalised by the `to*Status` functions below (an unrecognised one maps to a
+ * neutral fallback, as before). Entities are then constructed with schema
+ * checks disabled: the vendor data has just been decoded.
  *
  * @module
  */
 
-import type { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import {
   Customer as CustomerNS,
   PaymentIntent as PaymentIntentNS,
   Refund as RefundNS,
+  PaymentProviderError,
   type Page,
 } from "@thomasfosterau/effect-payments";
+import { PROVIDER } from "./error.js";
 import { toMinorUnits } from "./money.js";
 
-/**
- * Construct entities from trusted Airwallex data without re-running the schema
- * checks (the provider's own response is the source of truth).
- */
+/** The vendor data was decoded just before construction. */
 const TRUSTED: Schema.MakeOptions = { disableChecks: true };
 
 // ---------------------------------------------------------------------------
-// Wire types (the subset of Airwallex fields the neutral mapping reads)
+// Wire shapes (the subset of Airwallex fields the neutral mapping reads)
 // ---------------------------------------------------------------------------
 
-export interface AirwallexCustomer {
-  readonly id: string;
-  readonly email?: string | null | undefined;
-  readonly first_name?: string | null | undefined;
-  readonly last_name?: string | null | undefined;
-  readonly phone_number?: string | null | undefined;
-  readonly metadata?: Record<string, string> | null | undefined;
-  readonly created_at?: string | null | undefined;
-}
+/** An optional, nullable field. */
+const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema));
 
-export interface AirwallexPaymentIntent {
-  readonly id: string;
-  readonly amount: number;
-  readonly currency: string;
-  readonly status: string;
-  readonly customer_id?: string | null | undefined;
-  readonly payment_method_id?: string | null | undefined;
-  readonly client_secret?: string | null | undefined;
-  readonly descriptor?: string | null | undefined;
-  readonly metadata?: Record<string, string> | null | undefined;
-  readonly created_at?: string | null | undefined;
-}
+/** Metadata values of any type decode; only the string ones are kept. */
+const Metadata = Maybe(Schema.Record(Schema.String, Schema.Unknown));
 
-export interface AirwallexRefund {
-  readonly id: string;
-  readonly amount: number;
-  readonly currency: string;
-  readonly status: string;
-  readonly payment_intent_id?: string | null | undefined;
-  readonly reason?: string | null | undefined;
-  readonly metadata?: Record<string, string> | null | undefined;
-  readonly created_at?: string | null | undefined;
-}
+const AirwallexCustomer = Schema.Struct({
+  id: Schema.String,
+  email: Maybe(Schema.String),
+  first_name: Maybe(Schema.String),
+  last_name: Maybe(Schema.String),
+  phone_number: Maybe(Schema.String),
+  metadata: Metadata,
+  created_at: Maybe(Schema.String),
+});
 
-/** A page of Airwallex results. */
-export interface AirwallexList<A> {
-  readonly items: ReadonlyArray<A>;
-  readonly has_more: boolean;
-}
+const AirwallexPaymentIntent = Schema.Struct({
+  id: Schema.String,
+  amount: Schema.Finite,
+  currency: Schema.String,
+  status: Schema.String,
+  customer_id: Maybe(Schema.String),
+  payment_method_id: Maybe(Schema.String),
+  client_secret: Maybe(Schema.String),
+  descriptor: Maybe(Schema.String),
+  metadata: Metadata,
+  created_at: Maybe(Schema.String),
+});
+
+const AirwallexRefund = Schema.Struct({
+  id: Schema.String,
+  amount: Schema.Finite,
+  currency: Schema.String,
+  status: Schema.String,
+  payment_intent_id: Maybe(Schema.String),
+  reason: Maybe(Schema.String),
+  metadata: Metadata,
+  created_at: Maybe(Schema.String),
+});
+
+/** An Airwallex list response. */
+const AirwallexList = <S extends Schema.Top>(item: S) =>
+  Schema.Struct({ items: Schema.Array(item), has_more: Schema.Boolean });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -86,8 +95,12 @@ const composeName = (
   return name.length > 0 ? name : null;
 };
 
-const metadataOf = (metadata: Record<string, string> | null | undefined): Record<string, string> =>
-  metadata ?? {};
+const metadataOf = (metadata: typeof Metadata.Type): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(metadata ?? {}).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
 
 /** Normalize an Airwallex payment intent status to the neutral status. */
 export const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus => {
@@ -131,7 +144,7 @@ export const toRefundStatus = (status: string): RefundNS.RefundStatus => {
 // ---------------------------------------------------------------------------
 
 /** Map an Airwallex customer to the neutral entity. */
-export const toCustomer = (customer: AirwallexCustomer): CustomerNS.Customer =>
+const toCustomer = (customer: typeof AirwallexCustomer.Type): CustomerNS.Customer =>
   new CustomerNS.Customer(
     {
       id: customer.id,
@@ -147,7 +160,9 @@ export const toCustomer = (customer: AirwallexCustomer): CustomerNS.Customer =>
   );
 
 /** Map an Airwallex payment intent to the neutral entity. */
-export const toPaymentIntent = (intent: AirwallexPaymentIntent): PaymentIntentNS.PaymentIntent =>
+const toPaymentIntent = (
+  intent: typeof AirwallexPaymentIntent.Type,
+): PaymentIntentNS.PaymentIntent =>
   new PaymentIntentNS.PaymentIntent(
     {
       id: intent.id,
@@ -165,7 +180,7 @@ export const toPaymentIntent = (intent: AirwallexPaymentIntent): PaymentIntentNS
   );
 
 /** Map an Airwallex refund to the neutral entity. */
-export const toRefund = (refund: AirwallexRefund): RefundNS.Refund =>
+const toRefund = (refund: typeof AirwallexRefund.Type): RefundNS.Refund =>
   new RefundNS.Refund(
     {
       id: refund.id,
@@ -181,8 +196,67 @@ export const toRefund = (refund: AirwallexRefund): RefundNS.Refund =>
     TRUSTED,
   );
 
-/** Map an Airwallex list response into a neutral page. */
-export const toPage = <S, A>(list: AirwallexList<S>, map: (value: S) => A): Page<A> => ({
-  data: list.items.map(map),
-  hasMore: list.has_more,
-});
+// ---------------------------------------------------------------------------
+// Decoders
+// ---------------------------------------------------------------------------
+
+const malformed = (what: string, cause: unknown): PaymentProviderError =>
+  new PaymentProviderError({
+    message: `Airwallex returned a malformed ${what} response`,
+    provider: PROVIDER,
+    cause,
+  });
+
+/**
+ * Decode a response body with `schema` and map it, failing with
+ * {@link PaymentProviderError} when it does not decode.
+ */
+const decoder =
+  <S extends Schema.Codec<unknown, unknown>, A>(
+    what: string,
+    schema: S,
+    map: (value: S["Type"]) => A,
+  ) =>
+  (body: unknown): Effect.Effect<A, PaymentProviderError> =>
+    Schema.decodeUnknownEffect(schema)(body).pipe(
+      Effect.mapError((cause) => malformed(what, cause)),
+      Effect.map(map),
+    );
+
+/** Decode a list response and map every item, as a neutral page. */
+const pageDecoder = <S extends Schema.Codec<unknown, unknown>, A>(
+  what: string,
+  item: S,
+  map: (value: S["Type"]) => A,
+) =>
+  decoder(`${what} list`, AirwallexList(item), (list): Page<A> => ({
+    data: list.items.map(map),
+    hasMore: list.has_more,
+  }));
+
+/** A customer. */
+export const decodeCustomer = decoder("customer", AirwallexCustomer, toCustomer);
+/** A page of customers. */
+export const decodeCustomerPage = pageDecoder("customer", AirwallexCustomer, toCustomer);
+/** A payment intent. */
+export const decodePaymentIntent = decoder(
+  "payment intent",
+  AirwallexPaymentIntent,
+  toPaymentIntent,
+);
+/** A page of payment intents. */
+export const decodePaymentIntentPage = pageDecoder(
+  "payment intent",
+  AirwallexPaymentIntent,
+  toPaymentIntent,
+);
+/** The currency of a payment intent. */
+export const decodePaymentIntentCurrency = decoder(
+  "payment intent",
+  AirwallexPaymentIntent,
+  (intent) => intent.currency,
+);
+/** A refund. */
+export const decodeRefund = decoder("refund", AirwallexRefund, toRefund);
+/** A page of refunds. */
+export const decodeRefundPage = pageDecoder("refund", AirwallexRefund, toRefund);

@@ -66,8 +66,14 @@ export const stripeHttpConfigLayer = StripeHttp.layerConfig();
 export const unavailableLayer = Stub.unavailable("stripe");
 export const stripeHttpLayer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_123") });
 export const stripeSdkLayer = StripeSdk.layer({ apiKey: Redacted.make("sk_test_123") });
-export const paypalLayer = PayPalPayments.layer({ clientId: "id", clientSecret: "secret" });
-export const airwallexLayer = AirwallexPayments.layer({ clientId: "id", apiKey: "key" });
+export const paypalLayer = PayPalPayments.layer({
+  clientId: "id",
+  clientSecret: Redacted.make("secret"),
+});
+export const airwallexLayer = AirwallexPayments.layer({
+  clientId: "id",
+  apiKey: Redacted.make("key"),
+});
 export const stripeCustomer = StripeCustomer.retrieve("cus_123");
 export const event = Webhook.constructEvent("{}", "t=1,v1=sig", "whsec_123");
 

@@ -13,7 +13,7 @@ npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-airw
 ## Usage
 
 ```typescript
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
@@ -24,7 +24,7 @@ const program = Customer.create({ email: "jane@example.com" });
 // `HttpClient`, which `FetchHttpClient.layer` supplies on any fetch runtime.
 const layer = AirwallexPayments.layer({
   clientId: process.env.AIRWALLEX_CLIENT_ID!,
-  apiKey: process.env.AIRWALLEX_API_KEY!,
+  apiKey: Redacted.make(process.env.AIRWALLEX_API_KEY!),
 }).pipe(Layer.provide(FetchHttpClient.layer));
 // from AIRWALLEX_CLIENT_ID / AIRWALLEX_API_KEY:
 // const layer = AirwallexPayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
@@ -53,6 +53,8 @@ Because each capability is an independent Effect service, this provider simply d
 - **Timeouts** — the token login fails with `PaymentNetworkError` after `loginTimeout` ms (default 30 000) and any other request after `timeout` ms (default 80 000, as in the Stripe transport). Logins are serialised, so without a bound one hung login would stall every request on the client; after a timeout the next caller logs in afresh. `layerFromEnv` uses the defaults; pass `loginTimeout` / `timeout` to `layer` to change them (`Infinity` disables one; `0`, a negative number or `NaN` fails with `PaymentConfigError`). Two things to know:
   - `timeout` covers the resource request only, not getting a token. Callers queued behind a failing login each make their own login attempt, so the k-th queued caller can wait about k × `loginTimeout` in the worst case (sharing one login's failure with the whole queue is #65).
   - A **non-GET that times out has an unknown outcome**: the vendor may have applied the write. Don't blindly retry a create, capture or refund. Idempotency keys that make that safe are #66.
+- **Secrets** — `apiKey` is a `Redacted<string>` (`Redacted.make(...)`; `layerFromEnv` reads it with `Config.Redacted`), so the API key never reaches a log line or an error.
+- **Decoded responses** — every Airwallex response the capabilities read is decoded with a `Schema` at the boundary; a response that does not match fails with `PaymentProviderError` instead of producing a half-built entity. `AirwallexClient.request` returns `unknown`.
 
 See the [repository README](../../README.md) for the full guide.
 

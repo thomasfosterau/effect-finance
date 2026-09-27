@@ -16,13 +16,16 @@
  *
  * @example
  * ```typescript
- * import { Effect } from "effect";
+ * import { Effect, Redacted } from "effect";
  * import * as Product from "@thomasfosterau/effect-payments/Product";
  * import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
  *
  * const program = Product.create({ name: "Premium" });
  *
- * const layer = PayPalPayments.layer({ clientId: "...", clientSecret: "..." });
+ * const layer = PayPalPayments.layer({
+ *   clientId: "...",
+ *   clientSecret: Redacted.make("..."),
+ * });
  * const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  *

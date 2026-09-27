@@ -34,19 +34,15 @@ import {
   type PayPalConfig,
 } from "./PayPal.js";
 import {
-  toPaymentIntent,
-  toPrice,
-  toProduct,
-  toRefund,
-  toSubscription,
-  toPage,
-  type PayPalCapture,
-  type PayPalLink,
-  type PayPalOrder,
-  type PayPalPlan,
-  type PayPalProduct,
-  type PayPalRefund,
-  type PayPalSubscription,
+  decodeCaptureCurrency,
+  decodeOrderCaptureId,
+  decodePaymentIntent,
+  decodePrice,
+  decodePricePage,
+  decodeProduct,
+  decodeProductPage,
+  decodeRefund,
+  decodeSubscription,
 } from "./internal/mapping.js";
 import { toMajorString } from "./internal/money.js";
 
@@ -69,7 +65,7 @@ export const productsLayer: Layer.Layer<ProductNS.Products, never, PayPalClient>
     ProductNS.Products.of({
       create: (params) =>
         client
-          .request<PayPalProduct>({
+          .request({
             method: "POST",
             path: "/v1/catalogs/products",
             body: {
@@ -79,20 +75,20 @@ export const productsLayer: Layer.Layer<ProductNS.Products, never, PayPalClient>
               category: "SOFTWARE",
             },
           })
-          .pipe(Effect.map(toProduct)),
+          .pipe(Effect.flatMap(decodeProduct)),
       retrieve: (id) =>
         client
-          .request<PayPalProduct>({
+          .request({
             method: "GET",
             path: `/v1/catalogs/products/${id}`,
           })
-          .pipe(Effect.map(toProduct)),
+          .pipe(Effect.flatMap(decodeProduct)),
       update: (id, params) =>
         // PayPal patches a product, then returns 204; re-read to map the result.
         params.description === undefined
           ? notSupported("updating a product without a description")
           : client
-              .request<void>({
+              .request({
                 method: "PATCH",
                 path: `/v1/catalogs/products/${id}`,
                 body: [
@@ -105,22 +101,22 @@ export const productsLayer: Layer.Layer<ProductNS.Products, never, PayPalClient>
               })
               .pipe(
                 Effect.flatMap(() =>
-                  client.request<PayPalProduct>({
+                  client.request({
                     method: "GET",
                     path: `/v1/catalogs/products/${id}`,
                   }),
                 ),
-                Effect.map(toProduct),
+                Effect.flatMap(decodeProduct),
               ),
       del: () => notSupported("deleting products"),
       list: (params) =>
         client
-          .request<{ products: PayPalProduct[]; links?: PayPalLink[] }>({
+          .request({
             method: "GET",
             path: "/v1/catalogs/products",
             query: { page_size: params?.limit },
           })
-          .pipe(Effect.map((res) => toPage(res.products.map(toProduct), res.links))),
+          .pipe(Effect.flatMap(decodeProductPage)),
     }),
   ),
 );
@@ -140,7 +136,7 @@ export const pricesLayer: Layer.Layer<PriceNS.Prices, never, PayPalClient> = Lay
           return notSupported("one-time prices (plans must be recurring)");
         }
         return client
-          .request<PayPalPlan>({
+          .request({
             method: "POST",
             path: "/v1/billing/plans",
             body: {
@@ -166,15 +162,15 @@ export const pricesLayer: Layer.Layer<PriceNS.Prices, never, PayPalClient> = Lay
               payment_preferences: { auto_bill_outstanding: true },
             },
           })
-          .pipe(Effect.map(toPrice));
+          .pipe(Effect.flatMap(decodePrice));
       },
       retrieve: (id) =>
         client
-          .request<PayPalPlan>({
+          .request({
             method: "GET",
             path: `/v1/billing/plans/${id}`,
           })
-          .pipe(Effect.map(toPrice)),
+          .pipe(Effect.flatMap(decodePrice)),
       update: (id, params) => {
         // The only neutral field PayPal can act on is `active`, via
         // activate/deactivate; then re-read the plan to map the result.
@@ -183,28 +179,28 @@ export const pricesLayer: Layer.Layer<PriceNS.Prices, never, PayPalClient> = Lay
         }
         const action = params.active ? "activate" : "deactivate";
         return client
-          .request<void>({
+          .request({
             method: "POST",
             path: `/v1/billing/plans/${id}/${action}`,
           })
           .pipe(
             Effect.flatMap(() =>
-              client.request<PayPalPlan>({
+              client.request({
                 method: "GET",
                 path: `/v1/billing/plans/${id}`,
               }),
             ),
-            Effect.map(toPrice),
+            Effect.flatMap(decodePrice),
           );
       },
       list: (params) =>
         client
-          .request<{ plans: PayPalPlan[]; links?: PayPalLink[] }>({
+          .request({
             method: "GET",
             path: "/v1/billing/plans",
             query: { page_size: params?.limit, product_id: params?.product },
           })
-          .pipe(Effect.map((res) => toPage(res.plans.map(toPrice), res.links))),
+          .pipe(Effect.flatMap(decodePricePage)),
     }),
   ),
 );
@@ -221,7 +217,7 @@ export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, ne
       PaymentIntentNS.PaymentIntents.of({
         create: (params) =>
           client
-            .request<PayPalOrder>({
+            .request({
               method: "POST",
               path: "/v2/checkout/orders",
               body: {
@@ -238,24 +234,24 @@ export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, ne
                 ],
               },
             })
-            .pipe(Effect.map(toPaymentIntent)),
+            .pipe(Effect.flatMap(decodePaymentIntent)),
         retrieve: (id) =>
           client
-            .request<PayPalOrder>({
+            .request({
               method: "GET",
               path: `/v2/checkout/orders/${id}`,
             })
-            .pipe(Effect.map(toPaymentIntent)),
+            .pipe(Effect.flatMap(decodePaymentIntent)),
         update: () => notSupported("updating orders"),
         // Confirming a neutral payment intent maps onto capturing a PayPal order.
         confirm: (id) =>
           client
-            .request<PayPalOrder>({
+            .request({
               method: "POST",
               path: `/v2/checkout/orders/${id}/capture`,
               body: {},
             })
-            .pipe(Effect.map(toPaymentIntent)),
+            .pipe(Effect.flatMap(decodePaymentIntent)),
         cancel: () => notSupported("canceling orders"),
         list: () => notSupported("listing orders"),
       }),
@@ -276,7 +272,7 @@ export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never
         // price is used as the plan id, and the customer id is stored in custom_id.
         create: (params) =>
           client
-            .request<PayPalSubscription>({
+            .request({
               method: "POST",
               path: "/v1/billing/subscriptions",
               body: {
@@ -285,30 +281,30 @@ export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never
                 custom_id: params.customer,
               },
             })
-            .pipe(Effect.map(toSubscription)),
+            .pipe(Effect.flatMap(decodeSubscription)),
         retrieve: (id) =>
           client
-            .request<PayPalSubscription>({
+            .request({
               method: "GET",
               path: `/v1/billing/subscriptions/${id}`,
             })
-            .pipe(Effect.map(toSubscription)),
+            .pipe(Effect.flatMap(decodeSubscription)),
         update: () => notSupported("updating subscriptions"),
         cancel: (id) =>
           client
-            .request<void>({
+            .request({
               method: "POST",
               path: `/v1/billing/subscriptions/${id}/cancel`,
               body: { reason: "Canceled via effect-payments" },
             })
             .pipe(
               Effect.flatMap(() =>
-                client.request<PayPalSubscription>({
+                client.request({
                   method: "GET",
                   path: `/v1/billing/subscriptions/${id}`,
                 }),
               ),
-              Effect.map(toSubscription),
+              Effect.flatMap(decodeSubscription),
             ),
         list: () => notSupported("listing subscriptions"),
       }),
@@ -330,11 +326,12 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
           // or resolve the first capture of an order (`paymentIntent`).
           let captureId = params.charge ?? null;
           if (!captureId && params.paymentIntent) {
-            const order = yield* client.request<PayPalOrder>({
-              method: "GET",
-              path: `/v2/checkout/orders/${params.paymentIntent}`,
-            });
-            captureId = order.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? null;
+            captureId = yield* client
+              .request({
+                method: "GET",
+                path: `/v2/checkout/orders/${params.paymentIntent}`,
+              })
+              .pipe(Effect.flatMap(decodeOrderCaptureId));
           }
           if (!captureId) {
             return yield* notSupported(
@@ -346,31 +343,33 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
           // major-unit value, so look the capture up when an amount is given.
           let amount: { currency_code: string; value: string } | undefined;
           if (params.amount != null) {
-            const capture = yield* client.request<PayPalCapture>({
-              method: "GET",
-              path: `/v2/payments/captures/${captureId}`,
-            });
-            const currency = capture.amount?.currency_code ?? "USD";
+            const currency = yield* client
+              .request({
+                method: "GET",
+                path: `/v2/payments/captures/${captureId}`,
+              })
+              .pipe(Effect.flatMap(decodeCaptureCurrency));
             amount = {
               currency_code: currency,
               value: toMajorString(params.amount, currency),
             };
           }
 
-          const refund = yield* client.request<PayPalRefund>({
-            method: "POST",
-            path: `/v2/payments/captures/${captureId}/refund`,
-            body: amount ? { amount } : {},
-          });
-          return toRefund(refund);
+          return yield* client
+            .request({
+              method: "POST",
+              path: `/v2/payments/captures/${captureId}/refund`,
+              body: amount ? { amount } : {},
+            })
+            .pipe(Effect.flatMap(decodeRefund));
         }),
       retrieve: (id) =>
         client
-          .request<PayPalRefund>({
+          .request({
             method: "GET",
             path: `/v2/payments/refunds/${id}`,
           })
-          .pipe(Effect.map(toRefund)),
+          .pipe(Effect.flatMap(decodeRefund)),
       update: () => notSupported("updating refunds"),
       list: () => notSupported("listing refunds"),
     }),

@@ -53,11 +53,11 @@ const result = await Effect.runPromise(
 The same program runs on a different provider by changing only the layer:
 
 ```typescript
-import { Layer } from "effect";
+import { Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
 
-const layer = AirwallexPayments.layer({ clientId: "...", apiKey: "..." }).pipe(
+const layer = AirwallexPayments.layer({ clientId: "...", apiKey: Redacted.make("...") }).pipe(
   Layer.provide(FetchHttpClient.layer),
 );
 ```

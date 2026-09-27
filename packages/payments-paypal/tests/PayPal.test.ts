@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Cause, Effect, Fiber, Layer } from "effect";
+import { Cause, ConfigProvider, Effect, Fiber, Layer, Predicate, Redacted } from "effect";
 import { TestClock } from "effect/testing";
 import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
 import {
@@ -7,7 +7,7 @@ import {
   PaymentConfigError,
   PaymentNetworkError,
 } from "@thomasfosterau/effect-payments";
-import { make, type PayPalConfig } from "../src/PayPal.ts";
+import { PayPalClient, layerFromEnv, make, type PayPalConfig } from "../src/PayPal.ts";
 
 const LOGIN_PATH = "/v1/oauth2/token";
 const LOGIN_RESPONSE = () => jsonResponse(200, { access_token: "at_1", expires_in: 3600 });
@@ -64,9 +64,22 @@ const stubFetch = (handler: (request: CapturedRequest) => Response) => {
 
 const config = (over: Partial<PayPalConfig>): PayPalConfig => ({
   clientId: "client_1",
-  clientSecret: "secret_1",
+  clientSecret: Redacted.make("secret_1"),
   ...over,
 });
+
+/**
+ * Every string reachable from `value` through its own properties, enumerable
+ * or not — what a logger that walks the object could print.
+ */
+const stringsIn = (value: unknown, seen = new Set<unknown>()): Array<string> => {
+  if (Predicate.isString(value)) return [value];
+  if (!Predicate.isObject(value) || seen.has(value)) return [];
+  seen.add(value);
+  return Object.getOwnPropertyNames(value).flatMap((key) =>
+    stringsIn(Object.getOwnPropertyDescriptor(value, key)?.value, seen),
+  );
+};
 
 describe("PayPal client", () => {
   it("exchanges credentials for a token and authorizes requests", async () => {
@@ -75,13 +88,13 @@ describe("PayPal client", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const client = yield* make(config({}));
-        return yield* client.request<{ id: string }>({
+        return yield* client.request({
           method: "GET",
           path: "/v1/catalogs/products/PROD-1",
         });
       }).pipe(Effect.provide(http)),
     );
-    expect(result.id).toBe("PROD-1");
+    expect(result).toMatchObject({ id: "PROD-1" });
 
     const token = calls.find((c) => c.url.endsWith(LOGIN_PATH))!;
     const expectedBasic = btoa("client_1:secret_1");
@@ -133,7 +146,10 @@ describe("PayPal client", () => {
   it("fails with a config error when credentials are missing", async () => {
     const { http } = stubFetch(() => jsonResponse(200, {}));
     const error = await Effect.runPromise(
-      make(config({ clientId: "", clientSecret: "" })).pipe(Effect.flip, Effect.provide(http)),
+      make(config({ clientId: "", clientSecret: Redacted.make("") })).pipe(
+        Effect.flip,
+        Effect.provide(http),
+      ),
     );
     expect(error).toBeInstanceOf(PaymentConfigError);
   });
@@ -188,14 +204,14 @@ describe("PayPal client", () => {
           client.request({ method: "GET", path: "/v1/catalogs/products/PROD-1" }),
         );
         expect(first).toBeInstanceOf(PaymentAuthenticationError);
-        return yield* client.request<{ id: string }>({
+        return yield* client.request({
           method: "GET",
           path: "/v1/catalogs/products/PROD-1",
         });
       }).pipe(Effect.provide(http)),
     );
 
-    expect(second.id).toBe("x");
+    expect(second).toMatchObject({ id: "x" });
     expect(calls.filter((c) => c.url.endsWith(LOGIN_PATH))).toHaveLength(2);
   });
   it("keeps a newer token when a request made with the old one gets a late 401", async () => {
@@ -329,7 +345,7 @@ describe("PayPal client timeouts", () => {
         const first = yield* Effect.forkChild(Effect.flip(client.request(get)));
         yield* macrotask;
         // Queued on the token lock behind the hung login.
-        const second = yield* Effect.forkChild(client.request<{ id: string }>(get));
+        const second = yield* Effect.forkChild(client.request(get));
         yield* macrotask;
         yield* TestClock.adjust("10 seconds");
         return { first: yield* Fiber.join(first), second: yield* Fiber.join(second) };
@@ -337,7 +353,7 @@ describe("PayPal client timeouts", () => {
     );
 
     expect(first).toBeInstanceOf(PaymentNetworkError);
-    expect(second.id).toBe("x");
+    expect(second).toMatchObject({ id: "x" });
     expect(state.logins).toBe(2);
     expect(state.resources).toEqual(["Bearer at_1"]);
   });
@@ -354,7 +370,7 @@ describe("PayPal client timeouts", () => {
           Effect.flip(client.request(get).pipe(Effect.timeout("2 seconds"))),
         );
         yield* macrotask;
-        const second = yield* Effect.forkChild(client.request<{ id: string }>(get));
+        const second = yield* Effect.forkChild(client.request(get));
         yield* macrotask;
         yield* TestClock.adjust("2 seconds");
         return { first: yield* Fiber.join(first), second: yield* Fiber.join(second) };
@@ -362,7 +378,7 @@ describe("PayPal client timeouts", () => {
     );
 
     expect(Cause.isTimeoutError(first)).toBe(true);
-    expect(second.id).toBe("x");
+    expect(second).toMatchObject({ id: "x" });
     expect(state.logins).toBe(2);
     expect(state.aborted).toBe(1);
   });
@@ -387,10 +403,10 @@ describe("PayPal client timeouts", () => {
     const result = await Effect.runPromise(
       Effect.flatMap(
         make(config({ loginTimeout: Number.POSITIVE_INFINITY, timeout: Number.POSITIVE_INFINITY })),
-        (client) => client.request<{ id: string }>(get),
+        (client) => client.request(get),
       ).pipe(Effect.provide(http)),
     );
-    expect(result.id).toBe("x");
+    expect(result).toMatchObject({ id: "x" });
   });
 
   it("fails a resource request that never answers with a network error after the timeout", async () => {
@@ -410,5 +426,87 @@ describe("PayPal client timeouts", () => {
     expect(error).toBeInstanceOf(PaymentNetworkError);
     expect(error.message).toBe("PayPal request timed out after 5000 ms");
     expect(state.aborted).toBe(1);
+  });
+});
+
+describe("PayPal client secrets", () => {
+  const SECRET = "secret_1";
+  const get = { method: "GET", path: "/v1/catalogs/products/PROD-1" } as const;
+
+  it("reads the clientSecret from configuration as a Redacted", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+    await Effect.runPromise(
+      Effect.flatMap(PayPalClient, (client) => client.request(get)).pipe(
+        Effect.provide(layerFromEnv()),
+        Effect.provide(http),
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromUnknown({
+              PAYPAL_CLIENT_ID: "client_env",
+              PAYPAL_CLIENT_SECRET: "secret_env",
+            }),
+          ),
+        ),
+      ),
+    );
+    const login = calls.find((c) => c.url.endsWith(LOGIN_PATH))!;
+    expect(login.headers.get("authorization")).toBe(`Basic ${btoa("client_env:secret_env")}`);
+  });
+
+  it("fails with PaymentConfigError when the clientSecret variable is absent", async () => {
+    const { http } = stubFetch(() => jsonResponse(200, {}));
+    const error = await Effect.runPromise(
+      Effect.flip(
+        Layer.build(layerFromEnv()).pipe(
+          Effect.scoped,
+          Effect.provide(http),
+          Effect.provide(
+            ConfigProvider.layer(ConfigProvider.fromUnknown({ PAYPAL_CLIENT_ID: "client_env" })),
+          ),
+        ),
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentConfigError);
+  });
+
+  it("keeps the clientSecret out of the config's string and JSON forms", () => {
+    const { clientSecret } = config({});
+    expect(String(clientSecret)).not.toContain(SECRET);
+    expect(JSON.stringify(config({}))).not.toContain(SECRET);
+  });
+
+  it("never carries the clientSecret in an error", async () => {
+    const answers: ReadonlyArray<() => Response> = [
+      () =>
+        jsonResponse(401, {
+          error: "invalid_client",
+          error_description: "Client Authentication failed",
+        }),
+      () => {
+        throw new TypeError("fetch failed");
+      },
+      () => jsonResponse(200, { access_token: 42 }),
+      () => jsonResponse(200, { access_token: "tok_leak", expires_in: "x" }),
+    ];
+    for (const answer of answers) {
+      const fetchImpl: typeof globalThis.fetch = async () => answer();
+      const http = FetchHttpClient.layer.pipe(
+        Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
+      );
+      const error = await Effect.runPromise(
+        Effect.flatMap(make(config({})), (client) => Effect.flip(client.request(get))).pipe(
+          Effect.provide(http),
+        ),
+      );
+      // The request (whose headers carry the credentials) is never kept.
+      expect(Predicate.hasProperty(error.cause, "request")).toBe(false);
+      for (const leak of [SECRET, btoa("client_1:secret_1"), "tok_leak"]) {
+        expect(JSON.stringify(error)).not.toContain(leak);
+        expect(String(error)).not.toContain(leak);
+        // Anywhere in the error's object graph, not just its serialised forms.
+        expect(stringsIn(error).filter((text) => text.includes(leak))).toEqual([]);
+        expect(JSON.stringify(error.cause ?? null)).not.toContain(leak);
+      }
+    }
   });
 });
