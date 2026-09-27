@@ -44,6 +44,7 @@ PayPal's billing suite and checkout APIs map onto a subset of the core capabilit
 | `Subscriptions` | Subscriptions | no `update` / `list` |
 | `Refunds` | Capture refunds | refund a `charge` (capture id) or a captured `paymentIntent`; no `update` / `list` |
 | `Customers` | — | **not provided** (PayPal has no first-class customer resource) |
+| `CheckoutSessions` / `BillingPortalSessions` | — | not in `capabilities`; `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs fail every call with `PaymentInvalidRequestError` |
 
 Because each capability is an independent Effect service, a program that only uses the supported capabilities is fully satisfied; one that needs `Customers` will not type-check against the PayPal layer. Individual operations without a PayPal equivalent fail with a neutral `PaymentInvalidRequestError`.
 

@@ -78,14 +78,16 @@ npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stri
 
 Each resource is an abstract Effect service (a `Context.Service`). A program that calls `Customer.create(...)` requires the `Customers` capability in its environment; nothing more.
 
-| Module          | Capability       | Operations                                                  |
-| --------------- | ---------------- | ----------------------------------------------------------- |
-| `Customer`      | `Customers`      | `create`, `retrieve`, `update`, `del`, `list`               |
-| `Product`       | `Products`       | `create`, `retrieve`, `update`, `del`, `list`               |
-| `Price`         | `Prices`         | `create`, `retrieve`, `update`, `list`                      |
+| Module | Capability | Operations |
+| --- | --- | --- |
+| `Customer` | `Customers` | `create`, `retrieve`, `update`, `del`, `list` |
+| `Product` | `Products` | `create`, `retrieve`, `update`, `del`, `list` |
+| `Price` | `Prices` | `create`, `retrieve`, `update`, `list` |
 | `PaymentIntent` | `PaymentIntents` | `create`, `retrieve`, `update`, `confirm`, `cancel`, `list` |
-| `Subscription`  | `Subscriptions`  | `create`, `retrieve`, `update`, `cancel`, `list`            |
-| `Refund`        | `Refunds`        | `create`, `retrieve`, `update`, `list`                      |
+| `Subscription` | `Subscriptions` | `create`, `retrieve`, `update`, `cancel`, `list` |
+| `Refund` | `Refunds` | `create`, `retrieve`, `update`, `list` |
+| `CheckoutSession` | `CheckoutSessions` | `create` (a hosted checkout page → its `url`) |
+| `BillingPortal` | `BillingPortalSessions` | `create` (a hosted billing portal page → its `url`) |
 
 Every operation returns `Effect<Entity, PaymentsError, Capability>`. List operations return a neutral `Page<Entity>` (`{ data, hasMore }`); deletions return `Deleted` (`{ id, deleted: true }`).
 
@@ -157,22 +159,29 @@ These require the `StripeHttp` transport (from `StripeHttp.layer`, or `Stripe.la
 
 ### Webhooks
 
-`Webhook` wraps the SDK's verifier today, so it needs the SDK client from `Stripe.layer`; a WebCrypto verifier becomes the default in #41.
+`Webhook.verify` is a Workers-safe WebCrypto verifier (HMAC-SHA256, constant-time compare, ±300 s tolerance by default, "now" from `Clock`) that needs neither the SDK nor any Node API. Pass the raw body bytes; nothing is decoded until the signature verifies, and every refusal is a `SignatureVerificationError` that never carries the secret.
 
 ```typescript
+import { Effect, Option, Redacted } from "effect";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
 
-const handle = (body: string | Buffer, signature: string, secret: string) =>
+const handle = (request: Request, secret: Redacted.Redacted<string>) =>
   Effect.gen(function* () {
-    const event = yield* Webhook.constructEvent(body, signature, secret);
-    // event is a typed Stripe.Event
-    return event;
+    const event = yield* Webhook.verify({
+      payload: new Uint8Array(yield* Effect.promise(() => request.arrayBuffer())),
+      header: request.headers.get(Webhook.SIGNATURE_HEADER),
+      secret,
+    });
+    const handled = yield* Webhook.decodeHandledEvent(event); // Option<HandledEvent>
+    return new Response(null, { status: 200 });
   }).pipe(
-    Effect.catchTag("SignatureVerificationError", (e) =>
-      Effect.logError(`Invalid webhook signature: ${e.message}`),
+    Effect.catchTag("SignatureVerificationError", () =>
+      Effect.succeed(new Response(null, { status: 400 })),
     ),
   );
 ```
+
+The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an optional alternative; they need the SDK client from `Stripe.layer`.
 
 See [`packages/payments-stripe/examples`](packages/payments-stripe/examples) for runnable examples.
 
