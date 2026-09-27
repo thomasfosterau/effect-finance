@@ -104,7 +104,8 @@ describe("StripePayments.layerConfig", () => {
       expect(error).toBeInstanceOf(PaymentsUnavailable);
       expect(error).toMatchObject({
         provider: "stripe",
-        message: "Stripe is not configured in this environment (STRIPE_API_KEY is not set)",
+        message:
+          "Stripe is not configured in this environment (STRIPE_API_KEY is not set or is empty)",
       });
       expect(calls).toHaveLength(0);
     },
@@ -185,6 +186,83 @@ describe("StripePayments.layerConfig", () => {
     );
     expect(calls[0]?.url.toString()).toBe("http://localhost:12111/v1/customers/cus_1");
     expect(calls[0]?.headers.get("stripe-version")).toBe("2025-08-27.basil");
+  });
+});
+
+describe("StripePayments.layerConfig and ConfigProvider", () => {
+  it("honours a ConfigProvider attached to the layer when the caller's has no key", async () => {
+    const { http, calls } = stubFetch(customer);
+    const layer = StripePayments.layerConfig().pipe(
+      Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ STRIPE_API_KEY: KEY }))),
+    );
+    const result = await Effect.runPromise(
+      Customer.retrieve("cus_1").pipe(Effect.provide(layer), Effect.provide(http)),
+    );
+    expect(result.id).toBe("cus_1");
+    expect(calls[0]?.headers.get("authorization")).toBe(`Bearer ${KEY}`);
+  });
+
+  it("prefers the caller's ConfigProvider over the layer's", async () => {
+    const { http, calls } = stubFetch(customer);
+    const layer = StripePayments.layerConfig().pipe(
+      Layer.provide(
+        ConfigProvider.layer(ConfigProvider.fromUnknown({ STRIPE_API_KEY: "sk_test_layer" })),
+      ),
+    );
+    await Effect.runPromise(
+      Customer.retrieve("cus_1").pipe(
+        withConfig({ STRIPE_API_KEY: "sk_test_caller" }),
+        Effect.provide(layer),
+        Effect.provide(http),
+      ),
+    );
+    expect(calls[0]?.headers.get("authorization")).toBe("Bearer sk_test_caller");
+  });
+
+  it("serves concurrent calls under different ConfigProviders independently", async () => {
+    const { http, calls } = stubFetch(customer);
+    const [configured, unconfigured] = await Effect.runPromise(
+      Effect.all(
+        [
+          Customer.retrieve("cus_1").pipe(withConfig({ STRIPE_API_KEY: KEY })),
+          Effect.flip(Customer.retrieve("cus_1").pipe(withConfig({}))),
+        ],
+        { concurrency: "unbounded" },
+      ).pipe(Effect.provide(StripePayments.layerConfig()), Effect.provide(http), withConfig({})),
+    );
+    expect(configured.id).toBe("cus_1");
+    expect(unconfigured).toBeInstanceOf(PaymentsUnavailable);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("treats an unreadable key as absent", async () => {
+    const { http, calls } = stubFetch(customer);
+    const error = await Effect.runPromise(
+      Effect.flip(Customer.retrieve("cus_1")).pipe(
+        Effect.provide(StripePayments.layerConfig()),
+        Effect.provide(http),
+        Effect.provide(
+          ConfigProvider.layer(ConfigProvider.fromUnknown({ STRIPE_API_KEY: { nested: true } })),
+        ),
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentsUnavailable);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("sends a POST with a generated Idempotency-Key once the key is present", async () => {
+    const { http, calls } = stubFetch(customer);
+    await Effect.runPromise(
+      Customer.create({ email: "a@example.test" }).pipe(
+        Effect.provide(StripePayments.layerConfig()),
+        Effect.provide(http),
+        withConfig({ STRIPE_API_KEY: KEY }),
+      ),
+    );
+    expect(calls[0]?.method).toBe("POST");
+    expect(calls[0]?.headers.get("idempotency-key")).toMatch(
+      /^effect-payments-retry-[0-9a-f-]{36}$/,
+    );
   });
 });
 

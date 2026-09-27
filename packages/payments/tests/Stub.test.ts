@@ -79,6 +79,16 @@ describe("Stub", () => {
     });
   });
 
+  it("unavailable constructs a fresh error for each call", async () => {
+    const [first, second] = await Effect.runPromise(
+      Effect.all([Effect.flip(Customer.retrieve("a")), Effect.flip(Customer.retrieve("b"))]).pipe(
+        Effect.provide(Stub.unavailable("stripe")),
+      ),
+    );
+    expect(first).toBeInstanceOf(PaymentsUnavailable);
+    expect(first).not.toBe(second);
+  });
+
   it("unavailable without a provider names none", async () => {
     const error = await Effect.runPromise(
       Effect.flip(Customer.retrieve("cus_1")).pipe(Effect.provide(Stub.unavailable())),
