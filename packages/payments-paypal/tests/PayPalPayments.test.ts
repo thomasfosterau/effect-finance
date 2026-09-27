@@ -271,10 +271,55 @@ describe("PayPalPayments decoding", () => {
     expect(error).toMatchObject({ message: "PayPal returned a malformed plan response" });
   });
 
-  it("fails a product list without its collection with a provider error", async () => {
-    const error = await failure(Product.list(), () => ({ items: [] }));
+  it("fails a product list whose collection is not an array with a provider error", async () => {
+    const error = await failure(Product.list(), () => ({ products: "PROD-1" }));
     expect(error).toBeInstanceOf(PaymentProviderError);
     expect(error).toMatchObject({ message: "PayPal returned a malformed product list response" });
+  });
+
+  it("reads a list page without its collection as an empty page", async () => {
+    const { client } = makeFakeClient(() => ({ links: [] }));
+    const products = await Effect.runPromise(Product.list().pipe(Effect.provide(provide(client))));
+    const prices = await Effect.runPromise(Price.list().pipe(Effect.provide(provide(client))));
+    expect(products).toEqual({ data: [], hasMore: false });
+    expect(prices).toEqual({ data: [], hasMore: false });
+  });
+
+  it("fails a plan whose interval count is not a positive integer with a provider error", async () => {
+    for (const interval_count of [0, -1, 1.5]) {
+      const error = await failure(Price.retrieve("P-1"), () => ({
+        id: "P-1",
+        billing_cycles: [
+          { tenure_type: "REGULAR", frequency: { interval_unit: "MONTH", interval_count } },
+        ],
+      }));
+      expect(error).toBeInstanceOf(PaymentProviderError);
+    }
+  });
+
+  it("fails a subscription whose quantity is not a whole number with a provider error", async () => {
+    for (const quantity of ["2.5", "two", "-1"]) {
+      const error = await failure(Subscription.retrieve("I-1"), () => ({
+        id: "I-1",
+        status: "ACTIVE",
+        quantity,
+      }));
+      expect(error).toBeInstanceOf(PaymentProviderError);
+      expect(error).toMatchObject({ message: "PayPal returned a malformed subscription response" });
+    }
+  });
+
+  it("fails a partial refund whose capture has no amount, rather than assuming USD", async () => {
+    const { client, calls } = makeFakeClient(() => ({ id: "CAP-1", status: "COMPLETED" }));
+    const error = await Effect.runPromise(
+      Refund.create({ charge: "CAP-1", amount: 500 }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({ message: "PayPal returned a malformed capture response" });
+    expect(calls.map((call) => call.path)).toEqual(["/v2/payments/captures/CAP-1"]);
   });
 
   it("fails an order whose status is not a string with a provider error", async () => {

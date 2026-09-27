@@ -62,7 +62,7 @@ const PayPalBillingCycle = Schema.Struct({
   frequency: Maybe(
     Schema.Struct({
       interval_unit: Maybe(Schema.String),
-      interval_count: Maybe(Schema.Finite),
+      interval_count: Maybe(Schema.Int.check(Schema.isGreaterThan(0))),
     }),
   ),
   pricing_scheme: Maybe(Schema.Struct({ fixed_price: Maybe(PayPalMoney) })),
@@ -101,7 +101,8 @@ const PayPalSubscription = Schema.Struct({
   status: Schema.String,
   plan_id: Maybe(Schema.String),
   custom_id: Maybe(Schema.String),
-  quantity: Maybe(Schema.String),
+  /** A whole number, sent by PayPal as a string. */
+  quantity: Maybe(Schema.String.check(Schema.isPattern(/^\d+$/))),
   start_time: Maybe(Schema.String),
   create_time: Maybe(Schema.String),
   billing_info: Maybe(Schema.Struct({ next_billing_time: Maybe(Schema.String) })),
@@ -118,12 +119,14 @@ const PayPalRefund = Schema.Struct({
 const PayPalLinks = Maybe(Schema.Array(Schema.Struct({ rel: Schema.String })));
 
 const PayPalProductList = Schema.Struct({
-  products: Schema.Array(PayPalProduct),
+  /** Absent on an empty page. */
+  products: Maybe(Schema.Array(PayPalProduct)),
   links: PayPalLinks,
 });
 
 const PayPalPlanList = Schema.Struct({
-  plans: Schema.Array(PayPalPlan),
+  /** Absent on an empty page. */
+  plans: Maybe(Schema.Array(PayPalPlan)),
   links: PayPalLinks,
 });
 
@@ -359,13 +362,13 @@ const decoder =
 export const decodeProduct = decoder("product", PayPalProduct, toProduct);
 /** A page of catalog products. */
 export const decodeProductPage = decoder("product list", PayPalProductList, (list) =>
-  toPage(list.products.map(toProduct), list.links),
+  toPage((list.products ?? []).map(toProduct), list.links),
 );
 /** A billing plan, as a neutral price. */
 export const decodePrice = decoder("plan", PayPalPlan, toPrice);
 /** A page of billing plans, as neutral prices. */
 export const decodePricePage = decoder("plan list", PayPalPlanList, (list) =>
-  toPage(list.plans.map(toPrice), list.links),
+  toPage((list.plans ?? []).map(toPrice), list.links),
 );
 /** An order, as a neutral payment intent. */
 export const decodePaymentIntent = decoder("order", PayPalOrder, toPaymentIntent);
@@ -375,11 +378,14 @@ export const decodeOrderCaptureId = decoder(
   PayPalOrder,
   (order) => order.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? null,
 );
-/** The currency of a capture, if it carries an amount. */
+/**
+ * The currency of a capture. A partial refund needs it to format the amount,
+ * so a capture without an amount is malformed rather than defaulted.
+ */
 export const decodeCaptureCurrency = decoder(
   "capture",
-  PayPalCapture,
-  (capture) => capture.amount?.currency_code ?? null,
+  Schema.Struct({ id: Schema.String, amount: PayPalMoney }),
+  (capture) => capture.amount.currency_code,
 );
 /** A subscription. */
 export const decodeSubscription = decoder("subscription", PayPalSubscription, toSubscription);

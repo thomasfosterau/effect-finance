@@ -194,4 +194,15 @@ describe("AirwallexPayments decoding", () => {
     expect(error).toBeInstanceOf(PaymentProviderError);
     expect(calls.map((call) => call.path)).toEqual(["/api/v1/pa/payment_intents/int_aw"]);
   });
+
+  it("keeps only the string metadata values instead of failing on others", async () => {
+    const { client } = makeFakeClient(() => ({
+      id: "cus_aw",
+      metadata: { tier: "pro", seats: 3, flags: { beta: true }, note: null },
+    }));
+    const customer = await Effect.runPromise(
+      Customer.retrieve("cus_aw").pipe(Effect.provide(provide(client))),
+    );
+    expect(customer.metadata).toEqual({ tier: "pro" });
+  });
 });

@@ -72,6 +72,19 @@ const config = (over: Partial<AirwallexConfig>): AirwallexConfig => ({
   ...over,
 });
 
+/**
+ * Every string reachable from `value` through its own properties, enumerable
+ * or not — what a logger that walks the object could print.
+ */
+const stringsIn = (value: unknown, seen = new Set<unknown>()): Array<string> => {
+  if (Predicate.isString(value)) return [value];
+  if (!Predicate.isObject(value) || seen.has(value)) return [];
+  seen.add(value);
+  return Object.getOwnPropertyNames(value).flatMap((key) =>
+    stringsIn(Object.getOwnPropertyDescriptor(value, key)?.value, seen),
+  );
+};
+
 describe("Airwallex client", () => {
   it("logs in once, caches the token, and authorizes requests", async () => {
     const { http, calls } = stubFetch(() => jsonResponse(200, { id: "cus_1", email: "a@b.com" }));
@@ -480,6 +493,7 @@ describe("Airwallex client secrets", () => {
         throw new TypeError("fetch failed");
       },
       () => jsonResponse(201, { token: 42 }),
+      () => jsonResponse(201, { token: "tok_leak", expires_at: 5 }),
     ];
     for (const answer of answers) {
       const fetchImpl: typeof globalThis.fetch = async () => answer();
@@ -493,9 +507,11 @@ describe("Airwallex client secrets", () => {
       );
       // The request (whose headers carry the credentials) is never kept.
       expect(Predicate.hasProperty(error.cause, "request")).toBe(false);
-      for (const leak of [SECRET]) {
+      for (const leak of [SECRET, "tok_leak"]) {
         expect(JSON.stringify(error)).not.toContain(leak);
         expect(String(error)).not.toContain(leak);
+        // Anywhere in the error's object graph, not just its serialised forms.
+        expect(stringsIn(error).filter((text) => text.includes(leak))).toEqual([]);
         expect(JSON.stringify(error.cause ?? null)).not.toContain(leak);
       }
     }

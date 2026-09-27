@@ -343,13 +343,12 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
           // major-unit value, so look the capture up when an amount is given.
           let amount: { currency_code: string; value: string } | undefined;
           if (params.amount != null) {
-            const currency =
-              (yield* client
-                .request({
-                  method: "GET",
-                  path: `/v2/payments/captures/${captureId}`,
-                })
-                .pipe(Effect.flatMap(decodeCaptureCurrency))) ?? "USD";
+            const currency = yield* client
+              .request({
+                method: "GET",
+                path: `/v2/payments/captures/${captureId}`,
+              })
+              .pipe(Effect.flatMap(decodeCaptureCurrency));
             amount = {
               currency_code: currency,
               value: toMajorString(params.amount, currency),

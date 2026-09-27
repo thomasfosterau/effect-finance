@@ -35,7 +35,8 @@ const TRUSTED: Schema.MakeOptions = { disableChecks: true };
 /** An optional, nullable field. */
 const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema));
 
-const Metadata = Maybe(Schema.Record(Schema.String, Schema.String));
+/** Metadata values of any type decode; only the string ones are kept. */
+const Metadata = Maybe(Schema.Record(Schema.String, Schema.Unknown));
 
 const AirwallexCustomer = Schema.Struct({
   id: Schema.String,
@@ -94,7 +95,12 @@ const composeName = (
   return name.length > 0 ? name : null;
 };
 
-const metadataOf = (metadata: typeof Metadata.Type): Record<string, string> => metadata ?? {};
+const metadataOf = (metadata: typeof Metadata.Type): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(metadata ?? {}).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
 
 /** Normalize an Airwallex payment intent status to the neutral status. */
 export const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus => {

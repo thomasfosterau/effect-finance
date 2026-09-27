@@ -68,6 +68,19 @@ const config = (over: Partial<PayPalConfig>): PayPalConfig => ({
   ...over,
 });
 
+/**
+ * Every string reachable from `value` through its own properties, enumerable
+ * or not — what a logger that walks the object could print.
+ */
+const stringsIn = (value: unknown, seen = new Set<unknown>()): Array<string> => {
+  if (Predicate.isString(value)) return [value];
+  if (!Predicate.isObject(value) || seen.has(value)) return [];
+  seen.add(value);
+  return Object.getOwnPropertyNames(value).flatMap((key) =>
+    stringsIn(Object.getOwnPropertyDescriptor(value, key)?.value, seen),
+  );
+};
+
 describe("PayPal client", () => {
   it("exchanges credentials for a token and authorizes requests", async () => {
     const { http, calls } = stubFetch(() => jsonResponse(200, { id: "PROD-1", name: "Premium" }));
@@ -473,6 +486,7 @@ describe("PayPal client secrets", () => {
         throw new TypeError("fetch failed");
       },
       () => jsonResponse(200, { access_token: 42 }),
+      () => jsonResponse(200, { access_token: "tok_leak", expires_in: "x" }),
     ];
     for (const answer of answers) {
       const fetchImpl: typeof globalThis.fetch = async () => answer();
@@ -486,9 +500,11 @@ describe("PayPal client secrets", () => {
       );
       // The request (whose headers carry the credentials) is never kept.
       expect(Predicate.hasProperty(error.cause, "request")).toBe(false);
-      for (const leak of [SECRET, btoa("client_1:secret_1")]) {
+      for (const leak of [SECRET, btoa("client_1:secret_1"), "tok_leak"]) {
         expect(JSON.stringify(error)).not.toContain(leak);
         expect(String(error)).not.toContain(leak);
+        // Anywhere in the error's object graph, not just its serialised forms.
+        expect(stringsIn(error).filter((text) => text.includes(leak))).toEqual([]);
         expect(JSON.stringify(error.cause ?? null)).not.toContain(leak);
       }
     }
