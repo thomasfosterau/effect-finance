@@ -25,8 +25,10 @@ import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 // decimals. If you pass a decimal amount, an error occurs."
 const PAYPAL_ZERO_DECIMAL = ["huf", "jpy", "twd"];
 
-// The remaining currencies with no minor unit (ISO 4217 exponent 0).
-const ISO_ZERO_DECIMAL = [
+// Other zero-decimal currencies, as ISO 4217 / Stripe list them (`MGA` has
+// ISO exponent 2 but is zero-decimal at Stripe). None is a currency PayPal
+// supports; they are kept so such an amount is never scaled by 100 here.
+const OTHER_ZERO_DECIMAL = [
   "bif",
   "clp",
   "djf",
@@ -44,9 +46,11 @@ const ISO_ZERO_DECIMAL = [
   "xpf",
 ];
 
-const ZERO_DECIMAL = new Set([...PAYPAL_ZERO_DECIMAL, ...ISO_ZERO_DECIMAL]);
+const ZERO_DECIMAL = new Set([...PAYPAL_ZERO_DECIMAL, ...OTHER_ZERO_DECIMAL]);
 
-// Currencies with three decimal places (ISO 4217 exponent 3).
+// Currencies with three decimal places (ISO 4217 exponent 3). PayPal supports
+// none of them today; its `Money` object documents thousandths for currencies
+// "like TND", so they keep three rather than being scaled by 100.
 const THREE_DECIMAL = new Set(["bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd"]);
 
 /** The number of fraction digits PayPal expects for `currency` (case-insensitive). */
@@ -110,19 +114,20 @@ export const formatMinorUnits = (minor: number, currency: string): string | unde
 
 /**
  * Format neutral minor units for a request body, failing with
- * {@link PaymentInvalidRequestError} (naming `param`) when the amount is not
- * a safe integer.
+ * {@link PaymentInvalidRequestError} (naming `param`) before anything is sent
+ * when the amount is not a safe integer or is negative (a price, an order or
+ * a refund amount is never below zero).
  */
 export const toMajorString = (
   minor: number,
   currency: string,
   param: string,
 ): Effect.Effect<string, PaymentInvalidRequestError> => {
-  const value = formatMinorUnits(minor, currency);
+  const value = minor < 0 ? undefined : formatMinorUnits(minor, currency);
   return value === undefined
     ? Effect.fail(
         new PaymentInvalidRequestError({
-          message: `\`${param}\` must be a whole number of minor units within the safe-integer range`,
+          message: `\`${param}\` must be a non-negative whole number of minor units within the safe-integer range`,
           param,
         }),
       )

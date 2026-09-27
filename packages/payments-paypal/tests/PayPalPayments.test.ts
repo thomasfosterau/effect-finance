@@ -454,6 +454,65 @@ describe("PayPalPayments money", () => {
     expect(calls).toEqual([]);
   });
 
+  it("rejects a negative order or price amount before sending anything", async () => {
+    const { client, calls } = makeFakeClient(echoOrder);
+    const orderError = await Effect.runPromise(
+      PaymentIntent.create({ amount: -100, currency: "usd" }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(orderError).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(orderError).toMatchObject({ param: "amount" });
+
+    const priceError = await Effect.runPromise(
+      Price.create({
+        product: "PROD-1",
+        currency: "jpy",
+        unitAmount: -1,
+        recurring: { interval: "month" },
+      }).pipe(Effect.provide(provide(client)), Effect.flip),
+    );
+    expect(priceError).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(priceError).toMatchObject({ param: "unitAmount" });
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects a negative partial-refund amount before refunding anything", async () => {
+    const { client, calls } = makeFakeClient(() => ({
+      id: "CAP-1",
+      amount: { currency_code: "USD", value: "10.00" },
+    }));
+    const error = await Effect.runPromise(
+      Refund.create({ charge: "CAP-1", amount: -500 }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(error).toMatchObject({ param: "amount" });
+    expect(calls.map((call) => call.path)).toEqual(["/v2/payments/captures/CAP-1"]);
+  });
+
+  it("fails a plan whose fixed price has more decimals than its currency allows", async () => {
+    const { client } = makeFakeClient(() => ({
+      id: "P-1",
+      status: "ACTIVE",
+      billing_cycles: [
+        {
+          tenure_type: "REGULAR",
+          frequency: { interval_unit: "MONTH", interval_count: 1 },
+          pricing_scheme: { fixed_price: { currency_code: "USD", value: "10.005" } },
+        },
+      ],
+    }));
+    const error = await Effect.runPromise(
+      Price.retrieve("P-1").pipe(Effect.provide(provide(client)), Effect.flip),
+    );
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({ message: "PayPal returned a malformed plan response" });
+  });
+
   it("rejects a fractional partial-refund amount before refunding anything", async () => {
     const { client, calls } = makeFakeClient(() => ({
       id: "CAP-1",

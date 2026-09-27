@@ -144,6 +144,14 @@ describe("PayPal money: rejection", () => {
     }
   });
 
+  it("toMajorString refuses a negative amount, which no request carries", async () => {
+    expect(await Effect.runPromise(toMajorString(0, "usd", "amount"))).toBe("0.00");
+    expect(await Effect.runPromise(toMajorString(-0, "usd", "amount"))).toBe("0.00");
+    const error = await Effect.runPromise(Effect.flip(toMajorString(-1, "usd", "amount")));
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(error.param).toBe("amount");
+  });
+
   it("toMajorString fails with an invalid-request error naming the parameter", async () => {
     expect(await Effect.runPromise(toMajorString(1000, "huf", "amount"))).toBe("1000");
     const error = await Effect.runPromise(Effect.flip(toMajorString(10.5, "usd", "unitAmount")));
