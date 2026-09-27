@@ -82,6 +82,23 @@ export class PaymentNetworkError extends Schema.TaggedError<PaymentNetworkError>
 ) {}
 
 /**
+ * Raised when no provider is available to serve the call — typically because
+ * its credential is not configured in this environment. It is raised at CALL
+ * time, never while building a layer, so an application without payments
+ * configured still starts and serves everything else; "not configured"
+ * behaves exactly like "the provider is down" (an HTTP API would answer it
+ * with a 503). The message never carries a secret.
+ */
+export class PaymentsUnavailable extends Schema.TaggedError<PaymentsUnavailable>()(
+  "PaymentsUnavailable",
+  {
+    message: Schema.String,
+    /** The provider that is unavailable, e.g. `"stripe"`, when known. */
+    provider: Schema.optional(Schema.String),
+  },
+) {}
+
+/**
  * Raised when a provider client/layer is misconfigured. This occurs during
  * layer construction rather than during an individual API call, which is why
  * it is not part of {@link PaymentsError}.
@@ -117,4 +134,5 @@ export type PaymentsError =
   | PaymentAuthenticationError
   | PaymentRateLimitError
   | PaymentInvalidRequestError
-  | PaymentNetworkError;
+  | PaymentNetworkError
+  | PaymentsUnavailable;

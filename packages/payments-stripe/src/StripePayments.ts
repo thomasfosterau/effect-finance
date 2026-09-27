@@ -49,7 +49,9 @@ import {
 } from "./internal/mapping.js";
 import {
   layer as httpLayer,
+  layerConfig as httpLayerConfig,
   layerFromEnv as httpLayerFromEnv,
+  type LayerConfigOptions,
   StripeHttp,
   type StripeHttpConfig,
   type StripeMethod,
@@ -462,3 +464,17 @@ export const layerFromEnv = (
   envVar?: string,
 ): Layer.Layer<Layer.Success<typeof capabilities>, PaymentConfigError, HttpClient.HttpClient> =>
   Layer.provide(capabilities, httpLayerFromEnv(envVar));
+
+/**
+ * Every neutral capability in the "not configured ≡ down" posture: the key is
+ * read from a configuration variable (`STRIPE_API_KEY` by default) at CALL
+ * time, never while the layer is built, so building it cannot fail and an
+ * application without Stripe configured still starts. While the variable is
+ * absent every capability call fails with `PaymentsUnavailable`; once it is
+ * present, calls go over the fetch transport. Requires an `HttpClient`
+ * (`FetchHttpClient.layer`). See `StripeHttp.layerConfig`.
+ */
+export const layerConfig = (
+  options?: LayerConfigOptions,
+): Layer.Layer<Layer.Success<typeof capabilities>, never, HttpClient.HttpClient> =>
+  Layer.provide(capabilities, httpLayerConfig(options));

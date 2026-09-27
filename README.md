@@ -104,6 +104,7 @@ The failure channel is the neutral `PaymentsError` union:
 - `PaymentRateLimitError` — too many requests (carries `retryAfter`)
 - `PaymentInvalidRequestError` — invalid parameters
 - `PaymentNetworkError` — transport-level failure
+- `PaymentsUnavailable` — no provider can serve the call, typically because its credential is not configured ("not configured ≡ down"; carries `provider`)
 
 Plus `PaymentConfigError` (raised while building a provider layer) and `SignatureVerificationError` (webhook verification).
 
@@ -143,6 +144,22 @@ const fromEnv = StripePayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient
 ```
 
 The transport is `StripeHttp`: form-encoded bodies with Stripe's bracketed nesting, a pinned `Stripe-Version`, the key as a `Redacted` bearer token, redirects refused, the SDK's retry policy (connection failures, `409`, `5xx`, `Stripe-Should-Retry`) with one `Idempotency-Key` across the attempts of a `POST`, and Stripe's error envelope decoded onto the neutral errors. Tests stub `FetchHttpClient.Fetch`.
+
+#### "Not configured ≡ down"
+
+`StripePayments.layerConfig` reads the key (`STRIPE_API_KEY` by default, or `envVar`) through the current `ConfigProvider` on **every call**, never while the layer is built. The layer therefore always builds — a Worker without billing configured still boots and serves everything else — and a call made while the key is absent fails with `PaymentsUnavailable`, exactly as if Stripe were down (answer it with a 503). Once the key is present, calls go over the fetch transport with it.
+
+```typescript
+const billing = StripePayments.layerConfig({ envVar: "STRIPE_SECRET_KEY" }).pipe(
+  Layer.provide(FetchHttpClient.layer),
+);
+
+const checkout = CheckoutSession.create(params).pipe(
+  Effect.catchTag("PaymentsUnavailable", () => Effect.succeed(serviceUnavailable)),
+);
+```
+
+`StripeHttp.layerConfig` is the same posture for the transport alone (so for the raw resource modules too). For a provider-neutral stub with no transport at all — a unit suite, say — `Stub.unavailable("stripe")` from `@thomasfosterau/effect-payments/Stub` fails every capability call the same way.
 
 For finer control, `StripePayments.capabilities` provides every capability over an existing `StripeHttp`, and individual layers (`StripePayments.customersLayer`, etc.) are exported too. To run on the official SDK instead, provide the capabilities with `Stripe.layer` (from `@thomasfosterau/effect-payments-stripe/Stripe`), which builds an SDK client and provides `StripeHttp` over it.
 

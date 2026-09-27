@@ -16,6 +16,7 @@ import {
   type Page,
   type PaymentConfigError,
   type PaymentsError,
+  type PaymentsUnavailable,
   type SignatureVerificationError,
 } from "@thomasfosterau/effect-payments";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
@@ -26,6 +27,7 @@ import type * as Refund from "@thomasfosterau/effect-payments/Refund";
 import type * as Subscription from "@thomasfosterau/effect-payments/Subscription";
 import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
 import * as BillingPortal from "@thomasfosterau/effect-payments/BillingPortal";
+import * as Stub from "@thomasfosterau/effect-payments/Stub";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 import * as StripeCustomer from "@thomasfosterau/effect-payments-stripe/Customer";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
@@ -59,6 +61,9 @@ export const portal = BillingPortal.create({
 // ── providers ─────────────────────────────────────────────────────────────
 
 export const stripeLayer = StripePayments.layer({ apiKey: Redacted.make("sk_test_123") });
+export const stripeConfigLayer = StripePayments.layerConfig({ envVar: "BILLING_STRIPE_KEY" });
+export const stripeHttpConfigLayer = StripeHttp.layerConfig();
+export const unavailableLayer = Stub.unavailable("stripe");
 export const stripeHttpLayer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_123") });
 export const stripeSdkLayer = StripeSdk.layer({ apiKey: Redacted.make("sk_test_123") });
 export const paypalLayer = PayPalPayments.layer({ clientId: "id", clientSecret: "secret" });
@@ -148,5 +153,24 @@ export type Checks = [
     Equals<Layer.Services<typeof airwallexLayer>, HttpClient.HttpClient>
   >,
   /** _paypalFailsWithConfig */ Assert<Equals<Layer.Error<typeof paypalLayer>, PaymentConfigError>>,
+  /** _unavailableIsPaymentsError */ Assert<
+    PaymentsUnavailable extends PaymentsError ? true : false
+  >,
+  /** _stripeConfigProvidesEverything */ Assert<
+    Equals<Layer.Success<typeof stripeConfigLayer>, Layer.Success<typeof stripeLayer>>
+  >,
+  /** _stripeConfigNeverFailsToBuild */ Assert<
+    Equals<Layer.Error<typeof stripeConfigLayer>, never>
+  >,
+  /** _stripeConfigNeedsHttpClient */ Assert<
+    Equals<Layer.Services<typeof stripeConfigLayer>, HttpClient.HttpClient>
+  >,
+  /** _stripeHttpConfigNeverFailsToBuild */ Assert<
+    Equals<Layer.Error<typeof stripeHttpConfigLayer>, never>
+  >,
+  /** _stubProvidesEverything */ Assert<
+    Equals<Layer.Success<typeof unavailableLayer>, Layer.Success<typeof stripeLayer>>
+  >,
+  /** _stubNeedsNothing */ Assert<Equals<Layer.Services<typeof unavailableLayer>, never>>,
   /** _webhookFails */ Assert<Equals<Effect.Error<typeof event>, SignatureVerificationError>>,
 ];

@@ -77,6 +77,10 @@
     "./PaymentsError": {
       "types": "./dist/PaymentsError.d.ts",
       "default": "./dist/PaymentsError.js"
+    },
+    "./Stub": {
+      "types": "./dist/Stub.d.ts",
+      "default": "./dist/Stub.js"
     }
   },
   "publishConfig": {
