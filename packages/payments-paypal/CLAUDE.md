@@ -16,7 +16,7 @@ PayPal REST: `Products`, `Prices` (billing plans), `PaymentIntents` (orders), `S
 - **Configuration from the environment is read through `Config`** in `layerFromEnv`, and a missing or empty variable still fails with `PaymentConfigError`.
 
 - **No `Customers`.** PayPal has no first-class customer resource; the provider deliberately implements a subset of the core's capabilities, and a program needing `Customers` fails to type-check against this layer.
-- **Money crosses the boundary as major-unit decimal strings** (`internal/money.ts`, zero-decimal currencies included); the core stays in minor units.
+- **Money crosses the boundary as major-unit decimal strings** (`internal/money.ts`); the core stays in minor units. Conversion is integer arithmetic, never a float, and the per-currency exponent follows PayPal's currency-codes reference (HUF, JPY, TWD zero-decimal), not Stripe's list. The response decoders reject an amount with excess decimals rather than round it.
 - **Vendor error bodies become neutral errors in `internal/error.ts`.** The client secret and the bearer token never appear in one: the client secret is `Redacted<string>` in the config (read with `Config.Redacted` in `layerFromEnv`) and unwrapped only where the login request is built, and a transport failure keeps only the underlying cause — never the `HttpClientError`, whose request carries the credential headers.
 
 ## Boundary

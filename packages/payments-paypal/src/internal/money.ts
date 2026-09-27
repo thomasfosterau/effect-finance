@@ -2,16 +2,35 @@
  * Conversion between the neutral minor-unit amounts and the major-unit decimal
  * *strings* PayPal uses on the wire (e.g. `"10.00"`).
  *
+ * Both directions use integer (string / `BigInt`) arithmetic, never a float,
+ * so an amount is exact across the whole safe-integer range and a value with
+ * more fraction digits than its currency allows is rejected instead of being
+ * silently rounded.
+ *
+ * The number of fraction digits per currency follows PayPal's "Currency codes"
+ * reference (https://developer.paypal.com/api/rest/reference/currency-codes/)
+ * and its `Money` object ("an integer for currencies like `JPY` that are not
+ * typically fractional; a decimal fraction for currencies like `TND` that are
+ * subdivided into thousandths"), which defers to ISO 4217 except where PayPal
+ * says otherwise. It is deliberately PayPal's table, not Stripe's: PayPal
+ * rejects decimals on `HUF` and `TWD`, which ISO 4217 (and Stripe) give two.
+ *
  * @module
  */
 
-// Currencies with no minor unit.
-const ZERO_DECIMAL = new Set([
+import { Effect } from "effect";
+import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
+
+// PayPal's currency-codes reference: "This currency does not support
+// decimals. If you pass a decimal amount, an error occurs."
+const PAYPAL_ZERO_DECIMAL = ["huf", "jpy", "twd"];
+
+// The remaining currencies with no minor unit (ISO 4217 exponent 0).
+const ISO_ZERO_DECIMAL = [
   "bif",
   "clp",
   "djf",
   "gnf",
-  "jpy",
   "kmf",
   "krw",
   "mga",
@@ -23,24 +42,89 @@ const ZERO_DECIMAL = new Set([
   "xaf",
   "xof",
   "xpf",
-]);
+];
 
-// Currencies with three decimal places.
+const ZERO_DECIMAL = new Set([...PAYPAL_ZERO_DECIMAL, ...ISO_ZERO_DECIMAL]);
+
+// Currencies with three decimal places (ISO 4217 exponent 3).
 const THREE_DECIMAL = new Set(["bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd"]);
 
-const factor = (currency: string): number => {
+/** The number of fraction digits PayPal expects for `currency` (case-insensitive). */
+export const exponent = (currency: string): 0 | 2 | 3 => {
   const code = currency.toLowerCase();
-  if (ZERO_DECIMAL.has(code)) return 1;
-  if (THREE_DECIMAL.has(code)) return 1000;
-  return 100;
+  if (ZERO_DECIMAL.has(code)) return 0;
+  if (THREE_DECIMAL.has(code)) return 3;
+  return 2;
 };
 
-const decimals = (currency: string): number => Math.round(Math.log10(factor(currency)));
+/** An optionally negative decimal: whole digits and an optional fraction. */
+const DECIMAL = /^(-?)(\d+)(?:\.(\d+))?$/;
 
-/** Format neutral minor units as a PayPal major-unit decimal string. */
-export const toMajorString = (minor: number, currency: string): string =>
-  (minor / factor(currency)).toFixed(decimals(currency));
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 
-/** Parse a PayPal major-unit decimal string into neutral minor units. */
-export const toMinorUnits = (value: string, currency: string): number =>
-  Math.round(Number.parseFloat(value) * factor(currency));
+/**
+ * Parse a PayPal major-unit decimal string into neutral minor units, or
+ * `undefined` when it is malformed, has more fraction digits than the
+ * currency allows, or is outside the safe-integer range as minor units.
+ */
+export const parseMinorUnits = (value: string, currency: string): number | undefined => {
+  const match = DECIMAL.exec(value);
+  if (match === null) return undefined;
+  const [, sign, whole, fraction = ""] = match;
+  const digits = exponent(currency);
+  if (fraction.length > digits) return undefined;
+  const magnitude = BigInt(`${whole}${fraction.padEnd(digits, "0")}`);
+  if (magnitude > MAX_SAFE) return undefined;
+  // `magnitude` is 0 for "-0.00"; never produce -0.
+  return sign === "-" && magnitude !== 0n ? -Number(magnitude) : Number(magnitude);
+};
+
+/**
+ * Parse a PayPal major-unit decimal string that has already been validated
+ * (the response decoders check every money value with
+ * {@link parseMinorUnits}). Throws a `RangeError` on an invalid value, which
+ * would be a bug in the caller.
+ */
+export const toMinorUnits = (value: string, currency: string): number => {
+  const minor = parseMinorUnits(value, currency);
+  if (minor === undefined) {
+    throw new RangeError(`Unvalidated PayPal amount for ${currency.toUpperCase()}`);
+  }
+  return minor;
+};
+
+/**
+ * Format neutral minor units as a PayPal major-unit decimal string, or
+ * `undefined` when `minor` is not a safe integer (such an amount has no exact
+ * decimal form, and sending a rounded one would charge a different amount).
+ */
+export const formatMinorUnits = (minor: number, currency: string): string | undefined => {
+  if (!Number.isSafeInteger(minor)) return undefined;
+  const digits = exponent(currency);
+  const sign = minor < 0 ? "-" : "";
+  const magnitude = String(Math.abs(minor)).padStart(digits + 1, "0");
+  if (digits === 0) return `${sign}${magnitude}`;
+  const point = magnitude.length - digits;
+  return `${sign}${magnitude.slice(0, point)}.${magnitude.slice(point)}`;
+};
+
+/**
+ * Format neutral minor units for a request body, failing with
+ * {@link PaymentInvalidRequestError} (naming `param`) when the amount is not
+ * a safe integer.
+ */
+export const toMajorString = (
+  minor: number,
+  currency: string,
+  param: string,
+): Effect.Effect<string, PaymentInvalidRequestError> => {
+  const value = formatMinorUnits(minor, currency);
+  return value === undefined
+    ? Effect.fail(
+        new PaymentInvalidRequestError({
+          message: `\`${param}\` must be a whole number of minor units within the safe-integer range`,
+          param,
+        }),
+      )
+    : Effect.succeed(value);
+};

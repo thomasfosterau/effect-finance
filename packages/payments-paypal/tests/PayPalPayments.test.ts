@@ -363,3 +363,109 @@ describe("PayPalPayments decoding", () => {
     expect(calls.map((call) => call.path)).toEqual(["/v2/payments/captures/CAP-1"]);
   });
 });
+
+describe("PayPalPayments money", () => {
+  /** An order echoing the amount it was created with. */
+  const echoOrder = (req: PayPalRequest) => ({
+    id: "ORD-1",
+    status: "CREATED",
+    purchase_units: [
+      { amount: (req.body as { purchase_units: { amount: unknown }[] }).purchase_units[0].amount },
+    ],
+  });
+
+  it("formats HUF, TWD and JPY without decimals, as PayPal requires", async () => {
+    for (const currency of ["huf", "twd", "jpy"]) {
+      const { client, calls } = makeFakeClient(echoOrder);
+      const intent = await Effect.runPromise(
+        PaymentIntent.create({ amount: 1000, currency }).pipe(Effect.provide(provide(client))),
+      );
+      const body = calls[0].body as { purchase_units: { amount: { value: string } }[] };
+      expect(body.purchase_units[0].amount.value).toBe("1000");
+      expect(intent.amount).toBe(1000);
+    }
+  });
+
+  it("formats and reads back a three-decimal currency exactly", async () => {
+    const { client, calls } = makeFakeClient(echoOrder);
+    const intent = await Effect.runPromise(
+      PaymentIntent.create({ amount: 12345, currency: "kwd" }).pipe(
+        Effect.provide(provide(client)),
+      ),
+    );
+    const body = calls[0].body as { purchase_units: { amount: { value: string } }[] };
+    expect(body.purchase_units[0].amount.value).toBe("12.345");
+    expect(intent.amount).toBe(12345);
+  });
+
+  it("fails an order whose amount has more decimals than its currency allows", async () => {
+    for (const amount of [
+      { currency_code: "USD", value: "10.005" },
+      { currency_code: "HUF", value: "10.00" },
+      { currency_code: "USD", value: "90071992547409.93" },
+    ]) {
+      const { client } = makeFakeClient(() => ({
+        id: "ORD-1",
+        status: "COMPLETED",
+        purchase_units: [{ amount }],
+      }));
+      const error = await Effect.runPromise(
+        PaymentIntent.retrieve("ORD-1").pipe(Effect.provide(provide(client)), Effect.flip),
+      );
+      expect(error).toBeInstanceOf(PaymentProviderError);
+      expect(error).toMatchObject({ message: "PayPal returned a malformed order response" });
+    }
+  });
+
+  it("fails a refund whose amount has excess decimals with a provider error", async () => {
+    const { client } = makeFakeClient(() => ({
+      id: "REF-1",
+      status: "COMPLETED",
+      amount: { currency_code: "JPY", value: "100.5" },
+    }));
+    const error = await Effect.runPromise(
+      Refund.retrieve("REF-1").pipe(Effect.provide(provide(client)), Effect.flip),
+    );
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error).toMatchObject({ message: "PayPal returned a malformed refund response" });
+  });
+
+  it("rejects a fractional amount before sending anything", async () => {
+    const { client, calls } = makeFakeClient(echoOrder);
+    const orderError = await Effect.runPromise(
+      PaymentIntent.create({ amount: 10.5, currency: "usd" }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(orderError).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(orderError).toMatchObject({ param: "amount" });
+
+    const priceError = await Effect.runPromise(
+      Price.create({
+        product: "PROD-1",
+        currency: "usd",
+        unitAmount: Number.MAX_SAFE_INTEGER + 2,
+        recurring: { interval: "month" },
+      }).pipe(Effect.provide(provide(client)), Effect.flip),
+    );
+    expect(priceError).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(priceError).toMatchObject({ param: "unitAmount" });
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects a fractional partial-refund amount before refunding anything", async () => {
+    const { client, calls } = makeFakeClient(() => ({
+      id: "CAP-1",
+      amount: { currency_code: "USD", value: "10.00" },
+    }));
+    const error = await Effect.runPromise(
+      Refund.create({ charge: "CAP-1", amount: 2.5 }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(calls.map((call) => call.path)).toEqual(["/v2/payments/captures/CAP-1"]);
+  });
+});
