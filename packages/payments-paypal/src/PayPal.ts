@@ -52,14 +52,20 @@ export interface PayPalConfig {
   readonly baseUrl?: string | undefined;
   /**
    * How long the token login may take, in milliseconds, before it fails with
-   * `PaymentNetworkError`. Defaults to 30 000. Logins are serialised, so a
-   * login that never answers would otherwise stall every request on the client.
+   * `PaymentNetworkError`. Defaults to 30 000; `Infinity` disables it, and
+   * `0`, a negative number or `NaN` fails with `PaymentConfigError`. Logins are
+   * serialised, so a login that never answers would otherwise stall every
+   * request on the client. A caller queued behind a failed login makes its own
+   * attempt, so the k-th queued caller can wait about k × `loginTimeout` (#65).
    */
   readonly loginTimeout?: number | undefined;
   /**
    * How long a resource request may take (response headers and body), in
    * milliseconds, before it fails with `PaymentNetworkError`. Defaults to
-   * 80 000, the Stripe transport's per-attempt timeout.
+   * 80 000, the Stripe transport's per-attempt timeout; `Infinity` disables it.
+   * It does not include acquiring a token (see `loginTimeout`). A non-GET that
+   * times out has an unknown outcome — the vendor may have applied it — so do
+   * not blindly retry a write (#66).
    */
   readonly timeout?: number | undefined;
 }
@@ -122,6 +128,23 @@ const errorBodyOf = (json: unknown): PayPalErrorBody | undefined =>
   Option.getOrUndefined(Schema.decodeUnknownOption(PayPalErrorBody)(json));
 
 /**
+ * A configured timeout as a `Duration`: a positive, finite number of
+ * milliseconds, or `Infinity` for no timeout. Anything else — `0`, a negative
+ * number, `NaN` — fails with {@link PaymentConfigError}.
+ */
+const timeoutOf = (
+  name: string,
+  millis: number,
+): Effect.Effect<Duration.Duration, PaymentConfigError> =>
+  millis === Number.POSITIVE_INFINITY || (Number.isFinite(millis) && millis > 0)
+    ? Effect.succeed(Duration.millis(millis))
+    : Effect.fail(
+        new PaymentConfigError({
+          message: `PayPal ${name} must be a positive number of milliseconds, or Infinity for none (got ${millis})`,
+        }),
+      );
+
+/**
  * Build a PayPal client from configuration.
  */
 export const make = (
@@ -142,8 +165,11 @@ export const make = (
     // wait for the in-flight login and then reuse its token.
     const tokenLock = yield* Semaphore.make(1);
 
-    const loginTimeout = Duration.millis(config.loginTimeout ?? DEFAULT_LOGIN_TIMEOUT_MS);
-    const timeout = Duration.millis(config.timeout ?? DEFAULT_TIMEOUT_MS);
+    const loginTimeout = yield* timeoutOf(
+      "loginTimeout",
+      config.loginTimeout ?? DEFAULT_LOGIN_TIMEOUT_MS,
+    );
+    const timeout = yield* timeoutOf("timeout", config.timeout ?? DEFAULT_TIMEOUT_MS);
 
     /**
      * Send `request` and read its JSON body, all within `limit`. A request that

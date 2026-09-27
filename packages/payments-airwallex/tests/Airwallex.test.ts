@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Fiber, Layer } from "effect";
+import { Cause, Effect, Fiber, Layer } from "effect";
 import { TestClock } from "effect/testing";
 import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
 import {
@@ -350,6 +350,57 @@ describe("Airwallex client timeouts", () => {
     expect(second.id).toBe("x");
     expect(state.logins).toBe(2);
     expect(state.resources).toEqual(["Bearer tok_123"]);
+  });
+
+  it("releases the token lock when an outer timeout interrupts the login it holds", async () => {
+    const { http, state } = hangingFetch({ logins: [1] });
+
+    const { first, second } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({ loginTimeout: 10_000 }));
+        // The caller gives up after 2 s, well inside the 10 s login timeout,
+        // interrupting the login while it holds the permit.
+        const first = yield* Effect.forkChild(
+          Effect.flip(client.request(get).pipe(Effect.timeout("2 seconds"))),
+        );
+        yield* macrotask;
+        const second = yield* Effect.forkChild(client.request<{ id: string }>(get));
+        yield* macrotask;
+        yield* TestClock.adjust("2 seconds");
+        return { first: yield* Fiber.join(first), second: yield* Fiber.join(second) };
+      }).pipe(Effect.provide(http), Effect.provide(TestClock.layer())),
+    );
+
+    expect(Cause.isTimeoutError(first)).toBe(true);
+    expect(second.id).toBe("x");
+    expect(state.logins).toBe(2);
+    expect(state.aborted).toBe(1);
+  });
+
+  it("rejects a zero, negative or NaN timeout with a config error, and accepts Infinity", async () => {
+    const { http } = hangingFetch({});
+    const invalid: ReadonlyArray<Partial<AirwallexConfig>> = [
+      { loginTimeout: 0 },
+      { loginTimeout: -1 },
+      { loginTimeout: Number.NaN },
+      { timeout: 0 },
+      { timeout: -5_000 },
+      { timeout: Number.NEGATIVE_INFINITY },
+    ];
+    for (const over of invalid) {
+      const error = await Effect.runPromise(
+        make(config(over)).pipe(Effect.flip, Effect.provide(http)),
+      );
+      expect(error).toBeInstanceOf(PaymentConfigError);
+      expect(error.message).toMatch(/^Airwallex (loginTimeout|timeout) must be a positive number/);
+    }
+    const result = await Effect.runPromise(
+      Effect.flatMap(
+        make(config({ loginTimeout: Number.POSITIVE_INFINITY, timeout: Number.POSITIVE_INFINITY })),
+        (client) => client.request<{ id: string }>(get),
+      ).pipe(Effect.provide(http)),
+    );
+    expect(result.id).toBe("x");
   });
 
   it("fails a resource request that never answers with a network error after the timeout", async () => {
