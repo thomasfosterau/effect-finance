@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vite-plus/test";
 import { Effect, Fiber, Layer } from "effect";
+import { TestClock } from "effect/testing";
 import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
-import { PaymentAuthenticationError, PaymentConfigError } from "@thomasfosterau/effect-payments";
+import {
+  PaymentAuthenticationError,
+  PaymentConfigError,
+  PaymentNetworkError,
+} from "@thomasfosterau/effect-payments";
 import { make, type PayPalConfig } from "../src/PayPal.ts";
 
 const LOGIN_PATH = "/v1/oauth2/token";
@@ -251,5 +256,108 @@ describe("PayPal client", () => {
     expect(seen.find((c) => c.url.endsWith("/v1/catalogs/products/SLOW"))!.authorization).toBe(
       "Bearer at_1",
     );
+  });
+});
+
+/** Let pending promises (the stubbed `fetch`) settle. */
+const macrotask = Effect.callback<void>((resume) => {
+  const timer = setTimeout(() => resume(Effect.void), 0);
+  return Effect.sync(() => clearTimeout(timer));
+});
+
+/**
+ * A stub `fetch` whose Nth login (1-based, listed in `hung`) never answers
+ * until the client aborts it; every other call answers normally. `aborted`
+ * counts the hung requests the client cancelled.
+ */
+const hangingFetch = (hung: { logins?: ReadonlyArray<number>; resources?: boolean }) => {
+  const resources: Array<string | null> = [];
+  const state = { logins: 0, aborted: 0, resources };
+  const hang = (init: RequestInit | undefined) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        state.aborted += 1;
+        reject(new Error("aborted"));
+      });
+    });
+  const fetchImpl: typeof globalThis.fetch = async (input, init) => {
+    if (String(input).endsWith(LOGIN_PATH)) {
+      state.logins += 1;
+      return hung.logins?.includes(state.logins) ? hang(init) : LOGIN_RESPONSE();
+    }
+    state.resources.push(new Headers(init?.headers).get("authorization"));
+    return hung.resources ? hang(init) : jsonResponse(200, { id: "x" });
+  };
+  const http: Layer.Layer<HttpClient.HttpClient> = FetchHttpClient.layer.pipe(
+    Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
+  );
+  return { http, state };
+};
+
+describe("PayPal client timeouts", () => {
+  const get = { method: "GET", path: "/v1/catalogs/products/PROD-1" } as const;
+
+  it("fails a login that never answers with a network error after the login timeout", async () => {
+    const { http, state } = hangingFetch({ logins: [1] });
+
+    const { error, pendingBefore } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({ loginTimeout: 10_000 }));
+        const fiber = yield* Effect.forkChild(Effect.flip(client.request(get)));
+        yield* macrotask;
+        yield* TestClock.adjust("9 seconds");
+        yield* macrotask;
+        const pendingBefore = fiber.pollUnsafe() === undefined;
+        yield* TestClock.adjust("1 second");
+        return { error: yield* Fiber.join(fiber), pendingBefore };
+      }).pipe(Effect.provide(http), Effect.provide(TestClock.layer())),
+    );
+
+    expect(pendingBefore).toBe(true);
+    expect(error).toBeInstanceOf(PaymentNetworkError);
+    expect(error.message).toBe("PayPal login timed out after 10000 ms");
+    expect(state.aborted).toBe(1);
+    expect(state.resources).toHaveLength(0);
+  });
+
+  it("releases the token lock so a caller queued behind a hung login logs in afresh", async () => {
+    const { http, state } = hangingFetch({ logins: [1] });
+
+    const { first, second } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({ loginTimeout: 10_000 }));
+        const first = yield* Effect.forkChild(Effect.flip(client.request(get)));
+        yield* macrotask;
+        // Queued on the token lock behind the hung login.
+        const second = yield* Effect.forkChild(client.request<{ id: string }>(get));
+        yield* macrotask;
+        yield* TestClock.adjust("10 seconds");
+        return { first: yield* Fiber.join(first), second: yield* Fiber.join(second) };
+      }).pipe(Effect.provide(http), Effect.provide(TestClock.layer())),
+    );
+
+    expect(first).toBeInstanceOf(PaymentNetworkError);
+    expect(second.id).toBe("x");
+    expect(state.logins).toBe(2);
+    expect(state.resources).toEqual(["Bearer at_1"]);
+  });
+
+  it("fails a resource request that never answers with a network error after the timeout", async () => {
+    const { http, state } = hangingFetch({ resources: true });
+
+    const error = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({ timeout: 5_000 }));
+        const fiber = yield* Effect.forkChild(Effect.flip(client.request(get)));
+        yield* macrotask;
+        yield* macrotask;
+        yield* TestClock.adjust("5 seconds");
+        return yield* Fiber.join(fiber);
+      }).pipe(Effect.provide(http), Effect.provide(TestClock.layer())),
+    );
+
+    expect(error).toBeInstanceOf(PaymentNetworkError);
+    expect(error.message).toBe("PayPal request timed out after 5000 ms");
+    expect(state.aborted).toBe(1);
   });
 });

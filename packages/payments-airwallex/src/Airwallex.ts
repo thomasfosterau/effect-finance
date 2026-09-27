@@ -17,6 +17,7 @@ import {
   Clock,
   Config,
   Context,
+  Duration,
   DateTime,
   Effect,
   Layer,
@@ -35,6 +36,10 @@ import {
 import { AirwallexErrorBody, handleAirwallexError, PROVIDER } from "./internal/error.js";
 
 const DEFAULT_BASE_URL = "https://api.airwallex.com";
+/** A login that has not answered after 30 s is abandoned. */
+const DEFAULT_LOGIN_TIMEOUT_MS = 30_000;
+/** A resource request is abandoned after 80 s, the Stripe transport default. */
+const DEFAULT_TIMEOUT_MS = 80_000;
 
 /** Configuration for the Airwallex client. */
 export interface AirwallexConfig {
@@ -42,6 +47,18 @@ export interface AirwallexConfig {
   readonly apiKey: string;
   /** Override the API base URL (defaults to the production endpoint). */
   readonly baseUrl?: string | undefined;
+  /**
+   * How long the token login may take, in milliseconds, before it fails with
+   * `PaymentNetworkError`. Defaults to 30 000. Logins are serialised, so a
+   * login that never answers would otherwise stall every request on the client.
+   */
+  readonly loginTimeout?: number | undefined;
+  /**
+   * How long a resource request may take (response headers and body), in
+   * milliseconds, before it fails with `PaymentNetworkError`. Defaults to
+   * 80 000, the Stripe transport's per-attempt timeout.
+   */
+  readonly timeout?: number | undefined;
 }
 
 /** A request issued through the Airwallex client. */
@@ -83,6 +100,12 @@ const buildUrl = (baseUrl: string, path: string, query: AirwallexRequest["query"
 const readJson = (response: HttpClientResponse.HttpClientResponse): Effect.Effect<unknown> =>
   response.json.pipe(Effect.orElseSucceed(() => ({})));
 
+/** A response reduced to its status and JSON body. */
+interface Reply {
+  readonly status: number;
+  readonly json: unknown;
+}
+
 const isOk = (status: number): boolean => status >= 200 && status < 300;
 
 /** The login response, decoded rather than trusted. */
@@ -118,17 +141,40 @@ export const make = (
     // wait for the in-flight login and then reuse its token.
     const tokenLock = yield* Semaphore.make(1);
 
-    const execute = (
+    const loginTimeout = Duration.millis(config.loginTimeout ?? DEFAULT_LOGIN_TIMEOUT_MS);
+    const timeout = Duration.millis(config.timeout ?? DEFAULT_TIMEOUT_MS);
+
+    /**
+     * Send `request` and read its JSON body, all within `limit`. A request that
+     * has not finished by then is interrupted (which aborts the fetch) and
+     * fails with {@link PaymentNetworkError}.
+     */
+    const send = (
       request: HttpClientRequest.HttpClientRequest,
-    ): Effect.Effect<HttpClientResponse.HttpClientResponse, PaymentNetworkError> =>
-      http
-        .execute(request)
-        .pipe(
-          Effect.mapError((cause) => new PaymentNetworkError({ message: cause.message, cause })),
-        );
+      limit: Duration.Duration,
+      what: string,
+    ): Effect.Effect<Reply, PaymentNetworkError> =>
+      http.execute(request).pipe(
+        Effect.flatMap((response) =>
+          Effect.map(readJson(response), (json): Reply => ({ status: response.status, json })),
+        ),
+        Effect.mapError((cause) => new PaymentNetworkError({ message: cause.message, cause })),
+        Effect.timeoutOption(limit),
+        Effect.flatMap(
+          Option.match({
+            onSome: Effect.succeed,
+            onNone: () =>
+              Effect.fail(
+                new PaymentNetworkError({
+                  message: `Airwallex ${what} timed out after ${Duration.toMillis(limit)} ms`,
+                }),
+              ),
+          }),
+        ),
+      );
 
     const login: Effect.Effect<string, PaymentsError> = Effect.gen(function* () {
-      const response = yield* execute(
+      const reply = yield* send(
         HttpClientRequest.post(`${baseUrl}/api/v1/authentication/login`).pipe(
           HttpClientRequest.setHeaders({
             "Content-Type": "application/json",
@@ -136,17 +182,19 @@ export const make = (
             "x-api-key": config.apiKey,
           }),
         ),
+        loginTimeout,
+        "login",
       );
-      if (!isOk(response.status)) {
-        return yield* handleAirwallexError(response.status, errorBodyOf(yield* readJson(response)));
+      if (!isOk(reply.status)) {
+        return yield* handleAirwallexError(reply.status, errorBodyOf(reply.json));
       }
-      const body = yield* Schema.decodeUnknownEffect(LoginResponse)(yield* readJson(response)).pipe(
+      const body = yield* Schema.decodeUnknownEffect(LoginResponse)(reply.json).pipe(
         Effect.mapError(
           (cause) =>
             new PaymentProviderError({
               message: "Airwallex returned a malformed login response",
               provider: PROVIDER,
-              statusCode: response.status,
+              statusCode: reply.status,
               cause,
             }),
         ),
@@ -183,12 +231,14 @@ export const make = (
         // `Content-Type: application/json` goes on EVERY request, body or not:
         // this restores the pre-HttpClient behaviour and keeps the client
         // consistent with the PayPal one.
-        const response = yield* execute(
+        const reply = yield* send(
           req.body != null
             ? HttpClientRequest.bodyJsonUnsafe(base, req.body)
             : HttpClientRequest.setHeader(base, "Content-Type", "application/json"),
+          timeout,
+          "request",
         );
-        if (response.status === 401) {
+        if (reply.status === 401) {
           // A revoked or rotated token: forget it, so the next call logs in
           // again instead of replaying the rejected token until it expires —
           // but only if it is still the stored one. A late 401 for a token
@@ -198,16 +248,13 @@ export const make = (
             Option.filter((stored) => stored.token !== token),
           );
         }
-        if (!isOk(response.status)) {
-          return yield* handleAirwallexError(
-            response.status,
-            errorBodyOf(yield* readJson(response)),
-          );
+        if (!isOk(reply.status)) {
+          return yield* handleAirwallexError(reply.status, errorBodyOf(reply.json));
         }
         // SAFETY: NOT checked — `request<A>` is the client's untyped escape
         // hatch, and each capability layer names the Airwallex shape it
         // expects (see internal/mapping.ts).
-        return (yield* readJson(response)) as A;
+        return reply.json as A;
       });
 
     return { request };
