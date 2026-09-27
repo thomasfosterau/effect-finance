@@ -40,6 +40,7 @@
 
 import {
   Config,
+  ConfigProvider,
   Context,
   Data,
   Duration,
@@ -483,14 +484,42 @@ export interface LayerConfigOptions extends Omit<StripeHttpConfig, "apiKey"> {
 }
 
 /**
+ * Read the key from one `ConfigProvider`: `None` when it is absent, empty or
+ * unreadable. An unreadable value is logged at debug level (the variable's
+ * name only, never its value) and then treated as absent.
+ */
+const readKey = (
+  envVar: string,
+  provider: ConfigProvider.ConfigProvider,
+): Effect.Effect<Option.Option<Redacted.Redacted<string>>> =>
+  Config.Redacted(envVar)
+    .pipe(Config.option)
+    .parse(provider)
+    .pipe(
+      Effect.map(Option.filter((key) => Redacted.value(key) !== "")),
+      Effect.catchTag("ConfigError", () =>
+        Effect.as(
+          Effect.logDebug(`Stripe key ${envVar} could not be read; treating it as not set`),
+          Option.none(),
+        ),
+      ),
+    );
+
+/**
  * The fetch transport in the "not configured ≡ down" posture: the key is read
- * from a configuration variable (through the current `ConfigProvider`) on
- * EVERY call, never while the layer is built. Building it therefore cannot
- * fail — an application without Stripe configured still starts — and a call
- * made while the variable is absent (or empty, or unreadable) fails with
- * {@link PaymentsUnavailable}, the same failure a Stripe outage looks like to
- * the program. A call made while it is present goes over the fetch transport
- * with that key.
+ * from a configuration variable on EVERY call, never while the layer is built.
+ * Building it therefore cannot fail — an application without Stripe
+ * configured still starts — and a call made while the variable is absent,
+ * empty or unreadable fails with {@link PaymentsUnavailable}, the same failure
+ * a Stripe outage looks like to the program. A call made while it is present
+ * goes over the fetch transport with that key.
+ *
+ * **Which `ConfigProvider`.** Each call reads the calling fiber's
+ * `ConfigProvider` first (so a per-request provider, or one the runtime
+ * carries, wins); when the key is not there, it falls back to the
+ * `ConfigProvider` the layer was built under. A provider attached to the
+ * layer itself (`layerConfig().pipe(Layer.provide(ConfigProvider.layer(…)))`)
+ * is therefore honoured, as it is for {@link layerFromEnv}.
  */
 export const layerConfig = (
   options: LayerConfigOptions = {},
@@ -499,25 +528,37 @@ export const layerConfig = (
     StripeHttp,
     Effect.gen(function* () {
       const client = yield* HttpClient.HttpClient;
+      const builtUnder = yield* ConfigProvider.ConfigProvider;
       const { envVar = "STRIPE_API_KEY", ...config } = options;
-      const unavailable = new PaymentsUnavailable({
-        message: `Stripe is not configured in this environment (${envVar} is not set)`,
-        provider: "stripe",
+      const unavailable = Effect.failSync(
+        () =>
+          new PaymentsUnavailable({
+            message: `Stripe is not configured in this environment (${envVar} is not set or is empty)`,
+            provider: "stripe",
+          }),
+      );
+      /** The key from the caller's provider, else from the one the layer was built under. */
+      const currentKey = Effect.flatMap(ConfigProvider.ConfigProvider, (caller) =>
+        Effect.flatMap(readKey(envVar, caller), (key) =>
+          Option.isSome(key) || caller === builtUnder
+            ? Effect.succeed(key)
+            : readKey(envVar, builtUnder),
+        ),
+      );
+      const request = Effect.fn("StripeHttp.layerConfig.request")(function* (
+        request: StripeRequest,
+      ) {
+        const apiKey = yield* currentKey;
+        if (Option.isNone(apiKey)) {
+          return yield* unavailable;
+        }
+        // `make` fails only on an empty key, which was ruled out above.
+        const http = yield* make({ ...config, apiKey: apiKey.value }).pipe(
+          Effect.provideService(HttpClient.HttpClient, client),
+          Effect.catchTag("PaymentConfigError", () => unavailable),
+        );
+        return yield* http.request(request);
       });
-      /** The transport for the key configured right now, or `unavailable`. */
-      const current: Effect.Effect<StripeHttp["Service"], PaymentsUnavailable> = Effect.gen(
-        function* () {
-          const apiKey = yield* Config.Redacted(envVar).pipe(Config.withDefault(Redacted.make("")));
-          if (Redacted.value(apiKey) === "") {
-            return yield* unavailable;
-          }
-          return yield* make({ ...config, apiKey }).pipe(
-            Effect.provideService(HttpClient.HttpClient, client),
-          );
-        },
-      ).pipe(Effect.mapError(() => unavailable));
-      return StripeHttp.of({
-        request: (request) => Effect.flatMap(current, (http) => http.request(request)),
-      });
+      return StripeHttp.of({ request });
     }),
   );

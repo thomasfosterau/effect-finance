@@ -472,7 +472,10 @@ export const layerFromEnv = (
  * application without Stripe configured still starts. While the variable is
  * absent every capability call fails with `PaymentsUnavailable`; once it is
  * present, calls go over the fetch transport. Requires an `HttpClient`
- * (`FetchHttpClient.layer`). See `StripeHttp.layerConfig`.
+ * (`FetchHttpClient.layer`). Each call reads the calling fiber's
+ * `ConfigProvider` first, then falls back to the one the layer was built
+ * under, so a provider attached with `Layer.provide` is honoured. See
+ * `StripeHttp.layerConfig`.
  */
 export const layerConfig = (
   options?: LayerConfigOptions,

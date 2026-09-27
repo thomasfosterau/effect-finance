@@ -147,7 +147,7 @@ The transport is `StripeHttp`: form-encoded bodies with Stripe's bracketed nesti
 
 #### "Not configured ≡ down"
 
-`StripePayments.layerConfig` reads the key (`STRIPE_API_KEY` by default, or `envVar`) through the current `ConfigProvider` on **every call**, never while the layer is built. The layer therefore always builds — a Worker without billing configured still boots and serves everything else — and a call made while the key is absent fails with `PaymentsUnavailable`, exactly as if Stripe were down (answer it with a 503). Once the key is present, calls go over the fetch transport with it.
+`StripePayments.layerConfig` reads the key (`STRIPE_API_KEY` by default, or `envVar`) on **every call**, never while the layer is built — from the calling fiber's `ConfigProvider` first, then from the one the layer was built under (so `layerConfig().pipe(Layer.provide(ConfigProvider.layer(…)))` works as it does for `layerFromEnv`). The layer therefore always builds — a Worker without billing configured still boots and serves everything else — and a call made while the key is absent fails with `PaymentsUnavailable`, exactly as if Stripe were down (answer it with a 503). Once the key is present, calls go over the fetch transport with it.
 
 ```typescript
 const billing = StripePayments.layerConfig({ envVar: "STRIPE_SECRET_KEY" }).pipe(

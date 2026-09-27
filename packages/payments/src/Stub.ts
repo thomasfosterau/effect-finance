@@ -34,8 +34,8 @@ import { Products } from "./Product.js";
 import { Refunds } from "./Refund.js";
 import { Subscriptions } from "./Subscription.js";
 
-/** The failure every call of a stub fails with. */
-type Failure = Effect.Effect<never, PaymentsError>;
+/** The failure every call of a stub fails with (an `Effect` that fails, run on each call). */
+export type Failure = Effect.Effect<never, PaymentsError>;
 
 /** A {@link Customers} layer whose every call fails with `failure`. */
 export const customers = (failure: Failure): Layer.Layer<Customers> =>
@@ -153,7 +153,7 @@ export const layer = (failure: Failure): Layer.Layer<Capabilities> =>
  */
 export const unavailable = (provider?: string): Layer.Layer<Capabilities> =>
   layer(
-    Effect.fail(
+    Effect.failSync(() =>
       provider === undefined
         ? new PaymentsUnavailable({ message: "Payments are not configured in this environment" })
         : new PaymentsUnavailable({
