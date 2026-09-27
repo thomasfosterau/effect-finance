@@ -58,6 +58,14 @@
       "types": "./dist/Refund.d.ts",
       "default": "./dist/Refund.js"
     },
+    "./CheckoutSession": {
+      "types": "./dist/CheckoutSession.d.ts",
+      "default": "./dist/CheckoutSession.js"
+    },
+    "./BillingPortal": {
+      "types": "./dist/BillingPortal.d.ts",
+      "default": "./dist/BillingPortal.js"
+    },
     "./Money": {
       "types": "./dist/Money.d.ts",
       "default": "./dist/Money.js"

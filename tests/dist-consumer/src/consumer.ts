@@ -24,6 +24,8 @@ import type * as Price from "@thomasfosterau/effect-payments/Price";
 import type * as Product from "@thomasfosterau/effect-payments/Product";
 import type * as Refund from "@thomasfosterau/effect-payments/Refund";
 import type * as Subscription from "@thomasfosterau/effect-payments/Subscription";
+import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
+import * as BillingPortal from "@thomasfosterau/effect-payments/BillingPortal";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 import * as StripeCustomer from "@thomasfosterau/effect-payments-stripe/Customer";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
@@ -42,6 +44,17 @@ type Equals<A, B> =
 export const created = Customer.create({ email: "reader@example.com" });
 export const listed = Customer.list({ limit: 10 });
 export const price: Money = money(2000, "usd");
+export const checkout = CheckoutSession.create({
+  mode: "subscription",
+  customer: "cus_123",
+  lineItems: [{ price: "price_123" }],
+  successUrl: "https://example.com/ok",
+  cancelUrl: "https://example.com/cancel",
+});
+export const portal = BillingPortal.create({
+  customer: "cus_123",
+  returnUrl: "https://example.com/account",
+});
 
 // ── providers ─────────────────────────────────────────────────────────────
 
@@ -71,6 +84,8 @@ export type Checks = [
       | PaymentIntent.PaymentIntents
       | Subscription.Subscriptions
       | Refund.Refunds
+      | CheckoutSession.CheckoutSessions
+      | BillingPortal.BillingPortalSessions
     >
   >,
   /** _stripeFailsWithConfig */ Assert<Equals<Layer.Error<typeof stripeLayer>, PaymentConfigError>>,
@@ -82,6 +97,32 @@ export type Checks = [
   >,
   /** _airwallexProvidesCustomers */ Assert<
     Customer.Customers extends Layer.Success<typeof airwallexLayer> ? true : false
+  >,
+  /** _checkoutSucceeds */ Assert<
+    Equals<Effect.Success<typeof checkout>, CheckoutSession.CheckoutSession>
+  >,
+  /** _checkoutRequires */ Assert<
+    Equals<Effect.Services<typeof checkout>, CheckoutSession.CheckoutSessions>
+  >,
+  /** _portalSucceeds */ Assert<
+    Equals<Effect.Success<typeof portal>, BillingPortal.BillingPortalSession>
+  >,
+  /** _checkoutFails */ Assert<Equals<Effect.Error<typeof checkout>, PaymentsError>>,
+  /** _portalFails */ Assert<Equals<Effect.Error<typeof portal>, PaymentsError>>,
+  /** _paypalHasNoCheckoutByDefault */ Assert<
+    CheckoutSession.CheckoutSessions extends Layer.Success<typeof paypalLayer> ? false : true
+  >,
+  /** _paypalCheckoutStub */ Assert<
+    Equals<
+      Layer.Success<typeof PayPalPayments.checkoutSessionsLayer>,
+      CheckoutSession.CheckoutSessions
+    >
+  >,
+  /** _airwallexPortalStub */ Assert<
+    Equals<
+      Layer.Success<typeof AirwallexPayments.billingPortalSessionsLayer>,
+      BillingPortal.BillingPortalSessions
+    >
   >,
   /** _stripeResourceRequiresTransport */ Assert<
     Equals<Effect.Services<typeof stripeCustomer>, StripeHttp.StripeHttp>

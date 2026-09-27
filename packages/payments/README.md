@@ -24,8 +24,8 @@ The program above depends only on the `Customers` capability — it does not imp
 
 ## What's included
 
-- **Capabilities** (`Context.Service` services): `Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`. Each module also exports accessor functions (`create`, `retrieve`, `update`, `del`, `list`, …).
-- **Domain types** (`effect/Schema` classes): `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, `Money`, plus `Page` / `Deleted`.
+- **Capabilities** (`Context.Service` services): `Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`, `CheckoutSessions` (hosted checkout → URL), `BillingPortalSessions` (hosted billing portal → URL). Each module also exports accessor functions (`create`, `retrieve`, `update`, `del`, `list`, …).
+- **Domain types** (`effect/Schema` classes): `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, `CheckoutSession`, `BillingPortalSession`, `Money`, plus `Page` / `Deleted`.
 - **Errors**: the neutral `PaymentsError` union and friends (`PaymentProviderError`, `PaymentAuthenticationError`, `PaymentRateLimitError`, `PaymentInvalidRequestError`, `PaymentNetworkError`, `PaymentConfigError`, `SignatureVerificationError`).
 
 See the [repository README](../../README.md) for the full guide.
