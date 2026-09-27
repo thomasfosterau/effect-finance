@@ -176,22 +176,29 @@ These require the `StripeHttp` transport (from `StripeHttp.layer`, or `Stripe.la
 
 ### Webhooks
 
-`Webhook` wraps the SDK's verifier today, so it needs the SDK client from `Stripe.layer`; a WebCrypto verifier becomes the default in #41.
+`Webhook.verify` is a Workers-safe WebCrypto verifier (HMAC-SHA256, constant-time compare, ±300 s tolerance by default, "now" from `Clock`) that needs neither the SDK nor any Node API. Pass the raw body bytes; nothing is decoded until the signature verifies, and every refusal is a `SignatureVerificationError` that never carries the secret.
 
 ```typescript
+import { Effect, Option, Redacted } from "effect";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
 
-const handle = (body: string | Buffer, signature: string, secret: string) =>
+const handle = (request: Request, secret: Redacted.Redacted<string>) =>
   Effect.gen(function* () {
-    const event = yield* Webhook.constructEvent(body, signature, secret);
-    // event is a typed Stripe.Event
-    return event;
+    const event = yield* Webhook.verify({
+      payload: new Uint8Array(yield* Effect.promise(() => request.arrayBuffer())),
+      header: request.headers.get(Webhook.SIGNATURE_HEADER),
+      secret,
+    });
+    const handled = yield* Webhook.decodeHandledEvent(event); // Option<HandledEvent>
+    return new Response(null, { status: 200 });
   }).pipe(
-    Effect.catchTag("SignatureVerificationError", (e) =>
-      Effect.logError(`Invalid webhook signature: ${e.message}`),
+    Effect.catchTag("SignatureVerificationError", () =>
+      Effect.succeed(new Response(null, { status: 400 })),
     ),
   );
 ```
+
+The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an optional alternative; they need the SDK client from `Stripe.layer`.
 
 See [`packages/payments-stripe/examples`](packages/payments-stripe/examples) for runnable examples.
 
