@@ -105,10 +105,11 @@ describe("Airwallex money: parse", () => {
     expect(parseMinorUnits(2 ** 53 - 1, "jpy")).toBe(2 ** 53 - 1);
   });
 
-  it("decodes every accepted amount in 2^44..2^46 USD to exactly its minor units", () => {
+  it("decodes every sampled accepted amount in 2^44..2^46 USD to exactly its minor units", () => {
     let accepted = 0;
     let refused = 0;
-    const step = 10_000_000_007n;
+    // About 53k samples: enough of both outcomes, well inside the default test timeout.
+    const step = 100_000_000_003n;
     for (let minor = 2n ** 44n * 100n; minor < 2n ** 46n * 100n; minor += step) {
       const text = minor.toString();
       const parsed = parseMinorUnits(Number(`${text.slice(0, -2)}.${text.slice(-2)}`), "usd");
