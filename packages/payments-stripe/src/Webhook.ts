@@ -303,7 +303,7 @@ export type CheckoutSessionObject = typeof CheckoutSessionObject.Type;
 /**
  * The `subscription` fields a state-change handler reads. `status` is any
  * string, so a status Stripe adds later still decodes; match it against the
- * core's `SubscriptionStatus` where a closed set is wanted.
+ * core's `KnownSubscriptionStatus` where a closed set is wanted.
  * `current_period_end` is read both at the top level and per item (Stripe
  * moved it onto the item in later API versions).
  */
