@@ -5,20 +5,28 @@
  */
 
 import { Context, Effect, Schema } from "effect";
+import * as Enumeration from "./Enumeration.js";
 import { Metadata } from "./Money.js";
 import type { Page } from "./Page.js";
 import type { PaymentsError } from "./PaymentsError.js";
 
 /**
- * The status of a refund, normalized across providers.
+ * The refund statuses that this library models, normalized across providers.
  */
-export const RefundStatus = Schema.Literals([
+export const KnownRefundStatus = Schema.Literals([
   "pending",
   "requires_action",
   "succeeded",
   "failed",
   "canceled",
 ]);
+export type KnownRefundStatus = typeof KnownRefundStatus.Type;
+
+/**
+ * The status of a refund: a {@link KnownRefundStatus}, or `Other` carrying the
+ * raw status a provider sent that is not modelled.
+ */
+export const RefundStatus = Enumeration.lenient(KnownRefundStatus);
 export type RefundStatus = typeof RefundStatus.Type;
 
 /**

@@ -8,14 +8,16 @@
  */
 
 import { Context, Effect, Schema } from "effect";
+import * as Enumeration from "./Enumeration.js";
 import { Metadata } from "./Money.js";
 import type { Page } from "./Page.js";
 import type { PaymentsError } from "./PaymentsError.js";
 
 /**
- * The lifecycle status of a payment intent, normalized across providers.
+ * The lifecycle statuses of a payment intent that this library models,
+ * normalized across providers.
  */
-export const PaymentStatus = Schema.Literals([
+export const KnownPaymentStatus = Schema.Literals([
   "requires_payment_method",
   "requires_confirmation",
   "requires_action",
@@ -24,6 +26,13 @@ export const PaymentStatus = Schema.Literals([
   "canceled",
   "succeeded",
 ]);
+export type KnownPaymentStatus = typeof KnownPaymentStatus.Type;
+
+/**
+ * The lifecycle status of a payment intent: a {@link KnownPaymentStatus}, or
+ * `Other` carrying the raw status a provider sent that is not modelled.
+ */
+export const PaymentStatus = Enumeration.lenient(KnownPaymentStatus);
 export type PaymentStatus = typeof PaymentStatus.Type;
 
 /**

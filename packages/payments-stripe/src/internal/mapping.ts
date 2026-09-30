@@ -10,18 +10,19 @@
  * Entities are then constructed with schema checks disabled: the vendor data
  * has just been decoded.
  *
- * **Enumerations are closed.** A status or type decodes against the neutral
- * literal set (`PaymentStatus`, `SubscriptionStatus`, `RefundStatus`, the
- * price `type` and recurring `interval`), so a value Stripe adds later fails
- * the whole decode — and one such item fails a whole list page — with
- * `PaymentProviderError`, rather than being passed through unmodelled. A
- * lenient fallback is tracked in #58.
+ * **Enumerations are lenient.** A status or type (`PaymentStatus`,
+ * `SubscriptionStatus`, `RefundStatus`, the price `type` and recurring
+ * `interval`) decodes through `Enumeration.fromWire`: a value in the neutral
+ * literal set stays that literal, and a value Stripe adds later becomes
+ * `Enumeration.Other` carrying the raw string, so one unrecognised value never
+ * fails an object or a whole list page.
  *
  * @module
  */
 
 import { Effect, Predicate, Schema } from "effect";
 import {
+  Enumeration,
   Customer as CustomerNS,
   Product as ProductNS,
   Price as PriceNS,
@@ -82,10 +83,10 @@ const StripePrice = Schema.Struct({
   active: Schema.Boolean,
   currency: Schema.String,
   unit_amount: Maybe(Schema.Number),
-  type: Schema.Literals(["one_time", "recurring"]),
+  type: Enumeration.fromWire(PriceNS.KnownPriceType),
   recurring: Maybe(
     Schema.Struct({
-      interval: PriceNS.RecurringInterval,
+      interval: Enumeration.fromWire(PriceNS.KnownRecurringInterval),
       interval_count: Schema.Number,
     }),
   ),
@@ -97,7 +98,7 @@ const StripePaymentIntent = Schema.Struct({
   id: Schema.String,
   amount: Schema.Number,
   currency: Schema.String,
-  status: PaymentIntentNS.PaymentStatus,
+  status: Enumeration.fromWire(PaymentIntentNS.KnownPaymentStatus),
   customer: Maybe(Ref),
   payment_method: Maybe(Ref),
   client_secret: Maybe(Schema.String),
@@ -115,7 +116,7 @@ const StripePaymentIntent = Schema.Struct({
 const StripeSubscription = Schema.Struct({
   id: Schema.String,
   customer: Ref,
-  status: SubscriptionNS.SubscriptionStatus,
+  status: Enumeration.fromWire(SubscriptionNS.KnownSubscriptionStatus),
   items: Schema.Struct({
     data: Schema.Array(
       Schema.Struct({
@@ -138,7 +139,7 @@ const StripeRefund = Schema.Struct({
   id: Schema.String,
   amount: Schema.Number,
   currency: Schema.String,
-  status: Maybe(RefundNS.RefundStatus),
+  status: Maybe(Enumeration.fromWire(RefundNS.KnownRefundStatus)),
   payment_intent: Maybe(Ref),
   charge: Maybe(Ref),
   reason: Maybe(Schema.String),

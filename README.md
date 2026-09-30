@@ -93,7 +93,7 @@ Every operation returns `Effect<Entity, PaymentsError, Capability>`. List operat
 
 ### Domain types
 
-Entities are provider-agnostic [`effect/Schema`](https://effect.website/docs/schema/introduction/) classes — e.g. `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, and `Money` (amounts are always in the smallest currency unit). They contain only fields that are meaningful across providers, in a normalized shape (`camelCase`, neutral status enums).
+Entities are provider-agnostic [`effect/Schema`](https://effect.website/docs/schema/introduction/) classes — e.g. `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, and `Money` (amounts are always in the smallest currency unit). They contain only fields that are meaningful across providers, in a normalized shape (`camelCase`, neutral status enums). Status and type enums are lenient: each is the known literals plus `Other` (`{ _tag: "Other", raw }`) carrying a provider value the library does not model, so an unexpected value never fails a whole list page; match exhaustively with a case for `Other`.
 
 ### Errors
 

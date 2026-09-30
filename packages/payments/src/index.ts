@@ -44,6 +44,7 @@ export * from "./PaymentsError.js";
 export * from "./Page.js";
 export { Money, Metadata, make as money } from "./Money.js";
 
+export * as Enumeration from "./Enumeration.js";
 export * as Customer from "./Customer.js";
 export * as Product from "./Product.js";
 export * as Price from "./Price.js";

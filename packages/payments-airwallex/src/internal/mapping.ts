@@ -7,8 +7,9 @@
  * trusted, and a 2xx whose body does not decode fails with
  * {@link PaymentProviderError} rather than producing an entity built from
  * `undefined`. Unknown fields are ignored. Statuses decode as strings and are
- * normalised by the `to*Status` functions below (an unrecognised one maps to a
- * neutral fallback, as before). Entities are then constructed with schema
+ * normalised by the `to*Status` functions below; a status they do not
+ * recognise becomes `Enumeration.Other` carrying the raw string, so it never
+ * fails an object or a list page. Entities are then constructed with schema
  * checks disabled: the vendor data has just been decoded.
  *
  * @module
@@ -16,6 +17,7 @@
 
 import { Effect, Schema } from "effect";
 import {
+  Enumeration,
   Customer as CustomerNS,
   PaymentIntent as PaymentIntentNS,
   Refund as RefundNS,
@@ -135,8 +137,9 @@ export const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus =
       return "canceled";
     case "PENDING":
     case "RECEIVED":
-    default:
       return "processing";
+    default:
+      return Enumeration.other(status);
   }
 };
 
@@ -152,8 +155,9 @@ export const toRefundStatus = (status: string): RefundNS.RefundStatus => {
     case "RECEIVED":
     case "ACCEPTED":
     case "PENDING":
-    default:
       return "pending";
+    default:
+      return Enumeration.other(status);
   }
 };
 
