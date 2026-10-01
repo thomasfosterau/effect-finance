@@ -34,6 +34,13 @@
 
 import { Effect } from "effect";
 import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
+import {
+  checkMinorUnits,
+  decimalText,
+  exponentFrom,
+  formatDecimal,
+  scaleToMinor,
+} from "@thomasfosterau/effect-payments/internal";
 
 // NOTE: the exponent table below is Stripe's zero- and three-decimal list, not
 // Airwallex's. It has NOT been verified against Airwallex's own currency
@@ -64,28 +71,13 @@ const ZERO_DECIMAL = new Set([
 const THREE_DECIMAL = new Set(["bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd"]);
 
 /** The number of fraction digits used for `currency` (case-insensitive). */
-export const exponent = (currency: string): 0 | 2 | 3 => {
-  const code = currency.toLowerCase();
-  if (ZERO_DECIMAL.has(code)) return 0;
-  if (THREE_DECIMAL.has(code)) return 3;
-  return 2;
-};
+export const exponent = exponentFrom(ZERO_DECIMAL, THREE_DECIMAL);
 
 /**
  * A number's shortest decimal form as `String(n)` prints it: an optional sign,
  * whole digits, an optional fraction and an optional exponent.
  */
 const NUMBER_TEXT = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]\d+))?$/;
-
-const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
-
-/** The decimal text of `sign · magnitude × 10^-digits`, e.g. `-12.34`. */
-const decimalText = (negative: boolean, magnitude: bigint, digits: number): string => {
-  const text = magnitude.toString().padStart(digits + 1, "0");
-  const point = text.length - digits;
-  const body = digits === 0 ? text : `${text.slice(0, point)}.${text.slice(point)}`;
-  return negative ? `-${body}` : body;
-};
 
 /**
  * Whether a decimal half a minor unit either side of `magnitude` (in tenths
@@ -123,9 +115,8 @@ export const parseMinorUnits = (major: number, currency: string): number | undef
   const mantissa = BigInt(`${whole}${fraction}`);
   const scale = fraction.length - Number(exp);
   const digits = exponent(currency);
-  if (scale > digits) return undefined;
-  const magnitude = mantissa * 10n ** BigInt(digits - scale);
-  if (magnitude > MAX_SAFE) return undefined;
+  const magnitude = scaleToMinor(mantissa, scale, digits);
+  if (magnitude === undefined) return undefined;
   const negative = sign === "-";
   if (isAmbiguous(major, negative, magnitude, digits)) return undefined;
   return negative ? -Number(magnitude) : Number(magnitude);
@@ -155,35 +146,16 @@ export const toMinorUnits = (major: number, currency: string): number => {
  * duplicate.
  */
 export const formatMinorUnits = (minor: number, currency: string): number | undefined => {
-  if (!Number.isSafeInteger(minor)) return undefined;
-  const digits = exponent(currency);
-  const major = Number(decimalText(minor < 0, BigInt(Math.abs(minor)), digits));
+  const text = formatDecimal(minor, exponent(currency));
+  if (text === undefined) return undefined;
+  const major = Number(text);
   // `JSON.stringify(major)` is `String(major)`, which `parseMinorUnits` reads.
   return parseMinorUnits(major, currency) === minor ? major : undefined;
 };
 
 /**
- * Check a request amount before anything is sent, failing with
- * {@link PaymentInvalidRequestError} (naming `param`) when it is negative (a
- * payment intent or a refund amount is never below zero) or not a safe
- * integer. Needs no currency, so a caller can run it before looking one up.
- */
-export const checkMinorUnits = (
-  minor: number,
-  param: string,
-): Effect.Effect<void, PaymentInvalidRequestError> =>
-  Number.isSafeInteger(minor) && minor >= 0
-    ? Effect.void
-    : Effect.fail(
-        new PaymentInvalidRequestError({
-          message: `\`${param}\` must be a non-negative whole number of minor units within the safe-integer range`,
-          param,
-        }),
-      );
-
-/**
  * Format neutral minor units for a request body, failing as
- * {@link checkMinorUnits} does, or with {@link PaymentInvalidRequestError}
+ * `checkMinorUnits` does, or with {@link PaymentInvalidRequestError}
  * when the amount has no exact JSON number form.
  */
 export const toMajorNumber = (

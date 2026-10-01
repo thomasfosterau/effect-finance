@@ -43,7 +43,8 @@ import {
   decodeRefund,
   decodeRefundPage,
 } from "./internal/mapping.js";
-import { checkMinorUnits, toMajorNumber } from "./internal/money.js";
+import { checkMinorUnits } from "@thomasfosterau/effect-payments/internal";
+import { toMajorNumber } from "./internal/money.js";
 
 /** A fresh idempotency key for a write request. */
 const requestId = (): string => globalThis.crypto.randomUUID();
