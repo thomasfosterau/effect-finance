@@ -76,8 +76,7 @@ export default defineConfig({
       // ---- Effect preset: ported-code allowances ---------------------------
       // The modules under packages/*/src predate the Effect oxlint preset
       // (first written against Effect 3 and the Stripe SDK, ported to Effect 4
-      // in #38, and due to be rewritten onto the fetch-only transport in #39).
-      // The rules below sit at `warn`
+      // in #38). The rules below sit at `warn`
       // so the code stays committable while each site stays reported; a new
       // site is a defect, not headroom.
       "effect/imperative-loops": "warn",

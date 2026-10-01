@@ -65,8 +65,9 @@ updates:
             "version-update:semver-patch",
           ]
       # The SDK's major versions change parameter and response types across
-      # every resource module; it is on its way out of the required surface
-      # (#39, the fetch-only transport), so majors wait for that.
+      # every resource module; it stays a required type source until the
+      # remaining resource modules move to generated types (#81), so majors
+      # wait for that.
       - dependency-name: "stripe"
         update-types: ["version-update:semver-major"]
       - dependency-name: "vite-plus"
