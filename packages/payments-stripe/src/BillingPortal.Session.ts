@@ -4,7 +4,8 @@
  * Like {@link "./CheckoutSession"}, typed by a schema **generated** from
  * Stripe's OpenAPI spec at the pinned API version (not by the `stripe`
  * package), with the response decoded at the boundary: a body that does not
- * match fails with `PaymentProviderError`.
+ * match fails with `PaymentProviderError`. Response enumerations are lenient
+ * (`Enumeration.Other` carries a value Stripe adds later).
  *
  * @example
  * ```typescript

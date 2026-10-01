@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import { Effect, Exit } from "effect";
-import { type JsonObject, MissingPathError, prepareSpec } from "../scripts/prepareSpec.ts";
+import {
+  type JsonObject,
+  MissingPathError,
+  prepareSpec,
+  UnsupportedPatternError,
+} from "../scripts/prepareSpec.ts";
 
 const spec: JsonObject = {
   openapi: "3.0.0",
@@ -20,7 +25,34 @@ const spec: JsonObject = {
             },
           },
         ],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string", maxLength: 40, nullable: true },
+                  amount: { type: "integer", minimum: 1 },
+                  mode: { type: "string", enum: ["a", "b"], nullable: true },
+                  next: { anyOf: [{ $ref: "#/components/schemas/customer" }], nullable: true },
+                },
+              },
+            },
+          },
+        },
         responses: {
+          "201": {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    url: { type: "string", maxLength: 5000, enum: ["a"], nullable: true },
+                  },
+                },
+              },
+            },
+          },
           "200": {
             content: { "application/json": { schema: { $ref: "#/components/schemas/thing" } } },
           },
@@ -38,6 +70,9 @@ const spec: JsonObject = {
         type: "object",
         properties: {
           url: { type: "string", pattern: "^/v1/things", maxLength: 10 },
+          count: { type: "integer", minimum: 0 },
+          maximum: { type: "integer", maximum: 100, minimum: 1 },
+          minimum: { type: "string", maxLength: 3 },
           customer: {
             anyOf: [{ type: "string", maxLength: 5000 }, { $ref: "#/components/schemas/customer" }],
             nullable: true,
@@ -65,14 +100,14 @@ describe("prepareSpec", () => {
     const responses = (
       ((prepared["paths"] as JsonObject)["/kept"] as JsonObject)["get"] as JsonObject
     )["responses"] as JsonObject;
-    expect(Object.keys(responses)).toEqual(["200"]);
+    expect(Object.keys(responses)).toEqual(["200", "201"]);
   });
 
   it("collapses an expandable field to its id or an open object, and drops the ref list", () => {
     const customer = property(prepare(["/kept"]), "customer");
     expect(customer["x-expansionResources"]).toBeUndefined();
     expect(customer["anyOf"]).toEqual([
-      { type: "string", maxLength: 5000 },
+      { type: "string" },
       { type: "object", additionalProperties: true },
       { nullable: true, enum: [null] },
     ]);
@@ -88,8 +123,64 @@ describe("prepareSpec", () => {
     expect(property(prepared, "closed")["enum"]).toEqual(["a"]);
   });
 
-  it("strips string patterns but keeps other constraints", () => {
-    expect(property(prepare(["/kept"]), "url")).toEqual({ type: "string", maxLength: 10 });
+  it("strips list-URL patterns and the response checks that could only fail a decode", () => {
+    expect(property(prepare(["/kept"]), "url")).toEqual({ type: "string" });
+    expect(property(prepare(["/kept"]), "count")).toEqual({ type: "number" });
+  });
+
+  it("keeps a response property that is named like a JSON Schema keyword", () => {
+    const thing = schema(prepare(["/kept"]), "thing");
+    const properties = thing["properties"] as JsonObject;
+    expect(properties["maximum"]).toEqual({ type: "number" });
+    expect(properties["minimum"]).toEqual({ type: "string" });
+    expect(Object.keys(properties)).toContain("maximum");
+  });
+
+  it("treats an inline response schema as the response side", () => {
+    const inline = (
+      (((prepare(["/kept"])["paths"] as JsonObject)["/kept"] as JsonObject)["get"] as JsonObject)[
+        "responses"
+      ] as JsonObject
+    )["201"] as JsonObject;
+    const url = (
+      (
+        ((inline["content"] as JsonObject)["application/json"] as JsonObject)[
+          "schema"
+        ] as JsonObject
+      )["properties"] as JsonObject
+    )["url"] as JsonObject;
+    expect(url).toEqual({ type: "string", nullable: true, enum: ["a", null] });
+  });
+
+  it("keeps the checks, and the type, of a request schema", () => {
+    const body = (
+      ((prepare(["/kept"])["paths"] as JsonObject)["/kept"] as JsonObject)["get"] as JsonObject
+    )["requestBody"] as JsonObject;
+    const schema = (
+      ((body["content"] as JsonObject)["application/json"] as JsonObject)["schema"] as JsonObject
+    )["properties"] as JsonObject;
+    expect(schema["name"]).toEqual({ type: "string", maxLength: 40, nullable: true });
+    expect(schema["amount"]).toEqual({ type: "integer", minimum: 1 });
+    expect(schema["mode"]).toEqual({ type: "string", enum: ["a", "b"], nullable: true });
+    expect(schema["next"]).toEqual({
+      anyOf: [{ $ref: "#/components/schemas/customer" }],
+      nullable: true,
+    });
+  });
+
+  it("fails on a pattern that is not a list-URL template", () => {
+    const withPattern: JsonObject = {
+      ...spec,
+      components: {
+        schemas: { other: { type: "string", pattern: "^[a-z]+$" } },
+      },
+    };
+    const exit = Effect.runSyncExit(prepareSpec(withPattern, ["/kept"]));
+    const error = Exit.isFailure(exit)
+      ? exit.cause.reasons.map((reason) => ("error" in reason ? reason.error : undefined))[0]
+      : undefined;
+    expect(error).toBeInstanceOf(UnsupportedPatternError);
+    expect(error).toMatchObject({ pattern: "^[a-z]+$" });
   });
 
   it("keeps an optional deepObject query parameter optional", () => {

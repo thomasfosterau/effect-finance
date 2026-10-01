@@ -264,7 +264,7 @@ export default defineConfig({
       reporter: ["text-summary", "json-summary", "json"],
       reportsDirectory: "./coverage",
       include: ["packages/*/src/**/*.ts"],
-      exclude: ["**/*.d.ts"],
+      exclude: ["**/*.d.ts", "**/generated/**"],
     },
   },
 });

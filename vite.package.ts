@@ -132,7 +132,9 @@ export const packageConfig = ({ url }: PackageConfigOptions) => {
         reporter: ["text-summary", "json-summary", "json"],
         reportsDirectory: "./coverage",
         include: ["src/**/*.ts"],
-        exclude: ["**/*.d.ts"],
+        // `generated/`: machine-written schemas, exercised through the
+        // resource modules that decode with them, not line by line.
+        exclude: ["**/*.d.ts", "**/generated/**"],
       },
     },
   });

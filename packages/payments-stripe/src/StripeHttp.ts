@@ -71,8 +71,13 @@ import type { StripeParams } from "./internal/params.js";
 
 /**
  * The Stripe API version requests are pinned to unless the configuration
- * names another. It matches the version the `stripe` SDK's types (which the
- * resource modules return) describe.
+ * names another. Three things describe this one version and move together:
+ * the `stripe` SDK release the optional peer range allows (18.5.x), the
+ * OpenAPI spec the resource schemas are generated from
+ * (`scripts/stripe-spec.json`, checked by `tests/generatedSchemas.test.ts`),
+ * and this constant. It governs what this transport sends; webhook events are
+ * delivered at the API version of the receiving endpoint (or the account
+ * default), not this one.
  */
 export const DEFAULT_API_VERSION = "2025-08-27.basil";
 

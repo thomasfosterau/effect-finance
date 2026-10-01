@@ -66,7 +66,6 @@ describe("CheckoutSession (generated basil types)", () => {
         Object.entries(checkoutSession).filter(([key]) => key !== "livemode"),
       ),
       "a wrongly typed field": { ...checkoutSession, expires_at: "soon" },
-      "a value outside an enumeration": { ...checkoutSession, payment_status: "maybe" },
       "a non-object body": "<html>bad gateway</html>",
     };
     for (const [label, body] of Object.entries(cases)) {
@@ -80,6 +79,57 @@ describe("CheckoutSession (generated basil types)", () => {
         message: "Stripe returned a malformed checkout session response",
       });
     }
+  });
+
+  it("decodes an enumeration value Stripe adds later as Other instead of failing", async () => {
+    const future = {
+      ...checkoutSession,
+      payment_status: "settling",
+      mode: "setup_plus",
+      automatic_tax: { ...checkoutSession.automatic_tax, status: "reviewing" },
+    };
+    const { exit } = run(CheckoutSession.expire("cs_test_123"), () => future);
+    const result = await exit;
+    expect(Exit.isSuccess(result)).toBe(true);
+    if (!Exit.isSuccess(result)) return;
+    expect(result.value.payment_status).toEqual({ _tag: "Other", raw: "settling" });
+    expect(result.value.mode).toEqual({ _tag: "Other", raw: "setup_plus" });
+    expect(result.value.automatic_tax.status).toEqual({ _tag: "Other", raw: "reviewing" });
+    // A known value stays a bare string, and the `object` discriminator stays closed.
+    expect(result.value.status).toBe("open");
+    const wrongObject = run(CheckoutSession.expire("cs_test_123"), () => ({
+      ...checkoutSession,
+      object: "payment_intent",
+    }));
+    expect(Exit.isFailure(await wrongObject.exit)).toBe(true);
+  });
+
+  it("does not fail a response over a documented length or integer constraint", async () => {
+    const { exit } = run(CheckoutSession.retrieve("cs_test_123"), () => ({
+      ...checkoutSession,
+      client_reference_id: "x".repeat(6000),
+      expires_at: 1759276400.5,
+    }));
+    expect(Exit.isSuccess(await exit)).toBe(true);
+  });
+
+  it("accepts an optional parameter an exactOptionalPropertyTypes caller forwards as undefined", async () => {
+    const customer: string | undefined = undefined;
+    const price: string | undefined = "price_123";
+    const { http, exit } = run(
+      CheckoutSession.create({
+        mode: "payment",
+        customer,
+        cancel_url: undefined,
+        // Nested objects carry an open rest; an optional forwarded as undefined must pass it too.
+        adaptive_pricing: { enabled: customer === undefined ? undefined : true },
+        line_items: [{ price, quantity: 1 }],
+        after_expiration: { recovery: { enabled: true, allow_promotion_codes: undefined } },
+      }),
+      () => checkoutSession,
+    );
+    expect(Exit.isSuccess(await exit)).toBe(true);
+    expect(http.calls).toHaveLength(1);
   });
 
   it("decodes a list page and addresses expire and retrieve by encoded id", async () => {
