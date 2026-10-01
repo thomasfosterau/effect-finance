@@ -2,7 +2,6 @@ import { describe, it, expect } from "vite-plus/test";
 import { Effect } from "effect";
 import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 import {
-  checkMinorUnits,
   exponent,
   formatMinorUnits,
   parseMinorUnits,
@@ -223,16 +222,6 @@ describe("Airwallex money: request amounts", () => {
   it("toMajorNumber fails with an invalid-request error naming the parameter", async () => {
     for (const minor of [10.5, -1, Number.MAX_SAFE_INTEGER, 2 ** 53]) {
       const error = await Effect.runPromise(Effect.flip(toMajorNumber(minor, "usd", "amount")));
-      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
-      expect(error.param).toBe("amount");
-    }
-  });
-
-  it("checkMinorUnits needs no currency and refuses a negative or non-safe-integer amount", async () => {
-    await Effect.runPromise(checkMinorUnits(0, "amount"));
-    await Effect.runPromise(checkMinorUnits(Number.MAX_SAFE_INTEGER, "amount"));
-    for (const minor of [-1, 10.5, 2 ** 53, Number.NaN]) {
-      const error = await Effect.runPromise(Effect.flip(checkMinorUnits(minor, "amount")));
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error.param).toBe("amount");
     }

@@ -39,7 +39,7 @@ import {
   PaymentProviderError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
-import { shareLogin } from "./internal/sharedLogin.js";
+import { shareLogin } from "@thomasfosterau/effect-payments/internal";
 import { handlePayPalError, PayPalErrorBody, PROVIDER } from "./internal/error.js";
 
 const DEFAULT_BASE_URL = "https://api-m.paypal.com";

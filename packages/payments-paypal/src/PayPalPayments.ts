@@ -46,7 +46,8 @@ import {
   decodeRefund,
   decodeSubscription,
 } from "./internal/mapping.js";
-import { checkMinorUnits, toMajorString } from "./internal/money.js";
+import { checkMinorUnits } from "@thomasfosterau/effect-payments/internal";
+import { toMajorString } from "./internal/money.js";
 
 /** Fail with a neutral error for an operation PayPal does not support. */
 const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>

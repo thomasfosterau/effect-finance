@@ -19,7 +19,14 @@
  */
 
 import { Effect } from "effect";
-import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
+import {
+  checkMinorUnits,
+  decimalText,
+  exponentFrom,
+  formatDecimal,
+  parseDecimal,
+} from "@thomasfosterau/effect-payments/internal";
+import type { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 
 // PayPal's currency-codes reference: "This currency does not support
 // decimals. If you pass a decimal amount, an error occurs."
@@ -54,34 +61,15 @@ const ZERO_DECIMAL = new Set([...PAYPAL_ZERO_DECIMAL, ...OTHER_ZERO_DECIMAL]);
 const THREE_DECIMAL = new Set(["bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd"]);
 
 /** The number of fraction digits PayPal expects for `currency` (case-insensitive). */
-export const exponent = (currency: string): 0 | 2 | 3 => {
-  const code = currency.toLowerCase();
-  if (ZERO_DECIMAL.has(code)) return 0;
-  if (THREE_DECIMAL.has(code)) return 3;
-  return 2;
-};
-
-/** An optionally negative decimal: whole digits and an optional fraction. */
-const DECIMAL = /^(-?)(\d+)(?:\.(\d+))?$/;
-
-const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+export const exponent = exponentFrom(ZERO_DECIMAL, THREE_DECIMAL);
 
 /**
  * Parse a PayPal major-unit decimal string into neutral minor units, or
  * `undefined` when it is malformed, has more fraction digits than the
  * currency allows, or is outside the safe-integer range as minor units.
  */
-export const parseMinorUnits = (value: string, currency: string): number | undefined => {
-  const match = DECIMAL.exec(value);
-  if (match === null) return undefined;
-  const [, sign, whole, fraction = ""] = match;
-  const digits = exponent(currency);
-  if (fraction.length > digits) return undefined;
-  const magnitude = BigInt(`${whole}${fraction.padEnd(digits, "0")}`);
-  if (magnitude > MAX_SAFE) return undefined;
-  // `magnitude` is 0 for "-0.00"; never produce -0.
-  return sign === "-" && magnitude !== 0n ? -Number(magnitude) : Number(magnitude);
-};
+export const parseMinorUnits = (value: string, currency: string): number | undefined =>
+  parseDecimal(value, exponent(currency));
 
 /**
  * Parse a PayPal major-unit decimal string that has already been validated
@@ -97,51 +85,23 @@ export const toMinorUnits = (value: string, currency: string): number => {
   return minor;
 };
 
-/** The decimal string for a safe-integer `minor` (checked by the callers). */
-const digitsOf = (minor: number, currency: string): string => {
-  const digits = exponent(currency);
-  const sign = minor < 0 ? "-" : "";
-  const magnitude = String(Math.abs(minor)).padStart(digits + 1, "0");
-  if (digits === 0) return `${sign}${magnitude}`;
-  const point = magnitude.length - digits;
-  return `${sign}${magnitude.slice(0, point)}.${magnitude.slice(point)}`;
-};
-
 /**
  * Format neutral minor units as a PayPal major-unit decimal string, or
  * `undefined` when `minor` is not a safe integer (such an amount has no exact
  * decimal form, and sending a rounded one would charge a different amount).
  */
 export const formatMinorUnits = (minor: number, currency: string): string | undefined =>
-  Number.isSafeInteger(minor) ? digitsOf(minor, currency) : undefined;
-
-/**
- * Check a request amount without needing its currency, failing with
- * {@link PaymentInvalidRequestError} (naming `param`) unless it is a
- * non-negative safe integer (a price, an order or a refund amount is never
- * below zero). Callers run it before sending anything.
- */
-export const checkMinorUnits = (
-  minor: number,
-  param: string,
-): Effect.Effect<void, PaymentInvalidRequestError> =>
-  Number.isSafeInteger(minor) && minor >= 0
-    ? Effect.void
-    : Effect.fail(
-        new PaymentInvalidRequestError({
-          message: `\`${param}\` must be a non-negative whole number of minor units within the safe-integer range`,
-          param,
-        }),
-      );
+  formatDecimal(minor, exponent(currency));
 
 /**
  * Format neutral minor units for a request body, failing as
- * {@link checkMinorUnits} does when the amount is negative or not a safe
- * integer.
+ * `checkMinorUnits` does when the amount is negative or not a safe integer.
  */
 export const toMajorString = (
   minor: number,
   currency: string,
   param: string,
 ): Effect.Effect<string, PaymentInvalidRequestError> =>
-  Effect.map(checkMinorUnits(minor, param), () => digitsOf(minor, currency));
+  Effect.map(checkMinorUnits(minor, param), () =>
+    decimalText(false, BigInt(minor), exponent(currency)),
+  );

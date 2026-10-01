@@ -70,6 +70,10 @@ Mapping: Stripe sends `Idempotency-Key`; PayPal sends `PayPal-Request-Id` (on th
 - **Errors**: the neutral `PaymentsError` union and friends (`PaymentProviderError`, `PaymentAuthenticationError`, `PaymentRateLimitError`, `PaymentInvalidRequestError`, `PaymentNetworkError`, `PaymentsUnavailable`, `PaymentConfigError`, `SignatureVerificationError`). `PaymentsUnavailable` is the "not configured ≡ down" failure: no provider is available to serve the call (typically, its credential is absent), raised at call time.
 - **Stubs** (`Stub`): capability layers whose every call fails with one given error — `Stub.layer(failure)` for every capability, one constructor per capability (`Stub.customers`, …, `Stub.billingPortalSessions`), and `Stub.unavailable(provider?)`, every capability failing with `PaymentsUnavailable`, for an environment with no provider configured.
 
+## Internal subpath (not public API)
+
+`@thomasfosterau/effect-payments/internal` holds helpers that the provider packages in this repository share (`shareLogin`, one in-flight token login shared by every waiting caller, and the integer money core used to convert between minor units and major-unit decimals). It exists only because a provider may import nothing but this package. It is **internal and exempt from semver**: its exports can change or disappear in any release, minor and patch included. Do not import it from application code.
+
 See the [repository README](../../README.md) for the full guide.
 
 ## License
