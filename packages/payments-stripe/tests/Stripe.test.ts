@@ -102,6 +102,17 @@ describe("Stripe SDK transport", () => {
       expect(calls[1]?.headers.get("stripe-account")).toBe("acct_1");
     });
 
+    it("refuses an empty idempotencyKey or stripeAccount before sending", async () => {
+      const { transport, calls } = sdkWith(() => jsonResponse(200, { id: "cus_1" }));
+      for (const options of [{ idempotencyKey: "" }, { stripeAccount: "" }]) {
+        const error = await Effect.runPromise(
+          Effect.flip(transport.request({ method: "POST", path: "/v1/customers", ...options })),
+        );
+        expect(error).toMatchObject({ _tag: "PaymentInvalidRequestError" });
+      }
+      expect(calls).toEqual([]);
+    });
+
     it("passes request options to an upload", async () => {
       const { transport, calls } = sdkWith(() => jsonResponse(200, { id: "file_1" }));
       await Effect.runPromise(

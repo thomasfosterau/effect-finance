@@ -9,6 +9,7 @@ import * as File from "../src/File.ts";
 import * as Subscription from "../src/Subscription.ts";
 import * as TerminalLocation from "../src/Terminal.Location.ts";
 import * as TreasuryFinancialAccount from "../src/Treasury.FinancialAccount.ts";
+import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 import { make, StripeHttp } from "../src/StripeHttp.ts";
 import { fakeStripeHttp, jsonResponse, stubFetch, withTestClock } from "./support.ts";
 
@@ -184,6 +185,27 @@ describe("the options reach the wire", () => {
       "signup-3",
     ]);
   });
+});
+
+describe("an empty option is refused, not silently dropped", () => {
+  it.each(["idempotencyKey", "stripeAccount"] as const)(
+    '%s: "" fails with PaymentInvalidRequestError before anything is sent',
+    async (name) => {
+      const { http, calls } = stubFetch(() => jsonResponse(200, { id: "cus_1" }));
+      const error = await run(
+        Effect.gen(function* () {
+          const client = yield* make({ apiKey: Redacted.make("sk_test_not_a_real_key_4242") });
+          return yield* Customer.create({}, { [name]: "" }).pipe(
+            Effect.flip,
+            Effect.provideService(StripeHttp, client),
+          );
+        }).pipe(Effect.provide(http)),
+      );
+      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+      expect(error).toMatchObject({ param: name });
+      expect(calls).toEqual([]);
+    },
+  );
 });
 
 describe("every resource-module operation takes options", () => {
