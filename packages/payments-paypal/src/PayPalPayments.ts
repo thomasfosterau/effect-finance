@@ -23,6 +23,7 @@ import {
   Refund as RefundNS,
   CheckoutSession as CheckoutSessionNS,
   BillingPortal as BillingPortalNS,
+  IdempotencyKey as IdempotencyKeyNS,
   Stub,
   PaymentInvalidRequestError,
   type PaymentsError,
@@ -32,6 +33,7 @@ import {
   layer as clientLayer,
   layerFromEnv as clientLayerFromEnv,
   type PayPalConfig,
+  type PayPalRequest,
 } from "./PayPal.js";
 import {
   decodeCaptureCurrency,
@@ -54,6 +56,21 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
     }),
   );
 
+/**
+ * `client.request` for a neutral write: the caller's idempotency key, checked,
+ * becomes the request's `requestId` (the `PayPal-Request-Id` header). With no
+ * key nothing is sent: a random id would deduplicate nothing, because a
+ * caller's retry re-runs this and would draw another.
+ */
+const write = (
+  client: PayPalClient["Service"],
+  request: Omit<PayPalRequest, "requestId">,
+  idempotencyKey: string | undefined,
+): Effect.Effect<unknown, PaymentsError> =>
+  Effect.flatMap(IdempotencyKeyNS.validate(idempotencyKey), (requestId) =>
+    client.request({ ...request, requestId }),
+  );
+
 // ---------------------------------------------------------------------------
 // Products (catalog products)
 // ---------------------------------------------------------------------------
@@ -64,8 +81,9 @@ export const productsLayer: Layer.Layer<ProductNS.Products, never, PayPalClient>
   Effect.map(PayPalClient, (client) =>
     ProductNS.Products.of({
       create: (params) =>
-        client
-          .request({
+        write(
+          client,
+          {
             method: "POST",
             path: "/v1/catalogs/products",
             body: {
@@ -74,8 +92,9 @@ export const productsLayer: Layer.Layer<ProductNS.Products, never, PayPalClient>
               type: "SERVICE",
               category: "SOFTWARE",
             },
-          })
-          .pipe(Effect.flatMap(decodeProduct)),
+          },
+          params.idempotencyKey,
+        ).pipe(Effect.flatMap(decodeProduct)),
       retrieve: (id) =>
         client
           .request({
@@ -138,32 +157,36 @@ export const pricesLayer: Layer.Layer<PriceNS.Prices, never, PayPalClient> = Lay
         const recurring = params.recurring;
         return toMajorString(params.unitAmount, params.currency, "unitAmount").pipe(
           Effect.flatMap((value) =>
-            client.request({
-              method: "POST",
-              path: "/v1/billing/plans",
-              body: {
-                product_id: params.product,
-                name: "Plan",
-                billing_cycles: [
-                  {
-                    tenure_type: "REGULAR",
-                    sequence: 1,
-                    total_cycles: 0,
-                    frequency: {
-                      interval_unit: recurring.interval.toUpperCase(),
-                      interval_count: recurring.intervalCount ?? 1,
-                    },
-                    pricing_scheme: {
-                      fixed_price: {
-                        currency_code: params.currency.toUpperCase(),
-                        value,
+            write(
+              client,
+              {
+                method: "POST",
+                path: "/v1/billing/plans",
+                body: {
+                  product_id: params.product,
+                  name: "Plan",
+                  billing_cycles: [
+                    {
+                      tenure_type: "REGULAR",
+                      sequence: 1,
+                      total_cycles: 0,
+                      frequency: {
+                        interval_unit: recurring.interval.toUpperCase(),
+                        interval_count: recurring.intervalCount ?? 1,
+                      },
+                      pricing_scheme: {
+                        fixed_price: {
+                          currency_code: params.currency.toUpperCase(),
+                          value,
+                        },
                       },
                     },
-                  },
-                ],
-                payment_preferences: { auto_bill_outstanding: true },
+                  ],
+                  payment_preferences: { auto_bill_outstanding: true },
+                },
               },
-            }),
+              params.idempotencyKey,
+            ),
           ),
           Effect.flatMap(decodePrice),
         );
@@ -222,23 +245,27 @@ export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, ne
         create: (params) =>
           toMajorString(params.amount, params.currency, "amount").pipe(
             Effect.flatMap((value) =>
-              client.request({
-                method: "POST",
-                path: "/v2/checkout/orders",
-                body: {
-                  intent: "CAPTURE",
-                  purchase_units: [
-                    {
-                      amount: {
-                        currency_code: params.currency.toUpperCase(),
-                        value,
+              write(
+                client,
+                {
+                  method: "POST",
+                  path: "/v2/checkout/orders",
+                  body: {
+                    intent: "CAPTURE",
+                    purchase_units: [
+                      {
+                        amount: {
+                          currency_code: params.currency.toUpperCase(),
+                          value,
+                        },
+                        description: params.description,
+                        custom_id: params.customer,
                       },
-                      description: params.description,
-                      custom_id: params.customer,
-                    },
-                  ],
+                    ],
+                  },
                 },
-              }),
+                params.idempotencyKey,
+              ),
             ),
             Effect.flatMap(decodePaymentIntent),
           ),
@@ -251,14 +278,16 @@ export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, ne
             .pipe(Effect.flatMap(decodePaymentIntent)),
         update: () => notSupported("updating orders"),
         // Confirming a neutral payment intent maps onto capturing a PayPal order.
-        confirm: (id) =>
-          client
-            .request({
+        confirm: (id, params) =>
+          write(
+            client,
+            {
               method: "POST",
               path: `/v2/checkout/orders/${id}/capture`,
               body: {},
-            })
-            .pipe(Effect.flatMap(decodePaymentIntent)),
+            },
+            params?.idempotencyKey,
+          ).pipe(Effect.flatMap(decodePaymentIntent)),
         cancel: () => notSupported("canceling orders"),
         list: () => notSupported("listing orders"),
       }),
@@ -278,8 +307,9 @@ export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never
         // PayPal subscriptions bill against a single plan; the first neutral item's
         // price is used as the plan id, and the customer id is stored in custom_id.
         create: (params) =>
-          client
-            .request({
+          write(
+            client,
+            {
               method: "POST",
               path: "/v1/billing/subscriptions",
               body: {
@@ -287,8 +317,9 @@ export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never
                 quantity: params.items[0]?.quantity ? String(params.items[0].quantity) : undefined,
                 custom_id: params.customer,
               },
-            })
-            .pipe(Effect.flatMap(decodeSubscription)),
+            },
+            params.idempotencyKey,
+          ).pipe(Effect.flatMap(decodeSubscription)),
         retrieve: (id) =>
           client
             .request({
@@ -329,7 +360,8 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
     RefundNS.Refunds.of({
       create: (params) =>
         Effect.gen(function* () {
-          // Refuse a bad partial amount before any lookup or refund is sent.
+          // Refuse a bad key or partial amount before any lookup or refund is sent.
+          const requestId = yield* IdempotencyKeyNS.validate(params.idempotencyKey);
           if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
           // PayPal refunds a capture. Accept a capture id directly (`charge`)
           // or resolve the first capture of an order (`paymentIntent`).
@@ -369,6 +401,7 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
               method: "POST",
               path: `/v2/payments/captures/${captureId}/refund`,
               body: amount ? { amount } : {},
+              requestId,
             })
             .pipe(Effect.flatMap(decodeRefund));
         }),

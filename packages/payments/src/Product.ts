@@ -7,6 +7,7 @@
 import { Context, Effect, Schema } from "effect";
 import { Metadata } from "./Money.js";
 import type { Page, Deleted } from "./Page.js";
+import type { IdempotencyKey } from "./IdempotencyKey.js";
 import type { PaymentsError } from "./PaymentsError.js";
 
 /**
@@ -28,6 +29,12 @@ export interface CreateParams {
   readonly description?: string | undefined;
   readonly active?: boolean | undefined;
   readonly metadata?: Record<string, string> | undefined;
+  /**
+   * Makes this write safe to repeat: create one with `IdempotencyKey.generate`
+   * before the first attempt and pass the same key on every retry (see
+   * `IdempotencyKey` for the contract).
+   */
+  readonly idempotencyKey?: IdempotencyKey | undefined;
 }
 
 /** Parameters for updating a product. */
