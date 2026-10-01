@@ -4,7 +4,7 @@ An Airwallex implementation of the vendor-neutral effect-payments core.
 
 It implements the capabilities Airwallex supports from [`@thomasfosterau/effect-payments`](https://www.npmjs.com/package/@thomasfosterau/effect-payments) over Airwallex's REST API, through `effect/http` with no vendor SDK.
 
-The same neutral program runs on Airwallex or Stripe — only the layer you provide changes.
+The same neutral program runs on Airwallex, Stripe or PayPal — only the layer you provide changes.
 
 ## Install
 

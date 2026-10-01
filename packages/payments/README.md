@@ -141,7 +141,7 @@ const exit = await Effect.runPromiseExit(
 
 ## API
 
-Every module is its own subpath (`@thomasfosterau/effect-payments/<Module>`); the root re-exports them as namespaces, plus the errors, `Page`, `Deleted` and `Money`.
+Every module is its own subpath (`@thomasfosterau/effect-payments/<Module>`). The root re-exports the capability modules, `Enumeration`, `IdempotencyKey` and `Stub` as namespaces, and flattens the errors, `Page` / `Deleted`, `Money`, `Metadata` and `money` (`Money.make`).
 
 | Module | Purpose |
 | --- | --- |

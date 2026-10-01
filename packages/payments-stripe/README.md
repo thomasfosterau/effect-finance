@@ -12,9 +12,8 @@ pnpm add @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe 
 
 `effect` is a peer dependency. The official `stripe` package is an **optional** peer (`^18.5.0`, the release for the default API version `2025-08-27.basil`):
 
-- the capability layers, `StripeHttp`, `Webhook.verify` and the generated modules (`CheckoutSession`, `BillingPortal.Session`) need nothing from it;
-- the other raw resource modules take their types from it, so add it as a dev dependency to use them;
-- it is a runtime dependency only for the SDK transport (`./Stripe`) or the SDK-based `Webhook.constructEvent*` verifier.
+- **At runtime** it is needed only for the SDK transport (`./Stripe`) or the SDK-based `Webhook.constructEvent*` verifier. The capability layers, `StripeHttp`, `Webhook.verify` and every resource module run without it.
+- **For types** it is needed by every entry whose declarations import it: the raw resource modules, `./Webhook` (its `constructEvent` signature names `Stripe.Event`, so `Webhook.verify` users need it too) and the package root, which re-exports them. Add it as a dev dependency when you import any of those; otherwise, with `skipLibCheck: false`, the declarations fail to resolve `stripe`, and with it on, their SDK types silently become `any`. Only `./StripePayments`, `./StripeHttp` and the generated modules (`./CheckoutSession`, `./BillingPortal.Session`) declare no import of it.
 
 ## Usage
 
@@ -142,7 +141,7 @@ The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an opti
 | `CheckoutSession`, `BillingPortal.Session` | Generated, decoded raw resource modules. |
 | `Customer`, `Invoice`, `Treasury`, `Issuing.*`, `Terminal.*`, `Identity.*`, … | Raw resource modules, one per Stripe API resource (see `package.json` `exports` for the full list). |
 
-The root entry re-exports the core (`Payments`), `StripeHttp`, `StripePayments` and the raw modules as namespaces; it never loads the SDK.
+The root entry re-exports the core (`Payments`), `StripeHttp`, `StripePayments`, `Webhook` and the raw modules as namespaces; it never loads the SDK at runtime.
 
 ## License
 
