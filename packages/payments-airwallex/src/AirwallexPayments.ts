@@ -22,6 +22,7 @@ import {
   Refund as RefundNS,
   CheckoutSession as CheckoutSessionNS,
   BillingPortal as BillingPortalNS,
+  IdempotencyKey as IdempotencyKeyNS,
   Stub,
   PaymentInvalidRequestError,
   type PaymentsError,
@@ -31,6 +32,7 @@ import {
   layer as clientLayer,
   layerFromEnv as clientLayerFromEnv,
   type AirwallexConfig,
+  type AirwallexRequest,
 } from "./Airwallex.js";
 import {
   decodeCustomer,
@@ -45,6 +47,21 @@ import { checkMinorUnits, toMajorNumber } from "./internal/money.js";
 
 /** A fresh idempotency key for a write request. */
 const requestId = (): string => globalThis.crypto.randomUUID();
+
+/**
+ * `client.request` for a neutral write: the caller's idempotency key, checked,
+ * becomes the request's `requestId`, which the client writes over the fresh
+ * `request_id` in the body. With no key the body keeps its fresh id (which
+ * deduplicates nothing across a caller's retry).
+ */
+const write = (
+  client: AirwallexClient["Service"],
+  request: Omit<AirwallexRequest, "requestId">,
+  idempotencyKey: string | undefined,
+): Effect.Effect<unknown, PaymentsError> =>
+  Effect.flatMap(IdempotencyKeyNS.validate(idempotencyKey), (requestId) =>
+    client.request({ ...request, requestId }),
+  );
 
 /** Fail with a neutral error for an operation Airwallex does not support. */
 const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
@@ -65,8 +82,9 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
     Effect.map(AirwallexClient, (client) =>
       CustomerNS.Customers.of({
         create: (params) =>
-          client
-            .request({
+          write(
+            client,
+            {
               method: "POST",
               path: "/api/v1/pa/customers",
               body: {
@@ -76,8 +94,9 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
                 phone_number: params.phone,
                 metadata: params.metadata,
               },
-            })
-            .pipe(Effect.flatMap(decodeCustomer)),
+            },
+            params.idempotencyKey,
+          ).pipe(Effect.flatMap(decodeCustomer)),
         retrieve: (id) =>
           client
             .request({
@@ -128,18 +147,22 @@ export const paymentIntentsLayer: Layer.Layer<
       create: (params) =>
         toMajorNumber(params.amount, params.currency, "amount").pipe(
           Effect.flatMap((amount) =>
-            client.request({
-              method: "POST",
-              path: "/api/v1/pa/payment_intents",
-              body: {
-                request_id: requestId(),
-                amount,
-                currency: params.currency,
-                customer_id: params.customer,
-                descriptor: params.description,
-                metadata: params.metadata,
+            write(
+              client,
+              {
+                method: "POST",
+                path: "/api/v1/pa/payment_intents",
+                body: {
+                  request_id: requestId(),
+                  amount,
+                  currency: params.currency,
+                  customer_id: params.customer,
+                  descriptor: params.description,
+                  metadata: params.metadata,
+                },
               },
-            }),
+              params.idempotencyKey,
+            ),
           ),
           Effect.flatMap(decodePaymentIntent),
         ),
@@ -152,16 +175,18 @@ export const paymentIntentsLayer: Layer.Layer<
           .pipe(Effect.flatMap(decodePaymentIntent)),
       update: () => notSupported("updating payment intents"),
       confirm: (id, params) =>
-        client
-          .request({
+        write(
+          client,
+          {
             method: "POST",
             path: `/api/v1/pa/payment_intents/${id}/confirm`,
             body: {
               request_id: requestId(),
               ...(params?.paymentMethod ? { payment_method: { id: params.paymentMethod } } : {}),
             },
-          })
-          .pipe(Effect.flatMap(decodePaymentIntent)),
+          },
+          params?.idempotencyKey,
+        ).pipe(Effect.flatMap(decodePaymentIntent)),
       cancel: (id) =>
         client
           .request({
@@ -198,7 +223,9 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient>
               "refunds without a payment intent (charges are not supported)",
             );
           }
-          // Refuse a negative or fractional amount before the currency lookup.
+          // Refuse a bad key, or a negative or fractional amount, before the
+          // currency lookup.
+          const idempotencyKey = yield* IdempotencyKeyNS.validate(params.idempotencyKey);
           if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
           // The neutral amount is in minor units; Airwallex needs major units,
           // and the conversion depends on the currency, so resolve it from the
@@ -224,6 +251,7 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient>
                 reason: params.reason,
                 metadata: params.metadata,
               },
+              requestId: idempotencyKey,
             })
             .pipe(Effect.flatMap(decodeRefund));
         }),
