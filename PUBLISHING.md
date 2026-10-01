@@ -1,6 +1,6 @@
 # Publishing & releases
 
-Releases are automated with [Changesets](https://github.com/changesets/changesets) and published to npm via [OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers) — there is no `NPM_TOKEN`. See [SECURITY.md](./SECURITY.md) for the security rationale behind the pipeline. (Copied from the effect-web library, itself from the effect-jsonapi library.)
+Releases are automated with [Changesets](https://github.com/changesets/changesets) and published to npm via [OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers) — there is no `NPM_TOKEN`. See [SECURITY.md](./SECURITY.md) for the security rationale behind the pipeline.
 
 ## The release flow
 
@@ -33,4 +33,4 @@ None of the four packages (`@thomasfosterau/effect-payments`, `-stripe`, `-paypa
 
 ## Renaming the repository
 
-The repository is due to be renamed `effect-stripe` → `effect-payments` (#36). Three places name it and must move in the same change as the rename, or the release silently stops: the fork guard `if: github.repository == 'thomasfosterau/effect-stripe'` in [release.yml](./.github/workflows/release.yml) (the job is skipped on any other name), the `repo` option of the changelog generator in [.changeset/config.json](./.changeset/config.json), and the trusted-publisher binding on npmjs.com (step 3 above). The `repository` / `homepage` / `bugs` URLs in each `package.json` follow GitHub's redirect but should be updated too.
+The repository is due to be renamed `effect-stripe` → `effect-payments` (#36). Three places name it and must move in the same change as the rename, or the release silently stops: the fork guard `if: github.repository == 'thomasfosterau/effect-stripe'` in [release.yml](./.github/workflows/release.yml) (the job is skipped on any other name), the `repo` option of the changelog generator in [.changeset/config.json](./.changeset/config.json), and the trusted-publisher binding on npmjs.com (step 3 above). The `repository` / `homepage` / `bugs` URLs in each `package.json` follow GitHub's redirect but should be updated too, as should the other places that name it: [SECURITY.md](./SECURITY.md), [`.github/ISSUE_TEMPLATE/config.yml`](./.github/ISSUE_TEMPLATE/config.yml), the PR template's link to AGENTS.md, the README and CONTRIBUTING notes on the rename, and AGENTS.md's `-R thomasfosterau/effect-stripe` flag.
