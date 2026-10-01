@@ -31,6 +31,13 @@ describe("BillingPortal.Session (generated basil types)", () => {
     });
   });
 
+  it("decodes a locale Stripe adds later as Other", async () => {
+    const result = await create(() => ({ ...billingPortalSession, locale: "tlh" })).exit;
+    expect(Exit.isSuccess(result)).toBe(true);
+    if (!Exit.isSuccess(result)) return;
+    expect(result.value.locale).toEqual({ _tag: "Other", raw: "tlh" });
+  });
+
   it("fails with PaymentProviderError when the session has no url", async () => {
     const { url: _url, ...withoutUrl } = billingPortalSession;
     const result = await create(() => withoutUrl).exit;

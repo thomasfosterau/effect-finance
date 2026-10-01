@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 // oxlint-disable-next-line effect/use-filesystem-service -- a test inspecting the package's own files, outside any Effect runtime
 import { readFileSync } from "node:fs";
 import { DEFAULT_API_VERSION } from "../src/StripeHttp.ts";
+import generatorPackage from "@effect/openapi-generator/package.json" with { type: "json" };
 import pin from "../scripts/stripe-spec.json" with { type: "json" };
 
 /**
@@ -25,6 +26,10 @@ describe("generated Stripe schemas", () => {
     expect(generated).toContain(`paths       ${pin.paths.join(", ")}`);
   });
 
+  it("records the generator version it ran with", () => {
+    expect(generated).toContain(`@effect/openapi-generator\` ${generatorPackage.version} `);
+  });
+
   it("pins a full commit and a SHA-256", () => {
     expect(pin.commit).toMatch(/^[0-9a-f]{40}$/);
     expect(pin.sha256).toMatch(/^[0-9a-f]{64}$/);
@@ -33,6 +38,14 @@ describe("generated Stripe schemas", () => {
   it("is pinned to the transport's default API version", () => {
     expect(pin.apiVersion).toBe(DEFAULT_API_VERSION);
     expect(DEFAULT_API_VERSION).toMatch(/\.basil$/);
+  });
+
+  it("makes response enumerations lenient and top-level schemas tree-shakeable", () => {
+    expect(generated).toContain("Enumeration.fromWire(Schema.Literals([");
+    const constants = generated.split("\n").filter((line) => line.startsWith("export const "));
+    const pure = constants.filter((line) => line.includes("= /* @__PURE__ */ "));
+    expect(pure.length).toBeGreaterThan(50);
+    expect(constants.filter((line) => /= (?:Schema|Enumeration)\./.test(line))).toEqual([]);
   });
 
   it("contains schemas only, no generated HTTP client", () => {

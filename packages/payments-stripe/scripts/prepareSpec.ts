@@ -87,20 +87,65 @@ const nullableEnum = (node: JsonObject): JsonObject => {
   return { ...node, enum: [...values, null] };
 };
 
-const rewrite = (node: Json): Json => {
-  if (Array.isArray(node)) return node.map(rewrite);
+/** Which side of the wire a schema describes: what we send, or what Stripe answers with. */
+type Side = "request" | "response";
+
+/**
+ * A response schema without the constraints that can only turn a legitimate
+ * answer into a decode failure. Stripe documents `maxLength` (5000) and
+ * integer-ness for its own bookkeeping; a value outside them in a response
+ * that has already succeeded (a non-idempotent create, say) must not fail the
+ * decode, so response schemas keep their types and drop the checks. A request
+ * schema keeps them: they describe what Stripe will accept.
+ */
+const withoutResponseChecks = (node: JsonObject): JsonObject => {
+  const { maxLength: _max, minLength: _min, minimum: _lo, maximum: _hi, ...rest } = node;
+  return rest["type"] === "integer" ? { ...rest, type: "number" } : rest;
+};
+
+/** The `pattern`s Stripe puts on list-URL templates, which describe no value. */
+const URL_TEMPLATE_PATTERN = /^\^\/v1\//;
+
+const rewrite = (node: Json, side: Side): Json => {
+  if (Array.isArray(node)) return node.map((item) => rewrite(item, side));
   if (!isObject(node)) return node;
   const entries = Object.entries(node).flatMap(([key, value]): Array<[string, Json]> => {
-    // The effect generator rejects a `pattern` it cannot revive (rc.117), and
-    // Stripe's patterns only describe list-URL templates, never a value.
+    // The effect generator rejects a `pattern` it cannot revive (rc.117).
+    // Only list-URL templates are dropped; `findUnsupportedPattern` has
+    // already refused any other, so none reaches here.
     if (key === "pattern" && typeof value === "string" && node["type"] === "string") return [];
-    return [[key, rewrite(value)]];
+    return [[key, rewrite(value, side)]];
   });
   const rewritten: JsonObject = Object.fromEntries(entries);
   if (rewritten["style"] === "deepObject") return optionalDeepObject(rewritten);
-  return nullableEnum(
-    nullableAnyOf(EXPANSION in rewritten ? collapseExpansion(rewritten) : rewritten),
-  );
+  const collapsed = EXPANSION in rewritten ? collapseExpansion(rewritten) : rewritten;
+  // Stripe sends `null` for an absent nested object or enum value in a
+  // response; a request never has to.
+  return side === "request"
+    ? collapsed
+    : withoutResponseChecks(nullableEnum(nullableAnyOf(collapsed)));
+};
+
+/**
+ * The first string `pattern` that is not a list-URL template, if any. Dropping
+ * a pattern that does describe a value would silently widen what decodes, so
+ * it fails the run instead.
+ */
+const findUnsupportedPattern = (node: Json): string | undefined => {
+  if (Array.isArray(node))
+    return node.map(findUnsupportedPattern).find((found) => found !== undefined);
+  if (!isObject(node)) return undefined;
+  const { pattern } = node;
+  if (
+    typeof pattern === "string" &&
+    node["type"] === "string" &&
+    !URL_TEMPLATE_PATTERN.test(pattern)
+  ) {
+    return pattern;
+  }
+  return Object.values(node)
+    .map(findUnsupportedPattern)
+    .find((found) => found !== undefined);
 };
 
 /**
@@ -122,15 +167,22 @@ export class MissingPathError extends Schema.TaggedError<MissingPathError>()("Mi
   path: Schema.String,
 }) {}
 
+/** Raised when the spec has a string `pattern` that is not a list-URL template. */
+export class UnsupportedPatternError extends Schema.TaggedError<UnsupportedPatternError>()(
+  "UnsupportedPatternError",
+  { pattern: Schema.String },
+) {}
+
 /**
- * Keep only `paths` of `spec` (every method on them), strip unsupported
- * `pattern`s and collapse expansions. Unreferenced `components` are left for
+ * Keep only `paths` of `spec` (every method on them), strip list-URL
+ * `pattern`s, collapse expansions and apply the response-side rewrites
+ * (nullability, relaxed checks) to `components` only. Unreferenced `components` are left for
  * the generator to drop: it only emits what a kept operation reaches.
  */
 export const prepareSpec = (
   spec: JsonObject,
   paths: ReadonlyArray<string>,
-): Effect.Effect<JsonObject, MissingPathError> =>
+): Effect.Effect<JsonObject, MissingPathError | UnsupportedPatternError> =>
   Effect.gen(function* () {
     const all = spec["paths"];
     if (!isObject(all)) return yield* new MissingPathError({ path: "(paths)" });
@@ -150,6 +202,21 @@ export const prepareSpec = (
           : operations,
       ]);
     }
-    const prepared = rewrite({ ...spec, paths: Object.fromEntries(kept) });
-    return isObject(prepared) ? prepared : spec;
+    const keptPaths = Object.fromEntries(kept);
+    const unsupported = findUnsupportedPattern({
+      paths: keptPaths,
+      components: spec["components"] ?? null,
+    });
+    if (unsupported !== undefined)
+      return yield* new UnsupportedPatternError({ pattern: unsupported });
+    // Request schemas live inline under `paths`; response schemas are the
+    // `components` they reference.
+    const prepared: JsonObject = {
+      ...spec,
+      paths: rewrite(keptPaths, "request"),
+      ...(spec["components"] === undefined
+        ? {}
+        : { components: rewrite(spec["components"], "response") }),
+    };
+    return prepared;
   });

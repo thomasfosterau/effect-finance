@@ -8,6 +8,10 @@
  * `PaymentProviderError` instead of being cast. An expandable field
  * (`customer`, `payment_intent`, `subscription`, …) decodes as its id or, when
  * expanded, an open JSON object; its own resource module types it in full.
+ * Every enumeration in a response (`mode`, `status`, `payment_status`, …) is
+ * lenient (`Enumeration` from the core): a value Stripe adds later decodes as
+ * `Other` carrying the raw string instead of failing a call that has already
+ * taken effect. Request enumerations stay closed.
  *
  * @example
  * ```typescript
@@ -58,7 +62,12 @@ export type SessionCreateParams = Generated.PostCheckoutSessionsRequestFormUrlEn
 export type SessionRetrieveParams = Generated.GetCheckoutSessionsSessionParams;
 /** The parameters of {@link expire}. */
 export type SessionExpireParams = Generated.PostCheckoutSessionsSessionExpireRequestFormUrlEncoded;
-/** The parameters of {@link list}. */
+/**
+ * The parameters of {@link list}. A `deepObject` query parameter is a flat,
+ * bracketed key (`"customer_details[email]": "…"`, which is also its wire
+ * name), not a nested object; `created` is the exception, since Stripe's spec
+ * gives it a `number | { gt, gte, lt, lte }` schema.
+ */
 export type SessionListParams = Generated.GetCheckoutSessionsParams;
 
 /**
