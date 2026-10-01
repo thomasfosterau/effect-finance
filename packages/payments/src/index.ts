@@ -10,6 +10,8 @@
  *   `Price`, `PaymentIntent`, `Subscription`, `Refund`, `CheckoutSession`,
  *   `BillingPortalSession`, `Money`).
  * - **Errors** — a neutral error channel (`PaymentsError` and friends).
+ * - **Idempotency keys** — `IdempotencyKey`, the branded key a caller passes
+ *   on the create and confirm operations to make a retried write safe.
  * - **Stubs** — capability layers whose every call fails with one error
  *   (`Stub`), including the "not configured ≡ down" `Stub.unavailable`.
  *
@@ -45,6 +47,7 @@ export * from "./Page.js";
 export { Money, Metadata, make as money } from "./Money.js";
 
 export * as Enumeration from "./Enumeration.js";
+export * as IdempotencyKey from "./IdempotencyKey.js";
 export * as Customer from "./Customer.js";
 export * as Product from "./Product.js";
 export * as Price from "./Price.js";
