@@ -312,6 +312,19 @@ describe("AirwallexPayments money (#68)", () => {
     expect(calls).toEqual([]);
   });
 
+  it("rejects an amount the parser would refuse before sending anything", async () => {
+    const { client, calls } = makeFakeClient(intent(1));
+    const error = await Effect.runPromise(
+      PaymentIntent.create({ amount: 4503599627370495, currency: "usd" }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(error).toMatchObject({ param: "amount" });
+    expect(calls).toEqual([]);
+  });
+
   it("rejects a negative or fractional partial-refund amount before any request", async () => {
     for (const amount of [-500, 10.5]) {
       const { client, calls } = makeFakeClient(intent(20));

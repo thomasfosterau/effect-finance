@@ -23,9 +23,11 @@
  *   parse to the same double as the amount without them.
  * - **Format.** A request amount must be a non-negative safe integer in minor
  *   units. Its decimal is built as a string and sent as the number whose JSON
- *   text is exactly that decimal; an amount with no such number (a decimal
- *   with more significant digits than a double keeps) fails instead of
- *   sending a different value.
+ *   text is exactly that decimal, and only when that number also parses back
+ *   to the same amount by the rules above. An amount with no such number (a
+ *   decimal with more significant digits than a double keeps, or an ambiguous
+ *   double) fails before anything is sent, so every amount this module sends
+ *   is one it can read back from Airwallex's echo.
  *
  * @module
  */
@@ -145,17 +147,19 @@ export const toMinorUnits = (major: number, currency: string): number => {
 /**
  * Format neutral minor units as the Airwallex major-unit number whose JSON
  * text is exactly their decimal, or `undefined` when `minor` is not a safe
- * integer or no double prints as that decimal (it has more significant
- * digits than a double keeps, as some large amounts with a fraction do).
+ * integer or the number would not read back as `minor` through
+ * {@link parseMinorUnits}: no double prints as the decimal (it has more
+ * significant digits than a double keeps), or the double is ambiguous. An
+ * amount this module could not decode from Airwallex's echo is never sent,
+ * since a write whose response fails to decode is easy to retry into a
+ * duplicate.
  */
 export const formatMinorUnits = (minor: number, currency: string): number | undefined => {
   if (!Number.isSafeInteger(minor)) return undefined;
-  const text = decimalText(minor < 0, BigInt(Math.abs(minor)), exponent(currency));
-  const major = Number(text);
-  // `JSON.stringify(major)` is `String(major)`, which drops trailing fraction
-  // zeros: send it only when that is the decimal itself.
-  const shortest = text.includes(".") ? text.replace(/\.?0+$/, "") : text;
-  return String(major) === shortest ? major : undefined;
+  const digits = exponent(currency);
+  const major = Number(decimalText(minor < 0, BigInt(Math.abs(minor)), digits));
+  // `JSON.stringify(major)` is `String(major)`, which `parseMinorUnits` reads.
+  return parseMinorUnits(major, currency) === minor ? major : undefined;
 };
 
 /**
@@ -192,7 +196,7 @@ export const toMajorNumber = (
     return value === undefined
       ? Effect.fail(
           new PaymentInvalidRequestError({
-            message: `\`${param}\` has more significant digits than Airwallex can receive exactly as a JSON number`,
+            message: `\`${param}\` cannot be sent to Airwallex as a JSON number that reads back exactly`,
             param,
           }),
         )

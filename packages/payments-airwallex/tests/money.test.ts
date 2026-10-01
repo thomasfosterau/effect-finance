@@ -81,6 +81,50 @@ describe("Airwallex money: parse", () => {
     expect(parseMinorUnits(Number("90071992547409.9"), "usd")).toBeUndefined();
   });
 
+  it("rejects an amount whose LOWER half-unit neighbour shares its double (2^45..2^46 USD)", () => {
+    // Above 2^45 major a double is 2^-7 apart, so 35184372088832.005 and
+    // 35184372088832.01 share a double while 35184372088832.015 does not:
+    // only the `m - half a minor unit` check refuses it.
+    expect(Number("35184372088832.005")).toBe(Number("35184372088832.01"));
+    expect(Number("35184372088832.015")).not.toBe(Number("35184372088832.01"));
+    expect(parseMinorUnits(Number("35184372088832.01"), "usd")).toBeUndefined();
+    expect(parseMinorUnits(Number("35184372088832.05"), "usd")).toBeUndefined();
+  });
+
+  it("rejects ambiguous three-decimal amounts above 2^42 major (KWD)", () => {
+    expect(parseMinorUnits(4398046511103.999, "kwd")).toBeDefined();
+    expect(parseMinorUnits(4398046511104.001, "kwd")).toBeUndefined();
+    expect(parseMinorUnits(4398046511104.003, "kwd")).toBeUndefined();
+  });
+
+  it("rejects an even zero-decimal integer in 2^52..2^53 (JPY) but reads odd ones", () => {
+    expect(parseMinorUnits(2 ** 52, "jpy")).toBeUndefined();
+    expect(parseMinorUnits(2 ** 52 + 2, "jpy")).toBeUndefined();
+    expect(parseMinorUnits(2 ** 53 - 2, "jpy")).toBeUndefined();
+    expect(parseMinorUnits(2 ** 52 + 1, "jpy")).toBe(2 ** 52 + 1);
+    expect(parseMinorUnits(2 ** 53 - 1, "jpy")).toBe(2 ** 53 - 1);
+  });
+
+  it("decodes every sampled accepted amount in 2^44..2^46 USD to exactly its minor units", () => {
+    let accepted = 0;
+    let refused = 0;
+    // About 53k samples: enough of both outcomes, well inside the default test timeout.
+    const step = 100_000_000_003n;
+    for (let minor = 2n ** 44n * 100n; minor < 2n ** 46n * 100n; minor += step) {
+      const text = minor.toString();
+      const parsed = parseMinorUnits(Number(`${text.slice(0, -2)}.${text.slice(-2)}`), "usd");
+      if (parsed === undefined) {
+        refused++;
+      } else {
+        accepted++;
+        expect(BigInt(parsed)).toBe(minor);
+      }
+    }
+    // Both outcomes occur, so the sweep cannot pass vacuously.
+    expect(accepted).toBeGreaterThan(1000);
+    expect(refused).toBeGreaterThan(1000);
+  });
+
   it("never decodes an amount near the top of the safe range to the wrong minor units", () => {
     for (let minor = Number.MAX_SAFE_INTEGER; minor > Number.MAX_SAFE_INTEGER - 20000; minor--) {
       const text = String(minor);
@@ -119,7 +163,7 @@ describe("Airwallex money: format", () => {
     expect(JSON.stringify(formatMinorUnits(5, "usd"))).toBe("0.05");
     expect(JSON.stringify(formatMinorUnits(5, "kwd"))).toBe("0.005");
     expect(JSON.stringify(formatMinorUnits(2000, "jpy"))).toBe("2000");
-    expect(JSON.stringify(formatMinorUnits(4503599627370495, "usd"))).toBe("45035996273704.95");
+    expect(JSON.stringify(formatMinorUnits(3518437208883199, "usd"))).toBe("35184372088831.99");
   });
 
   for (const { code, digits } of CURRENCIES) {
@@ -130,10 +174,8 @@ describe("Airwallex money: format", () => {
         const major = formatMinorUnits(minor, code);
         if (major === undefined) continue;
         const parsed = parseMinorUnits(JSON.parse(JSON.stringify(major)) as number, code);
-        // Up to 15 digits every amount reads back; above, it reads back or is
-        // refused as ambiguous, but it never reads back as another amount.
-        if (minor < 1e15) expect(parsed).toBe(minor);
-        else if (parsed !== undefined) expect(parsed).toBe(minor);
+        // Every amount that is sent reads back as exactly itself.
+        expect(parsed).toBe(minor);
       }
     });
   }
@@ -152,6 +194,16 @@ describe("Airwallex money: format", () => {
     expect(String(Number.MAX_SAFE_INTEGER / 100)).toBe("90071992547409.9");
     expect(formatMinorUnits(Number.MAX_SAFE_INTEGER, "usd")).toBeUndefined();
     expect(formatMinorUnits(Number.MAX_SAFE_INTEGER, "jpy")).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it("refuses an amount the parser would refuse (#73 follow-up: 4503599627370495 USD)", () => {
+    // The double for 45035996273704.95 is ambiguous, so Airwallex's echo of it
+    // could not be decoded; sending it would invite a duplicate on retry.
+    expect(parseMinorUnits(Number("45035996273704.95"), "usd")).toBeUndefined();
+    expect(formatMinorUnits(4503599627370495, "usd")).toBeUndefined();
+    expect(formatMinorUnits(3518437208883201, "usd")).toBeUndefined();
+    expect(formatMinorUnits(2 ** 52, "jpy")).toBeUndefined();
+    expect(formatMinorUnits(4398046511104001, "kwd")).toBeUndefined();
   });
 
   it("refuses an amount that is not a safe integer", () => {
