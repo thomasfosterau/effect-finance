@@ -130,7 +130,7 @@ describe("a retried write after a lost response is one logical write (#66)", () 
    * remembered answer. `loseFirstResponse` drops the answer to the first
    * attempt, as a timeout would: the write happened, the caller never saw it.
    */
-  const dedupingStripe = (loseFirstResponse: boolean) => {
+  const dedupingStripe = (loseFirstResponse: boolean, answerFirstWith500 = false) => {
     const seen = new Map<string, Response>();
     let writes = 0;
     let attempts = 0;
@@ -143,6 +143,10 @@ describe("a retried write after a lost response is one logical write (#66)", () 
         (() => ((writes += 1), jsonResponse(200, { ...customer, id: `cus_${writes}` })))();
       if (key !== null && remembered === undefined) seen.set(key, response.clone());
       if (loseFirstResponse && attempts === 1) throw new TypeError("fetch failed");
+      // The write was applied, but the caller is told the server failed.
+      if (answerFirstWith500 && attempts === 1) {
+        return jsonResponse(500, { error: { type: "api_error", message: "boom" } });
+      }
       return response.clone();
     });
     return { ...stub, writes: () => writes };
@@ -175,6 +179,28 @@ describe("a retried write after a lost response is one logical write (#66)", () 
     const keys = fake.calls.map((call) => call.headers.get("idempotency-key"));
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBe(keys[1]);
+  });
+
+  it("a vendor 5xx surfaces as PaymentProviderError (not PaymentNetworkError); retrying it with the same key is still one write", async () => {
+    const fake = dedupingStripe(false, true);
+    const key = IdempotencyKey.IdempotencyKey.make("write-5xx");
+    const created = await Effect.runPromise(
+      Customer.create({ email: "a@example.com", idempotencyKey: key }).pipe(
+        Effect.retry({
+          while: (error) => error._tag === "PaymentProviderError" && (error.statusCode ?? 0) >= 500,
+          times: 1,
+        }),
+        Effect.provide(
+          StripePayments.layer({
+            apiKey: Redacted.make("sk_test_not_a_real_key"),
+            maxNetworkRetries: 0,
+          }),
+        ),
+        Effect.provide(fake.http),
+      ),
+    );
+    expect(created.id).toBe("cus_1");
+    expect(fake.writes()).toBe(1);
   });
 
   it("without a key, the same retry creates a duplicate (the hazard being fixed)", async () => {

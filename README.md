@@ -123,13 +123,19 @@ const program = Customer.create({ email: "jane@example.com" }).pipe(
 
 ### Retrying a write safely
 
-A write that fails with `PaymentNetworkError` has an unknown outcome; retrying it blindly can double-charge. Create one `IdempotencyKey` per logical write _before the first attempt_, pass it as `idempotencyKey` on the create / confirm operation (`Customer.create`, `Product.create`, `Price.create`, `PaymentIntent.create` / `confirm`, `Subscription.create`, `Refund.create`, `CheckoutSession.create`) and reuse the same key on every retry:
+A write that fails with `PaymentNetworkError` (or a provider 5xx, which surfaces as `PaymentProviderError` with `statusCode >= 500`) has an unknown outcome; retrying it blindly can double-charge. Create one `IdempotencyKey` per logical write _before the first attempt_, pass it as `idempotencyKey` on the create / confirm operation (`Customer.create`, `Product.create`, `Price.create`, `PaymentIntent.create` / `confirm`, `Subscription.create`, `Refund.create`, `CheckoutSession.create`) and reuse the same key on every retry:
 
 ```typescript
 const idempotencyKey = yield * IdempotencyKey.generate; // once per logical write
 yield *
   Refund.create({ paymentIntent, idempotencyKey }).pipe(
-    Effect.retry({ while: (e) => e._tag === "PaymentNetworkError", times: 3 }),
+    Effect.retry({
+      while: (e) =>
+        e._tag === "PaymentNetworkError" ||
+        e._tag === "PaymentRateLimitError" ||
+        (e._tag === "PaymentProviderError" && (e.statusCode ?? 0) >= 500),
+      times: 3,
+    }),
   );
 ```
 
