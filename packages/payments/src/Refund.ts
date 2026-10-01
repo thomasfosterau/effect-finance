@@ -91,18 +91,28 @@ export class Refunds extends Context.Service<
   }
 >()("@effect-payments/Refunds") {}
 
-/** Create a refund. */
+/**
+ * Create a refund. Fails with `PaymentInvalidRequestError` when the provider
+ * cannot refund the given reference (a `charge` where it needs a
+ * `paymentIntent`, or the reverse).
+ */
 export const create = (params: CreateParams): Effect.Effect<Refund, PaymentsError, Refunds> =>
   Effect.flatMap(Refunds, (service) => service.create(params));
 /** Retrieve a refund by id. */
 export const retrieve = (id: string): Effect.Effect<Refund, PaymentsError, Refunds> =>
   Effect.flatMap(Refunds, (service) => service.retrieve(id));
-/** Update a refund. */
+/**
+ * Update a refund. Fails with `PaymentInvalidRequestError` on a provider
+ * without this operation.
+ */
 export const update = (
   id: string,
   params: UpdateParams,
 ): Effect.Effect<Refund, PaymentsError, Refunds> =>
   Effect.flatMap(Refunds, (service) => service.update(id, params));
-/** List refunds. */
+/**
+ * List refunds. Fails with `PaymentInvalidRequestError` on a provider
+ * without this operation.
+ */
 export const list = (params?: ListParams): Effect.Effect<Page<Refund>, PaymentsError, Refunds> =>
   Effect.flatMap(Refunds, (service) => service.list(params));

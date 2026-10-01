@@ -17,7 +17,8 @@
  *
  * @example
  * ```typescript
- * import { Effect, Redacted } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/http";
  * import * as Customer from "@thomasfosterau/effect-payments/Customer";
  * import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
  *
@@ -26,7 +27,7 @@
  * const layer = AirwallexPayments.layer({
  *   clientId: "...",
  *   apiKey: Redacted.make("..."),
- * });
+ * }).pipe(Layer.provide(FetchHttpClient.layer));
  * const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  *

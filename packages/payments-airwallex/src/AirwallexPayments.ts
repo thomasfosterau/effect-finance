@@ -75,7 +75,11 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
 // Customers
 // ---------------------------------------------------------------------------
 
-/** Airwallex implementation of the {@link CustomerNS.Customers} capability. */
+/**
+ * Airwallex customers as the {@link CustomerNS.Customers} capability. `del`
+ * fails with {@link PaymentInvalidRequestError} (Airwallex has no
+ * delete-customer endpoint).
+ */
 export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexClient> =
   Layer.effect(
     CustomerNS.Customers,
@@ -135,7 +139,11 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
 // PaymentIntents
 // ---------------------------------------------------------------------------
 
-/** Airwallex implementation of the {@link PaymentIntentNS.PaymentIntents} capability. */
+/**
+ * Airwallex payment intents as the {@link PaymentIntentNS.PaymentIntents}
+ * capability. `update` fails with {@link PaymentInvalidRequestError}; use
+ * `confirm` or `cancel`.
+ */
 export const paymentIntentsLayer: Layer.Layer<
   PaymentIntentNS.PaymentIntents,
   never,
@@ -211,7 +219,11 @@ export const paymentIntentsLayer: Layer.Layer<
 // Refunds
 // ---------------------------------------------------------------------------
 
-/** Airwallex implementation of the {@link RefundNS.Refunds} capability. */
+/**
+ * Airwallex refunds as the {@link RefundNS.Refunds} capability. A refund
+ * references a `paymentIntent`: `create` without one (a `charge` only) fails
+ * with {@link PaymentInvalidRequestError}, and so does `update`.
+ */
 export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient> = Layer.effect(
   RefundNS.Refunds,
   Effect.map(AirwallexClient, (client) =>
@@ -317,14 +329,15 @@ export const capabilities: Layer.Layer<
 > = Layer.mergeAll(customersLayer, paymentIntentsLayer, refundsLayer);
 
 /**
- * A self-contained layer providing the Airwallex client and its capabilities,
- * built from configuration.
+ * The Airwallex client and its capabilities in one layer, built from
+ * configuration. Requires an `HttpClient` (`FetchHttpClient.layer`).
  */
 export const layer = (config: AirwallexConfig) => Layer.provide(capabilities, clientLayer(config));
 
 /**
- * A self-contained layer providing the Airwallex client and its capabilities,
- * with the client built from environment variables.
+ * The Airwallex client and its capabilities in one layer, with the client
+ * built from environment variables. Requires an `HttpClient`
+ * (`FetchHttpClient.layer`).
  */
 export const layerFromEnv = (clientIdVar?: string, apiKeyVar?: string) =>
   Layer.provide(capabilities, clientLayerFromEnv(clientIdVar, apiKeyVar));

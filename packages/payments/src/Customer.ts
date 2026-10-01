@@ -101,7 +101,10 @@ export const update = (
   params: UpdateParams,
 ): Effect.Effect<Customer, PaymentsError, Customers> =>
   Effect.flatMap(Customers, (service) => service.update(id, params));
-/** Delete a customer. */
+/**
+ * Delete a customer. Fails with `PaymentInvalidRequestError` on a provider
+ * without this operation.
+ */
 export const del = (id: string): Effect.Effect<Deleted, PaymentsError, Customers> =>
   Effect.flatMap(Customers, (service) => service.del(id));
 /** List customers. */

@@ -75,7 +75,11 @@ const write = (
 // Products (catalog products)
 // ---------------------------------------------------------------------------
 
-/** PayPal implementation of the {@link ProductNS.Products} capability. */
+/**
+ * PayPal Catalog Products as the {@link ProductNS.Products} capability. `del`
+ * fails with {@link PaymentInvalidRequestError} (PayPal cannot delete a
+ * product), and so does an `update` without a `description`.
+ */
 export const productsLayer: Layer.Layer<ProductNS.Products, never, PayPalClient> = Layer.effect(
   ProductNS.Products,
   Effect.map(PayPalClient, (client) =>
@@ -144,7 +148,12 @@ export const productsLayer: Layer.Layer<ProductNS.Products, never, PayPalClient>
 // Prices (billing plans)
 // ---------------------------------------------------------------------------
 
-/** PayPal implementation of the {@link PriceNS.Prices} capability. */
+/**
+ * PayPal Billing Plans as the {@link PriceNS.Prices} capability. A one-time
+ * price fails `create` with {@link PaymentInvalidRequestError} (plans are
+ * recurring only), and `update` can only toggle `active` (activate /
+ * deactivate); any other update fails the same way.
+ */
 export const pricesLayer: Layer.Layer<PriceNS.Prices, never, PayPalClient> = Layer.effect(
   PriceNS.Prices,
   Effect.map(PayPalClient, (client) =>
@@ -236,7 +245,11 @@ export const pricesLayer: Layer.Layer<PriceNS.Prices, never, PayPalClient> = Lay
 // PaymentIntents (orders)
 // ---------------------------------------------------------------------------
 
-/** PayPal implementation of the {@link PaymentIntentNS.PaymentIntents} capability. */
+/**
+ * PayPal Orders as the {@link PaymentIntentNS.PaymentIntents} capability;
+ * `confirm` captures the order. `update`, `cancel` and `list` fail with
+ * {@link PaymentInvalidRequestError}.
+ */
 export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, never, PayPalClient> =
   Layer.effect(
     PaymentIntentNS.PaymentIntents,
@@ -298,7 +311,10 @@ export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, ne
 // Subscriptions
 // ---------------------------------------------------------------------------
 
-/** PayPal implementation of the {@link SubscriptionNS.Subscriptions} capability. */
+/**
+ * PayPal Subscriptions as the {@link SubscriptionNS.Subscriptions} capability.
+ * `update` and `list` fail with {@link PaymentInvalidRequestError}.
+ */
 export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never, PayPalClient> =
   Layer.effect(
     SubscriptionNS.Subscriptions,
@@ -353,7 +369,12 @@ export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never
 // Refunds (capture refunds)
 // ---------------------------------------------------------------------------
 
-/** PayPal implementation of the {@link RefundNS.Refunds} capability. */
+/**
+ * PayPal capture refunds as the {@link RefundNS.Refunds} capability: refund a
+ * `charge` (a capture id) or a captured `paymentIntent`. `create` with no
+ * capture to refund, `update` and `list` fail with
+ * {@link PaymentInvalidRequestError}.
+ */
 export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = Layer.effect(
   RefundNS.Refunds,
   Effect.map(PayPalClient, (client) =>
@@ -467,14 +488,15 @@ export const capabilities: Layer.Layer<
 );
 
 /**
- * A self-contained layer providing the PayPal client and its capabilities,
- * built from configuration.
+ * The PayPal client and its capabilities in one layer, built from
+ * configuration. Requires an `HttpClient` (`FetchHttpClient.layer`).
  */
 export const layer = (config: PayPalConfig) => Layer.provide(capabilities, clientLayer(config));
 
 /**
- * A self-contained layer providing the PayPal client and its capabilities, with
- * the client built from environment variables.
+ * The PayPal client and its capabilities in one layer, with the client
+ * built from environment variables. Requires an `HttpClient`
+ * (`FetchHttpClient.layer`).
  */
 export const layerFromEnv = (clientIdVar?: string, clientSecretVar?: string) =>
   Layer.provide(capabilities, clientLayerFromEnv(clientIdVar, clientSecretVar));

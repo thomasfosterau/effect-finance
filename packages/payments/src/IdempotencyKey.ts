@@ -18,7 +18,7 @@
  *   parameters with an error, not the original outcome. Stripe's
  *   `idempotency_error` surfaces as `PaymentProviderError` with code
  *   `StripeIdempotencyError` (not `PaymentInvalidRequestError`); PayPal's and
- *   Airwallex's behaviour here is unverified.
+ *   Airwallex's behaviour here is unverified (#93).
  * - **Only on create and confirm operations** (`Customer.create`,
  *   `Product.create`, `Price.create`, `PaymentIntent.create` / `confirm`,
  *   `Subscription.create`, `Refund.create`, `CheckoutSession.create`): the
@@ -38,9 +38,8 @@
  *   within hours as safe and one after days as a new write.
  * - **The shape is the lowest common denominator**: 1 to 64 characters from
  *   `A-Z a-z 0-9 _ -` (a UUID is 36). The vendors' own limits (Stripe 255,
- *   PayPal about 108, Airwallex about 64) and replay windows are from memory,
- *   *unverified* against their documentation, which was unreachable when this
- *   was written; the shape is deliberately conservative.
+ *   PayPal about 108, Airwallex about 64) and replay windows are unverified
+ *   (#93); the shape is deliberately conservative.
  *
  * @example
  * ```typescript

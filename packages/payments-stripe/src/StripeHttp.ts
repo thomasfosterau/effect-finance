@@ -118,16 +118,15 @@ export interface RequestOptions {
    * Create it once, before the first attempt, and pass the same value on
    * every retry of that write; a fresh key per attempt defeats the
    * deduplication. It is sent on whatever method you pass it to; Stripe is
-   * understood to ignore it on a `GET` and `DELETE` (unverified: the vendor
-   * documentation was unreachable), unlike the PayPal and Airwallex clients,
-   * which refuse a key on a non-`POST`. An empty key, like an empty
-   * `stripeAccount`, fails with `PaymentInvalidRequestError` before anything
-   * is sent. Without one, a
+   * understood to ignore it on a `GET` and `DELETE` (unverified, #93), unlike
+   * the PayPal and Airwallex clients, which refuse a key on a non-`POST`. An
+   * empty key, like an empty `stripeAccount`, fails with
+   * `PaymentInvalidRequestError` before anything is sent. Without one, a
    * `POST` that may be retried by the transport gets a generated key shared
    * by all of its attempts (which covers the transport's retries only, never
    * a caller's). The transport sends the value verbatim; Stripe accepts up
-   * to 255 characters and rejects the same key reused with different
-   * parameters.
+   * to 255 characters (unverified, #93) and rejects the same key reused with
+   * different parameters.
    */
   readonly idempotencyKey?: string | undefined;
   /** A connected account to act as (`Stripe-Account`), overriding the configured one. */

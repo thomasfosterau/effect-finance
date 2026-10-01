@@ -121,7 +121,10 @@ export const create = (
 /** Retrieve a subscription by id. */
 export const retrieve = (id: string): Effect.Effect<Subscription, PaymentsError, Subscriptions> =>
   Effect.flatMap(Subscriptions, (service) => service.retrieve(id));
-/** Update a subscription. */
+/**
+ * Update a subscription. Fails with `PaymentInvalidRequestError` on a provider
+ * without this operation.
+ */
 export const update = (
   id: string,
   params: UpdateParams,
@@ -130,7 +133,10 @@ export const update = (
 /** Cancel a subscription. */
 export const cancel = (id: string): Effect.Effect<Subscription, PaymentsError, Subscriptions> =>
   Effect.flatMap(Subscriptions, (service) => service.cancel(id));
-/** List subscriptions. */
+/**
+ * List subscriptions. Fails with `PaymentInvalidRequestError` on a provider
+ * without this operation.
+ */
 export const list = (
   params?: ListParams,
 ): Effect.Effect<Page<Subscription>, PaymentsError, Subscriptions> =>
