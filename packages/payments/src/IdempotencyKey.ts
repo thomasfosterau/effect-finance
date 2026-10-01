@@ -14,8 +14,11 @@
  *   attempt* ({@link generate}) and passed unchanged on every retry of that
  *   write. A fresh key per attempt defeats the deduplication, and a key held
  *   by a layer or a scope would be shared by unrelated writes. Never reuse a
- *   key for a different write: providers reject the same key with different
- *   parameters (`PaymentInvalidRequestError`).
+ *   key for a different write: a provider answers the same key with different
+ *   parameters with an error, not the original outcome. Stripe's
+ *   `idempotency_error` surfaces as `PaymentProviderError` with code
+ *   `StripeIdempotencyError` (not `PaymentInvalidRequestError`); PayPal's and
+ *   Airwallex's behaviour here is unverified.
  * - **Only on create and confirm operations** (`Customer.create`,
  *   `Product.create`, `Price.create`, `PaymentIntent.create` / `confirm`,
  *   `Subscription.create`, `Refund.create`, `CheckoutSession.create`): the
@@ -23,9 +26,13 @@
  *   semantics and naturally repeatable. `Subscription.cancel` and
  *   `PaymentIntent.cancel` take none: PayPal cannot honour a key there, and a
  *   key a provider silently dropped would be worse than none.
- * - **Retry only when the outcome is unknown** (`PaymentNetworkError`, a
- *   timeout, a 5xx). A `PaymentInvalidRequestError` will fail the same way
- *   again.
+ * - **Retry only when the outcome is unknown or the write was not applied**:
+ *   `PaymentNetworkError` (a timeout, a dropped connection),
+ *   `PaymentProviderError` with `statusCode >= 500` (a vendor 5xx surfaces as
+ *   this, not as `PaymentNetworkError`) and `PaymentRateLimitError` (back off
+ *   for `retryAfter` first). Do not retry `PaymentInvalidRequestError`,
+ *   `PaymentAuthenticationError`, or a `PaymentProviderError` below 500
+ *   (including `StripeIdempotencyError`): they fail the same way again.
  * - **A window, not forever.** Providers remember a key for a limited time
  *   that differs per provider and is not promised by the type. Treat a retry
  *   within hours as safe and one after days as a new write.
@@ -47,7 +54,10 @@
  *     return yield* Refund.create({ paymentIntent, idempotencyKey }).pipe(
  *       Effect.retry({
  *         // the same key on every attempt
- *         while: (error) => error._tag === "PaymentNetworkError",
+ *         while: (error) =>
+ *           error._tag === "PaymentNetworkError" ||
+ *           error._tag === "PaymentRateLimitError" ||
+ *           (error._tag === "PaymentProviderError" && (error.statusCode ?? 0) >= 500),
  *         schedule: Schedule.exponential("200 millis"),
  *         times: 3,
  *       }),
