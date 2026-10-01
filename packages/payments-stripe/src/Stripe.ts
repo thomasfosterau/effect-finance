@@ -23,6 +23,7 @@ import {
 } from "@thomasfosterau/effect-payments";
 import { PROVIDER, retryAfterOf, toPaymentsError } from "./internal/error.js";
 import { encodeForm } from "./internal/form.js";
+import { checkOptions } from "./internal/options.js";
 import { omitUndefined } from "./internal/omitUndefined.js";
 import { StripeService } from "./internal/sdk.js";
 import { DEFAULT_API_VERSION, StripeHttp, type StripeRequest } from "./StripeHttp.js";
@@ -91,29 +92,32 @@ const handleStripeError = (error: unknown): PaymentsError => {
 export const transport = (stripe: Stripe): StripeHttp["Service"] =>
   StripeHttp.of({
     request: (request: StripeRequest) =>
-      Effect.tryPromise({
-        try: (): Promise<unknown> => {
-          const options = omitUndefined({
-            idempotencyKey: request.idempotencyKey,
-            stripeAccount: request.stripeAccount,
-          });
-          if (request.upload) {
-            // SAFETY: an upload's parameters are the Files API's; the
-            // resource module (`File.create`) types them as such.
-            return stripe.files.create(request.params as Stripe.FileCreateParams, options);
-          }
-          if (request.method === "POST") {
-            // SAFETY: `rawRequest` form-encodes any object, as the SDK's
-            // resource methods do.
-            const params = request.params as Record<string, unknown> | undefined;
-            return stripe.rawRequest(request.method, request.path, params, options);
-          }
-          const query = encodeForm(request.params);
-          const target = query === "" ? request.path : `${request.path}?${query}`;
-          return stripe.rawRequest(request.method, target, undefined, options);
-        },
-        catch: handleStripeError,
-      }),
+      Effect.andThen(
+        checkOptions(request),
+        Effect.tryPromise({
+          try: (): Promise<unknown> => {
+            const options = omitUndefined({
+              idempotencyKey: request.idempotencyKey,
+              stripeAccount: request.stripeAccount,
+            });
+            if (request.upload) {
+              // SAFETY: an upload's parameters are the Files API's; the
+              // resource module (`File.create`) types them as such.
+              return stripe.files.create(request.params as Stripe.FileCreateParams, options);
+            }
+            if (request.method === "POST") {
+              // SAFETY: `rawRequest` form-encodes any object, as the SDK's
+              // resource methods do.
+              const params = request.params as Record<string, unknown> | undefined;
+              return stripe.rawRequest(request.method, request.path, params, options);
+            }
+            const query = encodeForm(request.params);
+            const target = query === "" ? request.path : `${request.path}?${query}`;
+            return stripe.rawRequest(request.method, target, undefined, options);
+          },
+          catch: handleStripeError,
+        }),
+      ),
   });
 
 /**

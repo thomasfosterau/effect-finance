@@ -29,7 +29,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a person
@@ -37,8 +37,9 @@ import type { StripeHttp } from "./StripeHttp.js";
 export const create = (
   accountId: string,
   params: Stripe.AccountCreatePersonParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Person, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/accounts/${accountId}/persons`, params);
+  stripeRequest("POST", path`/v1/accounts/${accountId}/persons`, params, options);
 
 /**
  * Retrieve a person
@@ -47,8 +48,9 @@ export const retrieve = (
   accountId: string,
   id: string,
   params?: Stripe.AccountRetrievePersonParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Person, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/accounts/${accountId}/persons/${id}`, params);
+  stripeRequest("GET", path`/v1/accounts/${accountId}/persons/${id}`, params, options);
 
 /**
  * Update a person
@@ -57,8 +59,9 @@ export const update = (
   accountId: string,
   id: string,
   params?: Stripe.AccountUpdatePersonParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Person, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/accounts/${accountId}/persons/${id}`, params);
+  stripeRequest("POST", path`/v1/accounts/${accountId}/persons/${id}`, params, options);
 
 /**
  * Delete a person
@@ -66,8 +69,9 @@ export const update = (
 export const del = (
   accountId: string,
   id: string,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.DeletedPerson, StripeError, StripeHttp> =>
-  stripeRequest("DELETE", path`/v1/accounts/${accountId}/persons/${id}`);
+  stripeRequest("DELETE", path`/v1/accounts/${accountId}/persons/${id}`, undefined, options);
 
 /**
  * List persons
@@ -75,5 +79,6 @@ export const del = (
 export const list = (
   accountId: string,
   params?: Stripe.AccountListPersonsParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Person>, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/accounts/${accountId}/persons`, params);
+  stripeRequest("GET", path`/v1/accounts/${accountId}/persons`, params, options);

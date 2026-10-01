@@ -5,6 +5,7 @@ import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
 import {
   PaymentAuthenticationError,
   PaymentConfigError,
+  PaymentInvalidRequestError,
   PaymentNetworkError,
 } from "@thomasfosterau/effect-payments";
 import { PayPalClient, layerFromEnv, make, type PayPalConfig } from "../src/PayPal.ts";
@@ -586,5 +587,85 @@ describe("PayPal client secrets", () => {
         expect(JSON.stringify(error.cause ?? null)).not.toContain(leak);
       }
     }
+  });
+});
+
+describe("PayPal client requestId (PayPal-Request-Id)", () => {
+  const order = { method: "POST", path: "/v2/checkout/orders", body: { a: 1 } } as const;
+
+  it("sends the requestId as PayPal-Request-Id on a POST", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(201, { id: "ORDER-1" }));
+    await Effect.runPromise(
+      Effect.flatMap(make(config({})), (client) =>
+        client.request({ ...order, requestId: "order-7" }),
+      ).pipe(Effect.provide(http)),
+    );
+    const post = calls.find((c) => c.url.endsWith("/v2/checkout/orders"))!;
+    expect(post.headers.get("paypal-request-id")).toBe("order-7");
+    expect(post.body).toBe(JSON.stringify({ a: 1 }));
+  });
+
+  it("sends the header on a bodyless POST too", async () => {
+    const { http, calls } = stubFetch(() => new Response(null, { status: 204 }));
+    await Effect.runPromise(
+      Effect.flatMap(make(config({})), (client) =>
+        client.request({
+          method: "POST",
+          path: "/v1/billing/plans/P-1/activate",
+          requestId: "r-1",
+        }),
+      ).pipe(Effect.provide(http)),
+    );
+    const post = calls.find((c) => c.url.endsWith("/activate"))!;
+    expect(post.headers.get("paypal-request-id")).toBe("r-1");
+  });
+
+  it("sends no header without a requestId", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(201, { id: "ORDER-1" }));
+    await Effect.runPromise(
+      Effect.flatMap(make(config({})), (client) => client.request(order)).pipe(
+        Effect.provide(http),
+      ),
+    );
+    const post = calls.find((c) => c.url.endsWith("/v2/checkout/orders"))!;
+    expect(post.headers.get("paypal-request-id")).toBeNull();
+  });
+
+  it("sends the same id when the caller retries a write that failed in flight", async () => {
+    let attempts = 0;
+    const { http, calls } = stubFetch(() => {
+      attempts += 1;
+      if (attempts === 1) throw new TypeError("fetch failed");
+      return jsonResponse(201, { id: "ORDER-1" });
+    });
+    const outcome = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        const write = client.request({ ...order, requestId: "order-8" });
+        const first = yield* Effect.flip(write);
+        const second = yield* write;
+        return { first, second };
+      }).pipe(Effect.provide(http)),
+    );
+    expect(outcome.first).toBeInstanceOf(PaymentNetworkError);
+    expect(outcome.second).toMatchObject({ id: "ORDER-1" });
+    const posts = calls.filter((c) => c.url.endsWith("/v2/checkout/orders"));
+    expect(posts.map((c) => c.headers.get("paypal-request-id"))).toEqual(["order-8", "order-8"]);
+  });
+
+  it("refuses an empty id, or an id on a method that is not POST, before sending anything", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, {}));
+    const errors = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        return yield* Effect.all([
+          Effect.flip(client.request({ ...order, requestId: "" })),
+          Effect.flip(client.request({ method: "GET", path: "/v2/x", requestId: "r" })),
+          Effect.flip(client.request({ method: "PATCH", path: "/v2/x", requestId: "r" })),
+        ]);
+      }).pipe(Effect.provide(http)),
+    );
+    for (const error of errors) expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(calls).toEqual([]);
   });
 });

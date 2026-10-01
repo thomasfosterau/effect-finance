@@ -23,7 +23,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve an issuing transaction
@@ -31,8 +31,9 @@ import type { StripeHttp } from "./StripeHttp.js";
 export const retrieve = (
   id: string,
   params?: Stripe.Issuing.TransactionRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Issuing.Transaction, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/issuing/transactions/${id}`, params);
+  stripeRequest("GET", path`/v1/issuing/transactions/${id}`, params, options);
 
 /**
  * Update an issuing transaction
@@ -40,13 +41,15 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.Issuing.TransactionUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Issuing.Transaction, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/issuing/transactions/${id}`, params);
+  stripeRequest("POST", path`/v1/issuing/transactions/${id}`, params, options);
 
 /**
  * List issuing transactions
  */
 export const list = (
   params?: Stripe.Issuing.TransactionListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Transaction>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/issuing/transactions", params);
+  stripeRequest("GET", "/v1/issuing/transactions", params, options);

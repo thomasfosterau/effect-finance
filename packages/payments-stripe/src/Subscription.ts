@@ -29,15 +29,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a subscription
  */
 export const create = (
   params: Stripe.SubscriptionCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/subscriptions", params);
+  stripeRequest("POST", "/v1/subscriptions", params, options);
 
 /**
  * Retrieve a subscription
@@ -45,8 +46,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.SubscriptionRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/subscriptions/${id}`, params);
+  stripeRequest("GET", path`/v1/subscriptions/${id}`, params, options);
 
 /**
  * Update a subscription
@@ -54,8 +56,9 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.SubscriptionUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/subscriptions/${id}`, params);
+  stripeRequest("POST", path`/v1/subscriptions/${id}`, params, options);
 
 /**
  * Cancel a subscription
@@ -63,13 +66,15 @@ export const update = (
 export const cancel = (
   id: string,
   params?: Stripe.SubscriptionCancelParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Subscription, StripeError, StripeHttp> =>
-  stripeRequest("DELETE", path`/v1/subscriptions/${id}`, params);
+  stripeRequest("DELETE", path`/v1/subscriptions/${id}`, params, options);
 
 /**
  * List subscriptions
  */
 export const list = (
   params?: Stripe.SubscriptionListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Subscription>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/subscriptions", params);
+  stripeRequest("GET", "/v1/subscriptions", params, options);

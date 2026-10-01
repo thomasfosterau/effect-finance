@@ -28,7 +28,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a terminal connection token
@@ -39,5 +39,6 @@ import type { StripeHttp } from "./StripeHttp.js";
  */
 export const create = (
   params?: Stripe.Terminal.ConnectionTokenCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Terminal.ConnectionToken, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/terminal/connection_tokens", params);
+  stripeRequest("POST", "/v1/terminal/connection_tokens", params, options);

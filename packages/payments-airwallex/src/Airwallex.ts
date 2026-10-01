@@ -34,6 +34,7 @@ import {
 } from "effect/unstable/http";
 import {
   PaymentConfigError,
+  PaymentInvalidRequestError,
   PaymentNetworkError,
   PaymentProviderError,
   type PaymentsError,
@@ -81,6 +82,19 @@ export interface AirwallexRequest {
   readonly path: string;
   readonly query?: Record<string, string | number | undefined> | undefined;
   readonly body?: unknown | undefined;
+  /**
+   * The `request_id` of a `POST`, written into the JSON body in place of any
+   * `request_id` already there (the capability layers put a fresh one on every
+   * call). Makes one logical write safe to repeat: create it once, before the
+   * first attempt, and send the same value on every retry of that write;
+   * Airwallex then returns the original result for the same parameters (and,
+   * unverified, rejects the same id with different ones). Airwallex limits the id to about
+   * 64 characters (unverified here). An empty string, a non-`POST` request, or
+   * a body that is present but not a JSON object fails with
+   * `PaymentInvalidRequestError` before anything is sent, rather than
+   * silently dropping the id.
+   */
+  readonly requestId?: string | undefined;
 }
 
 /**
@@ -162,6 +176,38 @@ const timeoutOf = (
           message: `Airwallex ${name} must be a positive number of milliseconds, or Infinity for none (got ${millis})`,
         }),
       );
+
+/**
+ * The request body with the caller's `requestId` written into it as
+ * `request_id`, or the invalid-request error when the id cannot be honoured
+ * (empty, not a `POST`, or a body that is not an object). Without a
+ * `requestId` the body is returned as it is.
+ */
+const withRequestId = (
+  req: AirwallexRequest,
+): Effect.Effect<unknown, PaymentInvalidRequestError> => {
+  if (req.requestId === undefined) return Effect.succeed(req.body);
+  if (req.requestId === "") {
+    return Effect.fail(
+      new PaymentInvalidRequestError({ message: "Airwallex requestId must not be empty" }),
+    );
+  }
+  if (req.method !== "POST") {
+    return Effect.fail(
+      new PaymentInvalidRequestError({
+        message: `Airwallex requestId applies to POST requests only (got ${req.method})`,
+      }),
+    );
+  }
+  if (req.body != null && (typeof req.body !== "object" || Array.isArray(req.body))) {
+    return Effect.fail(
+      new PaymentInvalidRequestError({
+        message: "Airwallex requestId needs a JSON object body to carry request_id",
+      }),
+    );
+  }
+  return Effect.succeed({ ...req.body, request_id: req.requestId });
+};
 
 /**
  * Build an Airwallex client from configuration.
@@ -270,6 +316,7 @@ export const make = (
 
     const request = (req: AirwallexRequest): Effect.Effect<unknown, PaymentsError> =>
       Effect.gen(function* () {
+        const body = yield* withRequestId(req);
         const token = yield* getToken;
         const base = HttpClientRequest.make(req.method)(
           buildUrl(baseUrl, req.path, req.query),
@@ -278,8 +325,8 @@ export const make = (
         // this restores the pre-HttpClient behaviour and keeps the client
         // consistent with the PayPal one.
         const reply = yield* send(
-          req.body != null
-            ? HttpClientRequest.bodyJsonUnsafe(base, req.body)
+          body != null
+            ? HttpClientRequest.bodyJsonUnsafe(base, body)
             : HttpClientRequest.setHeader(base, "Content-Type", "application/json"),
           timeout,
           "request",

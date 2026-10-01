@@ -26,15 +26,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a subscription schedule
  */
 export const create = (
   params?: Stripe.SubscriptionScheduleCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/subscription_schedules", params);
+  stripeRequest("POST", "/v1/subscription_schedules", params, options);
 
 /**
  * Retrieve a subscription schedule
@@ -42,8 +43,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.SubscriptionScheduleRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/subscription_schedules/${id}`, params);
+  stripeRequest("GET", path`/v1/subscription_schedules/${id}`, params, options);
 
 /**
  * Update a subscription schedule
@@ -51,8 +53,9 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.SubscriptionScheduleUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/subscription_schedules/${id}`, params);
+  stripeRequest("POST", path`/v1/subscription_schedules/${id}`, params, options);
 
 /**
  * Cancel a subscription schedule
@@ -60,8 +63,9 @@ export const update = (
 export const cancel = (
   id: string,
   params?: Stripe.SubscriptionScheduleCancelParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/subscription_schedules/${id}/cancel`, params);
+  stripeRequest("POST", path`/v1/subscription_schedules/${id}/cancel`, params, options);
 
 /**
  * Release a subscription schedule
@@ -69,13 +73,15 @@ export const cancel = (
 export const release = (
   id: string,
   params?: Stripe.SubscriptionScheduleReleaseParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SubscriptionSchedule, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/subscription_schedules/${id}/release`, params);
+  stripeRequest("POST", path`/v1/subscription_schedules/${id}/release`, params, options);
 
 /**
  * List subscription schedules
  */
 export const list = (
   params?: Stripe.SubscriptionScheduleListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.SubscriptionSchedule>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/subscription_schedules", params);
+  stripeRequest("GET", "/v1/subscription_schedules", params, options);

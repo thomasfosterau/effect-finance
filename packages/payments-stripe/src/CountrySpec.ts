@@ -24,7 +24,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a country spec
@@ -32,13 +32,15 @@ import type { StripeHttp } from "./StripeHttp.js";
 export const retrieve = (
   country: string,
   params?: Stripe.CountrySpecRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.CountrySpec, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/country_specs/${country}`, params);
+  stripeRequest("GET", path`/v1/country_specs/${country}`, params, options);
 
 /**
  * List country specs
  */
 export const list = (
   params?: Stripe.CountrySpecListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.CountrySpec>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/country_specs", params);
+  stripeRequest("GET", "/v1/country_specs", params, options);

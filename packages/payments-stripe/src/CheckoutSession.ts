@@ -40,7 +40,7 @@ import type { Effect } from "effect";
 import * as Generated from "./internal/generated/schemas.js";
 import { stripeRequestDecoded } from "./internal/decode.js";
 import { path, type StripeError } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /** The Checkout Session object, as a `Schema` (the decoder for every response here). */
 export const Session = Generated.Checkout_session;
@@ -66,8 +66,16 @@ export type SessionListParams = Generated.GetCheckoutSessionsParams;
  */
 export const create = (
   params: SessionCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Session, StripeError, StripeHttp> =>
-  stripeRequestDecoded("checkout session", Session, "POST", "/v1/checkout/sessions", params);
+  stripeRequestDecoded(
+    "checkout session",
+    Session,
+    "POST",
+    "/v1/checkout/sessions",
+    params,
+    options,
+  );
 
 /**
  * Retrieve a checkout session
@@ -75,6 +83,7 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: SessionRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Session, StripeError, StripeHttp> =>
   stripeRequestDecoded(
     "checkout session",
@@ -82,6 +91,7 @@ export const retrieve = (
     "GET",
     path`/v1/checkout/sessions/${id}`,
     params,
+    options,
   );
 
 /**
@@ -90,6 +100,7 @@ export const retrieve = (
 export const expire = (
   id: string,
   params?: SessionExpireParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Session, StripeError, StripeHttp> =>
   stripeRequestDecoded(
     "checkout session",
@@ -97,6 +108,7 @@ export const expire = (
     "POST",
     path`/v1/checkout/sessions/${id}/expire`,
     params,
+    options,
   );
 
 /**
@@ -104,6 +116,7 @@ export const expire = (
  */
 export const list = (
   params?: SessionListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<SessionList, StripeError, StripeHttp> =>
   stripeRequestDecoded(
     "checkout session list",
@@ -111,4 +124,5 @@ export const list = (
     "GET",
     "/v1/checkout/sessions",
     params,
+    options,
   );

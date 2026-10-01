@@ -24,7 +24,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a review
@@ -32,16 +32,18 @@ import type { StripeHttp } from "./StripeHttp.js";
 export const retrieve = (
   id: string,
   params?: Stripe.ReviewRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Review, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/reviews/${id}`, params);
+  stripeRequest("GET", path`/v1/reviews/${id}`, params, options);
 
 /**
  * List reviews
  */
 export const list = (
   params?: Stripe.ReviewListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Review>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/reviews", params);
+  stripeRequest("GET", "/v1/reviews", params, options);
 
 /**
  * Approve a review
@@ -49,5 +51,6 @@ export const list = (
 export const approve = (
   id: string,
   params?: Stripe.ReviewApproveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Review, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/reviews/${id}/approve`, params);
+  stripeRequest("POST", path`/v1/reviews/${id}/approve`, params, options);

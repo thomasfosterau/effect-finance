@@ -25,7 +25,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a transaction
@@ -33,13 +33,15 @@ import type { StripeHttp } from "./StripeHttp.js";
 export const retrieve = (
   id: string,
   params?: Stripe.Treasury.TransactionRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Treasury.Transaction, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/treasury/transactions/${id}`, params);
+  stripeRequest("GET", path`/v1/treasury/transactions/${id}`, params, options);
 
 /**
  * List transactions
  */
 export const list = (
   params: Stripe.Treasury.TransactionListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Treasury.Transaction>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/treasury/transactions", params);
+  stripeRequest("GET", "/v1/treasury/transactions", params, options);

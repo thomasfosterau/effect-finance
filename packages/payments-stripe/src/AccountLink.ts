@@ -31,12 +31,13 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create an account link
  */
 export const create = (
   params: Stripe.AccountLinkCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.AccountLink, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/account_links", params);
+  stripeRequest("POST", "/v1/account_links", params, options);

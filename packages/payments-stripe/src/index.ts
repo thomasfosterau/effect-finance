@@ -97,4 +97,4 @@ export * as SubscriptionSchedule from "./SubscriptionSchedule.js";
 export * as Webhook from "./Webhook.js";
 
 export type { StripeError as StripeErrors } from "./internal/index.js";
-export type { StripeHttpConfig } from "./StripeHttp.js";
+export type { RequestOptions, StripeHttpConfig } from "./StripeHttp.js";

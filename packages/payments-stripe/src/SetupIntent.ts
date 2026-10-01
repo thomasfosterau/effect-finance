@@ -26,15 +26,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a setup intent
  */
 export const create = (
   params?: Stripe.SetupIntentCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/setup_intents", params);
+  stripeRequest("POST", "/v1/setup_intents", params, options);
 
 /**
  * Retrieve a setup intent
@@ -42,8 +43,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.SetupIntentRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/setup_intents/${id}`, params);
+  stripeRequest("GET", path`/v1/setup_intents/${id}`, params, options);
 
 /**
  * Update a setup intent
@@ -51,8 +53,9 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.SetupIntentUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/setup_intents/${id}`, params);
+  stripeRequest("POST", path`/v1/setup_intents/${id}`, params, options);
 
 /**
  * Confirm a setup intent
@@ -60,8 +63,9 @@ export const update = (
 export const confirm = (
   id: string,
   params?: Stripe.SetupIntentConfirmParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/setup_intents/${id}/confirm`, params);
+  stripeRequest("POST", path`/v1/setup_intents/${id}/confirm`, params, options);
 
 /**
  * Cancel a setup intent
@@ -69,13 +73,15 @@ export const confirm = (
 export const cancel = (
   id: string,
   params?: Stripe.SetupIntentCancelParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.SetupIntent, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/setup_intents/${id}/cancel`, params);
+  stripeRequest("POST", path`/v1/setup_intents/${id}/cancel`, params, options);
 
 /**
  * List setup intents
  */
 export const list = (
   params?: Stripe.SetupIntentListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.SetupIntent>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/setup_intents", params);
+  stripeRequest("GET", "/v1/setup_intents", params, options);

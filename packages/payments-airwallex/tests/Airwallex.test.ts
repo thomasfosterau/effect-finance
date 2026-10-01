@@ -5,6 +5,7 @@ import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
 import {
   PaymentAuthenticationError,
   PaymentConfigError,
+  PaymentInvalidRequestError,
   PaymentNetworkError,
 } from "@thomasfosterau/effect-payments";
 import { AirwallexClient, layerFromEnv, make, type AirwallexConfig } from "../src/Airwallex.ts";
@@ -593,5 +594,88 @@ describe("Airwallex client secrets", () => {
         expect(JSON.stringify(error.cause ?? null)).not.toContain(leak);
       }
     }
+  });
+});
+
+describe("Airwallex client requestId (request_id)", () => {
+  const create = {
+    method: "POST",
+    path: "/api/v1/pa/customers/create",
+    body: { request_id: "fresh-per-call", email: "a@b.com" },
+  } as const;
+  const bodyOf = (call: CapturedRequest | undefined) => JSON.parse(call?.body ?? "null");
+
+  it("writes the requestId into the body, replacing the layer's request_id", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(201, { id: "cus_1" }));
+    await Effect.runPromise(
+      Effect.flatMap(make(config({})), (client) =>
+        client.request({ ...create, requestId: "signup-7" }),
+      ).pipe(Effect.provide(http)),
+    );
+    const post = calls.find((c) => c.url.endsWith("/customers/create"))!;
+    expect(bodyOf(post)).toEqual({ request_id: "signup-7", email: "a@b.com" });
+  });
+
+  it("creates a body when the POST had none", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "pi_1" }));
+    await Effect.runPromise(
+      Effect.flatMap(make(config({})), (client) =>
+        client.request({
+          method: "POST",
+          path: "/api/v1/pa/payment_intents/pi_1/cancel",
+          requestId: "c-1",
+        }),
+      ).pipe(Effect.provide(http)),
+    );
+    expect(bodyOf(calls.find((c) => c.url.endsWith("/cancel")))).toEqual({ request_id: "c-1" });
+  });
+
+  it("leaves the body as it was without a requestId", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(201, { id: "cus_1" }));
+    await Effect.runPromise(
+      Effect.flatMap(make(config({})), (client) => client.request(create)).pipe(
+        Effect.provide(http),
+      ),
+    );
+    expect(bodyOf(calls.find((c) => c.url.endsWith("/customers/create")))).toEqual(create.body);
+  });
+
+  it("sends the same request_id when the caller retries a write that failed in flight", async () => {
+    let attempts = 0;
+    const { http, calls } = stubFetch(() => {
+      attempts += 1;
+      if (attempts === 1) throw new TypeError("fetch failed");
+      return jsonResponse(201, { id: "cus_1" });
+    });
+    const outcome = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        const write = client.request({ ...create, requestId: "signup-8" });
+        const first = yield* Effect.flip(write);
+        const second = yield* write;
+        return { first, second };
+      }).pipe(Effect.provide(http)),
+    );
+    expect(outcome.first).toBeInstanceOf(PaymentNetworkError);
+    expect(outcome.second).toMatchObject({ id: "cus_1" });
+    const posts = calls.filter((c) => c.url.endsWith("/customers/create"));
+    expect(posts.map((c) => bodyOf(c).request_id)).toEqual(["signup-8", "signup-8"]);
+  });
+
+  it("refuses an empty id, a non-POST, or a non-object body, before sending anything", async () => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, {}));
+    const errors = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* make(config({}));
+        return yield* Effect.all([
+          Effect.flip(client.request({ ...create, requestId: "" })),
+          Effect.flip(client.request({ method: "GET", path: "/api/v1/x", requestId: "r" })),
+          Effect.flip(client.request({ ...create, body: [1], requestId: "r" })),
+          Effect.flip(client.request({ ...create, body: "text", requestId: "r" })),
+        ]);
+      }).pipe(Effect.provide(http)),
+    );
+    for (const error of errors) expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(calls).toEqual([]);
   });
 });

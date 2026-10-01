@@ -23,7 +23,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a verification report
@@ -36,8 +36,9 @@ import type { StripeHttp } from "./StripeHttp.js";
 export const retrieve = (
   id: string,
   params?: Stripe.Identity.VerificationReportRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Identity.VerificationReport, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/identity/verification_reports/${id}`, params);
+  stripeRequest("GET", path`/v1/identity/verification_reports/${id}`, params, options);
 
 /**
  * List verification reports
@@ -52,5 +53,6 @@ export const retrieve = (
  */
 export const list = (
   params?: Stripe.Identity.VerificationReportListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Identity.VerificationReport>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/identity/verification_reports", params);
+  stripeRequest("GET", "/v1/identity/verification_reports", params, options);

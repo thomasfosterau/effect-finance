@@ -30,15 +30,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a transfer
  */
 export const create = (
   params: Stripe.TransferCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Transfer, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/transfers", params);
+  stripeRequest("POST", "/v1/transfers", params, options);
 
 /**
  * Retrieve a transfer
@@ -46,8 +47,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.TransferRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Transfer, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/transfers/${id}`, params);
+  stripeRequest("GET", path`/v1/transfers/${id}`, params, options);
 
 /**
  * Update a transfer
@@ -55,13 +57,15 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.TransferUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Transfer, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/transfers/${id}`, params);
+  stripeRequest("POST", path`/v1/transfers/${id}`, params, options);
 
 /**
  * List transfers
  */
 export const list = (
   params?: Stripe.TransferListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Transfer>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/transfers", params);
+  stripeRequest("GET", "/v1/transfers", params, options);

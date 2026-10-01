@@ -26,15 +26,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a promotion code
  */
 export const create = (
   params: Stripe.PromotionCodeCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.PromotionCode, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/promotion_codes", params);
+  stripeRequest("POST", "/v1/promotion_codes", params, options);
 
 /**
  * Retrieve a promotion code
@@ -42,8 +43,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.PromotionCodeRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.PromotionCode, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/promotion_codes/${id}`, params);
+  stripeRequest("GET", path`/v1/promotion_codes/${id}`, params, options);
 
 /**
  * Update a promotion code
@@ -51,13 +53,15 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.PromotionCodeUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.PromotionCode, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/promotion_codes/${id}`, params);
+  stripeRequest("POST", path`/v1/promotion_codes/${id}`, params, options);
 
 /**
  * List promotion codes
  */
 export const list = (
   params?: Stripe.PromotionCodeListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.PromotionCode>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/promotion_codes", params);
+  stripeRequest("GET", "/v1/promotion_codes", params, options);

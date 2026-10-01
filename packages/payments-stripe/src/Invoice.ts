@@ -26,15 +26,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create an invoice
  */
 export const create = (
   params: Stripe.InvoiceCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Invoice, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/invoices", params);
+  stripeRequest("POST", "/v1/invoices", params, options);
 
 /**
  * Retrieve an invoice
@@ -42,8 +43,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.InvoiceRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Invoice, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/invoices/${id}`, params);
+  stripeRequest("GET", path`/v1/invoices/${id}`, params, options);
 
 /**
  * Update an invoice
@@ -51,19 +53,24 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.InvoiceUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Invoice, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/invoices/${id}`, params);
+  stripeRequest("POST", path`/v1/invoices/${id}`, params, options);
 
 /**
  * Delete an invoice
  */
-export const del = (id: string): Effect.Effect<Stripe.DeletedInvoice, StripeError, StripeHttp> =>
-  stripeRequest("DELETE", path`/v1/invoices/${id}`);
+export const del = (
+  id: string,
+  options?: RequestOptions | undefined,
+): Effect.Effect<Stripe.DeletedInvoice, StripeError, StripeHttp> =>
+  stripeRequest("DELETE", path`/v1/invoices/${id}`, undefined, options);
 
 /**
  * List invoices
  */
 export const list = (
   params?: Stripe.InvoiceListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Invoice>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/invoices", params);
+  stripeRequest("GET", "/v1/invoices", params, options);
