@@ -94,7 +94,7 @@ export class Refunds extends Context.Service<
 /**
  * Create a refund. Fails with `PaymentInvalidRequestError` when the provider
  * cannot refund the given reference (a `charge` where it needs a
- * `paymentIntent`, or the reverse).
+ * `paymentIntent`, or a `paymentIntent` with nothing captured).
  */
 export const create = (params: CreateParams): Effect.Effect<Refund, PaymentsError, Refunds> =>
   Effect.flatMap(Refunds, (service) => service.create(params));
