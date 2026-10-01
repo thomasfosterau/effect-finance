@@ -1,5 +1,5 @@
 /**
- * Example: Handling Stripe Webhooks with effect-stripe
+ * Example: Handling Stripe webhooks with @thomasfosterau/effect-payments-stripe
  *
  * This example demonstrates how to:
  * - Verify webhook signatures

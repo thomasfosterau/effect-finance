@@ -1,14 +1,18 @@
 # @thomasfosterau/effect-payments-paypal
 
-A **PayPal implementation** of the vendor-neutral [`@thomasfosterau/effect-payments`](../payments) core.
+A PayPal implementation of the vendor-neutral effect-payments core.
+
+It implements the capabilities PayPal supports from [`@thomasfosterau/effect-payments`](https://www.npmjs.com/package/@thomasfosterau/effect-payments) over PayPal's REST API, through `effect/http` with no vendor SDK.
 
 The same neutral program runs on PayPal, Stripe or Airwallex — only the layer you provide changes.
 
-## Installation
+## Install
 
 ```bash
-npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-paypal effect
+pnpm add @thomasfosterau/effect-payments @thomasfosterau/effect-payments-paypal effect
 ```
+
+`effect` is a peer dependency.
 
 ## Usage
 
@@ -55,13 +59,20 @@ Because each capability is an independent Effect service, a program that only us
 - **Timeouts** — the token login fails with `PaymentNetworkError` after `loginTimeout` ms (default 30 000) and any other request after `timeout` ms (default 80 000, as in the Stripe transport). Logins are serialised, so without a bound one hung login would stall every request on the client; after a timeout the next caller logs in afresh. `layerFromEnv` uses the defaults; pass `loginTimeout` / `timeout` to `layer` to change them (`Infinity` disables one; `0`, a negative number or `NaN` fails with `PaymentConfigError`). Two things to know:
   - `timeout` covers the resource request only, not getting a token. Callers that arrive while a login is in flight share its outcome: they get its token, or they all fail with its error after about one `loginTimeout`. The next call after a failure starts a fresh login.
   - A **non-GET that times out has an unknown outcome**: the vendor may have applied the write. Don't blindly retry a create, capture or refund without a key: the client's `requestId` (below) is what lets the vendor recognise the repeat.
-- **Neutral `idempotencyKey`** — `PaymentIntent.create` / `confirm` (capture), `Product.create`, `Price.create`, `Subscription.create` and `Refund.create` accept the core's `idempotencyKey` and send it as `PayPal-Request-Id` (see the core README's "Retrying a write safely"). With no key none is sent. `PaymentIntent.cancel`, `Subscription.cancel` and the plan activate / deactivate calls take none.
-- **`requestId`** — `PayPalClient.request({ method: "POST", …, requestId })` sends it as the `PayPal-Request-Id` header. Create one id per logical write, before the first attempt, and send the same one on every retry; PayPal then returns the original outcome. It is `POST` only, and not every PayPal endpoint honours the header (activate / deactivate / cancel-style calls are not documented as idempotent), so a `POST` to one of those is simply not deduplicated. An empty id, or one on a `GET`, `PATCH` or `DELETE`, fails with `PaymentInvalidRequestError` before anything is sent. The vendor's length limit (about 108 characters) and retention (which differs per API) are **unverified** here (the vendor documentation was unreachable); stay within 1–64 characters of `[A-Za-z0-9_-]` and retry within hours, not days.
-- **Empty variables** — `layerFromEnv` reads `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and the optional `PAYPAL_BASE_URL` through `Config`. Effect 4.0.0-rc.118 treats a literal empty string as a missing value (it was a present `""` through rc.117), so an empty id or secret fails with `PaymentConfigError`, and an empty `PAYPAL_BASE_URL` means the default (live) endpoint, not a blank URL. There is no sandbox/live switch yet, so an unset or empty base URL is **live**; `make` refuses a `baseUrl` that is blank or not an absolute http(s) URL with `PaymentConfigError`.
+- **Neutral `idempotencyKey`** — `PaymentIntent.create` / `confirm` (capture), `Product.create`, `Price.create`, `Subscription.create` and `Refund.create` accept the core's `idempotencyKey` and send it as `PayPal-Request-Id` (see "Retrying a write safely" in the core package's README). With no key none is sent. `PaymentIntent.cancel`, `Subscription.cancel` and the plan activate / deactivate calls take none.
+- **`requestId`** — `PayPalClient.request({ method: "POST", …, requestId })` sends it as the `PayPal-Request-Id` header. Create one id per logical write, before the first attempt, and send the same one on every retry; PayPal then returns the original outcome. It is `POST` only, and not every PayPal endpoint honours the header (activate / deactivate / cancel-style calls are not documented as idempotent), so a `POST` to one of those is simply not deduplicated. An empty id, or one on a `GET`, `PATCH` or `DELETE`, fails with `PaymentInvalidRequestError` before anything is sent. The vendor's length limit (about 108 characters) and retention (which differs per API) are unverified ([#93](https://github.com/thomasfosterau/effect-stripe/issues/93)); stay within 1–64 characters of `[A-Za-z0-9_-]` and retry within hours, not days.
+- **Empty variables** — `layerFromEnv` reads `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and the optional `PAYPAL_BASE_URL` through `Config`. Effect treats a literal empty string as a missing value, so an empty id or secret fails with `PaymentConfigError`, and an empty `PAYPAL_BASE_URL` means the default (live) endpoint, not a blank URL. There is no sandbox/live switch yet, so an unset or empty base URL is **live**; `make` refuses a `baseUrl` that is blank or not an absolute http(s) URL with `PaymentConfigError`.
 - **Secrets** — `clientSecret` is a `Redacted<string>` (`Redacted.make(...)`; `layerFromEnv` reads it with `Config.Redacted`), so the client secret never reaches a log line or an error.
 - **Decoded responses** — every PayPal response the capabilities read is decoded with a `Schema` at the boundary; a response that does not match fails with `PaymentProviderError` instead of producing a half-built entity. `PayPalClient.request` returns `unknown`.
 
-See the [repository README](../../README.md) for the full guide.
+## API
+
+| Module | Purpose |
+| --- | --- |
+| `PayPalPayments` | `layer` / `layerFromEnv` (client + every supported capability; need an `HttpClient`), `capabilities` (over an existing `PayPalClient`), the individual capability layers, and the `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs. |
+| `PayPal` | The `PayPalClient` service (OAuth handshake, cached token, `request`), `layer` / `layerFromEnv` / `make`, and the `PayPalConfig` / `PayPalRequest` types. |
+
+The root entry re-exports both as namespaces, plus the core as `Payments`.
 
 ## License
 

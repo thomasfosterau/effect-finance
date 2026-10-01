@@ -35,7 +35,7 @@ Vendor-neutral subscription workflow: create a customer, a product, a recurring 
 
 ### webhooks.ts
 
-Stripe-specific: webhook signature verification and event handling, using the provider's `Webhook` module. Webhooks are inherently provider-shaped, so this example uses the Stripe escape hatch directly.
+Stripe-specific: the SDK-based `Webhook.constructEvent` verifier and event handling (needs the optional `stripe` peer). The default, Workers-safe `Webhook.verify` is shown in the package README; rewriting this example onto it is #96.
 
 ## Note
 

@@ -1,10 +1,18 @@
 ---
 "@thomasfosterau/effect-payments": minor
 "@thomasfosterau/effect-payments-stripe": minor
+"@thomasfosterau/effect-payments-paypal": minor
+"@thomasfosterau/effect-payments-airwallex": minor
 ---
 
-Split the library into a vendor-neutral payments core and a Stripe implementation, modelled on Effect's AI packages (`@effect/ai` + `@effect/ai-openai`).
+First release of the `@thomasfosterau/effect-payments` family: a vendor-neutral payments core for Effect 4 and its provider implementations. A program is written against the core's capabilities and runs on any provider by changing only the layer it provides — the payments analogue of Effect's AI modules.
 
-- **`@thomasfosterau/effect-payments`** — a new, vendor-neutral core. It defines provider-agnostic capabilities (`Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`), neutral domain entities (`Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, `Money`) and a neutral error channel (`PaymentsError`). Programs written against the core run on any provider.
-
-- **`@thomasfosterau/effect-payments-stripe`** — the Stripe implementation (formerly `@thomasfosterau/effect-stripe`). It supplies `Layer`s that implement the neutral capabilities on top of the Stripe SDK (`StripePayments.layer` / `layerFromEnv`), and continues to expose the full set of Stripe-specific resource modules as a provider escape hatch.
+- **`@thomasfosterau/effect-payments`** — the vendor-neutral core: provider-agnostic capabilities (`Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`) as `Context.Service` classes with module-level accessors (`Customer.create`, …), neutral domain entities (`Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, `Money`) and a neutral error channel (`PaymentsError`) of `Schema.TaggedError` classes, so errors work with `catchTag` and `instanceof` and are schema-encodable.
+- **`@thomasfosterau/effect-payments-stripe`** — the Stripe implementation: `Layer`s that implement the neutral capabilities, plus the full set of Stripe-specific resource modules as a provider escape hatch.
+- **Effect 4.** Every package requires `effect` `>=4.0.0-rc.118` as a peer; the emitted declarations name the rc.118 module paths (`effect/http`, not `effect/unstable/http`). Code that provides the HTTP client imports `FetchHttpClient` from `effect/http`.
+- **HTTP through `effect/http`.** The PayPal and Airwallex layers, and the Stripe fetch transport, require an `HttpClient`: provide `FetchHttpClient.layer`, and stub `FetchHttpClient.Fetch` or the `HttpClient` in tests. Token and error responses are decoded, so a malformed token response fails with `PaymentProviderError`.
+- **Configuration through `Config`.** `layerFromEnv` reads through `Config`, so a custom `ConfigProvider` applies, and a missing or empty variable fails with `PaymentConfigError`. Effect's `ConfigProvider` reads a literal empty string as a missing value.
+- **An empty or unset `PAYPAL_BASE_URL` / `AIRWALLEX_BASE_URL` selects the live endpoint.** There is no sandbox/live switch yet (#90): a sandbox deployment must set the sandbox URL explicitly (`https://api-m.sandbox.paypal.com`, `https://api-demo.airwallex.com`). `make` refuses a `baseUrl` that is blank or not an absolute http(s) URL with `PaymentConfigError`.
+- **Request caching.** The Stripe resource modules do not cache `retrieve` or `list`; a consumer that wants caching adds it per resolver (`RequestResolver.withCache`) or with `Cache`.
+- `StripeService`'s context key is `"@effect-payments-stripe/StripeService"`.
+- The generated Stripe schemas are produced with `@effect/openapi-generator` at the same Effect version.

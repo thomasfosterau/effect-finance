@@ -1,26 +1,89 @@
 # @thomasfosterau/effect-payments
 
-A **vendor-neutral payments core for Effect**. Define your payment workflows against provider-agnostic capabilities and choose a concrete provider (such as [`@thomasfosterau/effect-payments-stripe`](../payments-stripe)) at the edge of your application.
+A vendor-neutral payments core for Effect.
 
-This is the payments analogue of [`@effect/ai`](https://effect.website/docs/ai/introduction/): this package is the abstraction; provider packages are the implementations.
+Write your payment workflows against provider-agnostic capabilities, and choose the provider at the edge of your application by the layer you provide: [`@thomasfosterau/effect-payments-stripe`](https://www.npmjs.com/package/@thomasfosterau/effect-payments-stripe), [`-paypal`](https://www.npmjs.com/package/@thomasfosterau/effect-payments-paypal) or [`-airwallex`](https://www.npmjs.com/package/@thomasfosterau/effect-payments-airwallex). It is the payments analogue of Effect's AI modules: one abstraction, one package per provider.
 
-## Installation
+## Install
 
 ```bash
-npm install @thomasfosterau/effect-payments effect
+pnpm add @thomasfosterau/effect-payments effect
 ```
 
+`effect` is a peer dependency. Add a provider package to run a program.
+
 ## Usage
+
+A program depends only on the **capabilities** it uses; it never imports a provider:
+
+```typescript
+import { Effect } from "effect";
+import * as Customer from "@thomasfosterau/effect-payments/Customer";
+import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
+
+// Effect<{ customer, subscription }, PaymentsError, Customers | Subscriptions>
+const onboard = (email: string, priceId: string) =>
+  Effect.gen(function* () {
+    const customer = yield* Customer.create({ email });
+    const subscription = yield* Subscription.create({
+      customer: customer.id,
+      items: [{ price: priceId }],
+    });
+    return { customer, subscription };
+  });
+```
+
+Run it by providing a provider's layer, for example `StripePayments.layer` from `@thomasfosterau/effect-payments-stripe`. Swapping providers means swapping the layer, not the program.
+
+Providers may implement only the capabilities they support: Airwallex covers customers, payment intents and refunds; PayPal covers products, prices, payment intents, subscriptions and refunds, but has no customers. The type system enforces this: a program that needs a capability the provided layer doesn't supply does not type-check. An individual operation a provider lacks (deleting an Airwallex customer, listing PayPal orders) fails with `PaymentInvalidRequestError`; each provider's README lists them.
+
+## Capabilities
+
+Each resource is an abstract Effect service (a `Context.Service`). A program that calls `Customer.create(...)` requires the `Customers` capability in its environment, and nothing more.
+
+| Module | Capability | Operations |
+| --- | --- | --- |
+| `Customer` | `Customers` | `create`, `retrieve`, `update`, `del`, `list` |
+| `Product` | `Products` | `create`, `retrieve`, `update`, `del`, `list` |
+| `Price` | `Prices` | `create`, `retrieve`, `update`, `list` |
+| `PaymentIntent` | `PaymentIntents` | `create`, `retrieve`, `update`, `confirm`, `cancel`, `list` |
+| `Subscription` | `Subscriptions` | `create`, `retrieve`, `update`, `cancel`, `list` |
+| `Refund` | `Refunds` | `create`, `retrieve`, `update`, `list` |
+| `CheckoutSession` | `CheckoutSessions` | `create` (a hosted checkout page → its `url`) |
+| `BillingPortal` | `BillingPortalSessions` | `create` (a hosted billing portal page → its `url`) |
+
+Every operation returns `Effect<Entity, PaymentsError, Capability>`. List operations return a neutral `Page<Entity>` (`{ data, hasMore }`; request the next page with a `startingAfter` cursor); deletions return `Deleted` (`{ id, deleted: true }`).
+
+## Domain types
+
+Entities are provider-agnostic `effect/Schema` classes: `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, `CheckoutSession`, `BillingPortalSession` and `Money`. They contain only fields that are meaningful across providers, in a normalized shape (`camelCase`, neutral status enums). **Amounts are always in the smallest currency unit** (`2000` = $20.00), and currencies are lower-cased ISO 4217 codes (`"usd"`).
+
+Status and type enums are lenient: each is the known literals plus `Other` (`{ _tag: "Other", raw }`), carrying a provider value the library does not model, so an unexpected value never fails a whole list page. Match exhaustively with a case for `Other` (`Enumeration.isOther`).
+
+## Errors
+
+The failure channel is the neutral `PaymentsError` union:
+
+- `PaymentProviderError` — a provider rejected the request (carries `provider`, `code`, `statusCode`).
+- `PaymentAuthenticationError` — authentication failed.
+- `PaymentRateLimitError` — too many requests (carries `retryAfter`).
+- `PaymentInvalidRequestError` — invalid parameters, or an operation the provider does not support.
+- `PaymentNetworkError` — transport-level failure.
+- `PaymentsUnavailable` — no provider can serve the call, typically because its credential is not configured (carries `provider`). This is "not configured ≡ down": it is raised at call time, never while a layer is built, so an application without payments configured still starts and answers the call as it would an outage (an HTTP API answers it with a 503).
+
+Outside the union: `PaymentConfigError` (raised while building a provider layer) and `SignatureVerificationError` (webhook verification).
 
 ```typescript
 import { Effect } from "effect";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 
-// Effect<Customer, PaymentsError, Customers>
-const program = Customer.create({ email: "jane@example.com" });
+const program = Customer.create({ email: "jane@example.com" }).pipe(
+  Effect.catchTags({
+    PaymentAuthenticationError: (e) => Effect.logError(`Auth failed: ${e.message}`),
+    PaymentRateLimitError: (e) => Effect.logError(`Rate limited; retry after ${e.retryAfter}s`),
+  }),
+);
 ```
-
-The program above depends only on the `Customers` capability — it does not import any provider. Provide a provider layer (e.g. `StripePayments.layer`) to run it.
 
 ## Retrying a write safely
 
@@ -55,26 +118,45 @@ The rules:
 
 - **One key per logical write**, created by the caller _before the first attempt_ (`IdempotencyKey.generate`, or your own id for the operation, such as `refund-${orderId}`) and passed unchanged on every retry. A key generated inside the retried effect is a new key per attempt and protects nothing. Never reuse a key for a different write: a provider answers the same key with different parameters with an error rather than the original outcome. Stripe's is `idempotency_error`, which surfaces as `PaymentProviderError` with code `StripeIdempotencyError` (not `PaymentInvalidRequestError`); PayPal's and Airwallex's behaviour here is unverified.
 - **Accepted on the create and confirm operations** that every provider implementing them can honour: `Customer.create`, `Product.create`, `Price.create`, `PaymentIntent.create` / `confirm`, `Subscription.create`, `Refund.create`, `CheckoutSession.create`. It is optional, and a program that passes none behaves as before. Updates are set-semantics and repeatable. `Subscription.cancel` and `PaymentIntent.cancel` do **not** take one (PayPal cannot honour a key there), and neither does `BillingPortal.create`: the option is absent from their types, so passing one does not compile.
-- **Retry only when the outcome is unknown or the write was not applied**: `PaymentNetworkError` (a timeout, a dropped connection), `PaymentProviderError` with `statusCode >= 500` (a vendor 5xx surfaces as this, not as `PaymentNetworkError`) and `PaymentRateLimitError` (back off for `retryAfter` first). Do not retry `PaymentInvalidRequestError`, `PaymentAuthenticationError`, or a `PaymentProviderError` below 500 (including Stripe's `StripeIdempotencyError`): they fail the same way again.
-- **The shape is the lowest common denominator**: 1 to 64 characters from `A-Z a-z 0-9 _ -` (a UUID is 36). `IdempotencyKey` is a branded `Schema`; `IdempotencyKey.make` or `IdempotencyKey.validate` check a value of your own, and a raw string that slips past the types fails with `PaymentInvalidRequestError` before anything is sent.
-- **A window, not forever**: providers remember a key for a limited time, differing per provider. Treat a retry within hours as safe, one after days as a new write.
-- **Unverified vendor figures.** The vendors' own limits and windows (Stripe: 255 characters, at least 24 hours; PayPal: about 108 characters, retention differing per API; Airwallex: about 64 characters) are from memory, not checked against their documentation, which was unreachable when this was written. The 1 to 64 character shape stays inside the smallest of them; the replay window is not promised by the type.
+- **Retry only when the outcome is unknown or the write was not applied**: `PaymentNetworkError`, `PaymentProviderError` with `statusCode >= 500` (a vendor 5xx surfaces as this, not as `PaymentNetworkError`) and `PaymentRateLimitError` (back off for `retryAfter` first). Do not retry `PaymentInvalidRequestError`, `PaymentAuthenticationError`, or a `PaymentProviderError` below 500 (including Stripe's `StripeIdempotencyError`): they fail the same way again.
+- **The shape is the lowest common denominator**: 1 to 64 characters from `A-Z a-z 0-9 _ -` (a UUID is 36). `IdempotencyKey.IdempotencyKey` is the branded `Schema`; `IdempotencyKey.IdempotencyKey.make` (throws on a bad shape) or `IdempotencyKey.validate` (fails with `PaymentInvalidRequestError`) check a value of your own, and a raw string that slips past the types fails with `PaymentInvalidRequestError` before anything is sent.
+- **A window, not forever**: providers remember a key for a limited time, differing per provider. Treat a retry within hours as safe, and one after days as a new write. The vendors' own limits and windows (Stripe: 255 characters, at least 24 hours; PayPal: about 108 characters, retention differing per API; Airwallex: about 64 characters) are unverified ([#93](https://github.com/thomasfosterau/effect-stripe/issues/93)); the 1 to 64 character shape stays inside the smallest of them.
 
 Mapping: Stripe sends `Idempotency-Key`; PayPal sends `PayPal-Request-Id` (on the `POST`); Airwallex sends `request_id` in place of its fresh per-call id. Without a key, PayPal sends no id, Airwallex keeps a fresh per-call `request_id` and Stripe's transport generates a key of its own per call (for its own internal retries); none of those deduplicates your retry.
 
-## What's included
+## Stubs
 
-- **Capabilities** (`Context.Service` services): `Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`, `CheckoutSessions` (hosted checkout → URL), `BillingPortalSessions` (hosted billing portal → URL). Each module also exports accessor functions (`create`, `retrieve`, `update`, `del`, `list`, …).
-- **Domain types** (`effect/Schema` classes): `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, `CheckoutSession`, `BillingPortalSession`, `Money`, plus `Page` / `Deleted`.
-- **`IdempotencyKey`**: the branded key (`generate`, `validate`) that makes a retried create or confirm safe; see [Retrying a write safely](#retrying-a-write-safely).
-- **Errors**: the neutral `PaymentsError` union and friends (`PaymentProviderError`, `PaymentAuthenticationError`, `PaymentRateLimitError`, `PaymentInvalidRequestError`, `PaymentNetworkError`, `PaymentsUnavailable`, `PaymentConfigError`, `SignatureVerificationError`). `PaymentsUnavailable` is the "not configured ≡ down" failure: no provider is available to serve the call (typically, its credential is absent), raised at call time.
-- **Stubs** (`Stub`): capability layers whose every call fails with one given error — `Stub.layer(failure)` for every capability, one constructor per capability (`Stub.customers`, …, `Stub.billingPortalSessions`), and `Stub.unavailable(provider?)`, every capability failing with `PaymentsUnavailable`, for an environment with no provider configured.
+`Stub` builds capability layers whose every call fails with one given error: `Stub.layer(failure)` for every capability, one constructor per capability (`Stub.customers`, …, `Stub.billingPortalSessions`), and `Stub.unavailable(provider?)`, every capability failing with `PaymentsUnavailable`, for an environment with no provider configured or a unit suite with no transport at all.
+
+```typescript
+import { Effect } from "effect";
+import * as Customer from "@thomasfosterau/effect-payments/Customer";
+import * as Stub from "@thomasfosterau/effect-payments/Stub";
+
+// Fails with PaymentsUnavailable, as if the provider were down.
+const exit = await Effect.runPromiseExit(
+  Customer.create({ email: "jane@example.com" }).pipe(Effect.provide(Stub.unavailable("stripe"))),
+);
+```
+
+## API
+
+Every module is its own subpath (`@thomasfosterau/effect-payments/<Module>`). The root re-exports the capability modules, `Enumeration`, `IdempotencyKey` and `Stub` as namespaces, and flattens the errors, `Page` / `Deleted`, `Money`, `Metadata` and `money` (`Money.make`).
+
+| Module | Purpose |
+| --- | --- |
+| `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund` | The capability, its entity, its params and the accessor functions. |
+| `CheckoutSession`, `BillingPortal` | Hosted checkout and billing portal sessions: an entity whose `url` you redirect to. |
+| `Money` | `Money` (minor-unit amount + currency), `make`, `Metadata`. |
+| `Page` | `Page<A>` and `Deleted`. |
+| `PaymentsError` | The error classes and the `PaymentsError` union. |
+| `IdempotencyKey` | The branded key, `generate` and `validate`. |
+| `Enumeration` | The lenient-enum helpers: `Other`, `isOther`, `lenient`. |
+| `Stub` | Capability layers that fail every call with one error. |
 
 ## Internal subpath (not public API)
 
 `@thomasfosterau/effect-payments/internal` holds helpers that the provider packages in this repository share (`shareLogin`, one in-flight token login shared by every waiting caller, and the integer money core used to convert between minor units and major-unit decimals). It exists only because a provider may import nothing but this package. It is **internal and exempt from semver**: its exports can change or disappear in any release, minor and patch included. Do not import it from application code.
-
-See the [repository README](../../README.md) for the full guide.
 
 ## License
 
