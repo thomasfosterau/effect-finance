@@ -1,26 +1,12 @@
 /**
- * TaxRate resource operations
+ * Stripe's `/v1/tax_rates` API as a raw resource module, the escape hatch for
+ * what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as TaxRate from "@thomasfosterau/effect-payments-stripe/TaxRate";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createTaxRate = (percentage: number, displayName: string) =>
- *   TaxRate.create({ percentage, display_name: displayName, inclusive: false });
- *
- * const program = Effect.gen(function* () {
- *   const taxRate = yield* createTaxRate(10, "VAT");
- *   return taxRate;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a tax rate
+ * Create a tax rate (`POST /v1/tax_rates`).
  */
 export const create = (
   params: Stripe.TaxRateCreateParams,
@@ -38,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/tax_rates", params, options);
 
 /**
- * Retrieve a tax rate
+ * Retrieve a tax rate (`GET /v1/tax_rates/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/tax_rates/${id}`, params, options);
 
 /**
- * Update a tax rate
+ * Update a tax rate (`POST /v1/tax_rates/{id}`).
  */
 export const update = (
   id: string,
@@ -58,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/tax_rates/${id}`, params, options);
 
 /**
- * List tax rates
+ * List tax rates (`GET /v1/tax_rates`).
  */
 export const list = (
   params?: Stripe.TaxRateListParams,

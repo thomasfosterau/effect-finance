@@ -1,29 +1,12 @@
 /**
- * WebhookEndpoint resource operations
+ * Stripe's `/v1/webhook_endpoints` API as a raw resource module, the escape
+ * hatch for what the neutral capabilities do not cover. Results are typed with
+ * the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as WebhookEndpoint from "@thomasfosterau/effect-payments-stripe/WebhookEndpoint";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const program = Effect.gen(function* () {
- *   const endpoint = yield* WebhookEndpoint.create({
- *     url: "https://example.com/webhook",
- *     enabled_events: ["payment_intent.succeeded"],
- *   });
- *   const updated = yield* WebhookEndpoint.update(endpoint.id, {
- *     enabled_events: ["charge.succeeded", "charge.failed"],
- *   });
- *   return updated;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -32,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a webhook endpoint
+ * Create a webhook endpoint (`POST /v1/webhook_endpoints`).
  */
 export const create = (
   params: Stripe.WebhookEndpointCreateParams,
@@ -41,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/webhook_endpoints", params, options);
 
 /**
- * Retrieve a webhook endpoint
+ * Retrieve a webhook endpoint (`GET /v1/webhook_endpoints/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -51,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/webhook_endpoints/${id}`, params, options);
 
 /**
- * Update a webhook endpoint
+ * Update a webhook endpoint (`POST /v1/webhook_endpoints/{id}`).
  */
 export const update = (
   id: string,
@@ -61,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/webhook_endpoints/${id}`, params, options);
 
 /**
- * Delete a webhook endpoint
+ * Delete a webhook endpoint (`DELETE /v1/webhook_endpoints/{id}`).
  */
 export const del = (
   id: string,
@@ -70,7 +53,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/webhook_endpoints/${id}`, undefined, options);
 
 /**
- * List webhook endpoints
+ * List webhook endpoints (`GET /v1/webhook_endpoints`).
  */
 export const list = (
   params?: Stripe.WebhookEndpointListParams,

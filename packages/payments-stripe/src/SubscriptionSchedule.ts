@@ -1,26 +1,12 @@
 /**
- * SubscriptionSchedule resource operations
+ * Stripe's `/v1/subscription_schedules` API as a raw resource module, the
+ * escape hatch for what the neutral capabilities do not cover. Results are
+ * typed with the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as SubscriptionSchedule from "@thomasfosterau/effect-payments-stripe/SubscriptionSchedule";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createSchedule = (customerId: string, phases: object[]) =>
- *   SubscriptionSchedule.create({ customer: customerId, phases });
- *
- * const program = Effect.gen(function* () {
- *   const schedule = yield* createSchedule("cus_123", [{ items: [{ price: "price_123" }] }]);
- *   return schedule;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a subscription schedule
+ * Create a subscription schedule (`POST /v1/subscription_schedules`).
  */
 export const create = (
   params?: Stripe.SubscriptionScheduleCreateParams,
@@ -38,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/subscription_schedules", params, options);
 
 /**
- * Retrieve a subscription schedule
+ * Retrieve a subscription schedule (`GET /v1/subscription_schedules/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/subscription_schedules/${id}`, params, options);
 
 /**
- * Update a subscription schedule
+ * Update a subscription schedule (`POST /v1/subscription_schedules/{id}`).
  */
 export const update = (
   id: string,
@@ -59,6 +45,7 @@ export const update = (
 
 /**
  * Cancel a subscription schedule
+ * (`POST /v1/subscription_schedules/{id}/cancel`).
  */
 export const cancel = (
   id: string,
@@ -69,6 +56,7 @@ export const cancel = (
 
 /**
  * Release a subscription schedule
+ * (`POST /v1/subscription_schedules/{id}/release`).
  */
 export const release = (
   id: string,
@@ -78,7 +66,7 @@ export const release = (
   stripeRequest("POST", path`/v1/subscription_schedules/${id}/release`, params, options);
 
 /**
- * List subscription schedules
+ * List subscription schedules (`GET /v1/subscription_schedules`).
  */
 export const list = (
   params?: Stripe.SubscriptionScheduleListParams,

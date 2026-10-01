@@ -1,30 +1,12 @@
 /**
- * Issuing Card resource operations
+ * Stripe's `/v1/issuing/cards` API as a raw resource module, the escape hatch
+ * for what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as IssuingCard from "@thomasfosterau/effect-payments-stripe/Issuing.Card";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createCard = (cardholderId: string) =>
- *   IssuingCard.create({
- *     cardholder: cardholderId,
- *     currency: "usd",
- *     type: "virtual",
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const card = yield* createCard("ich_xxx");
- *   return card;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -33,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create an issuing card
+ * Create an issuing card (`POST /v1/issuing/cards`).
  */
 export const create = (
   params: Stripe.Issuing.CardCreateParams,
@@ -42,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/issuing/cards", params, options);
 
 /**
- * Retrieve an issuing card
+ * Retrieve an issuing card (`GET /v1/issuing/cards/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -52,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/issuing/cards/${id}`, params, options);
 
 /**
- * Update an issuing card
+ * Update an issuing card (`POST /v1/issuing/cards/{id}`).
  */
 export const update = (
   id: string,
@@ -62,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/issuing/cards/${id}`, params, options);
 
 /**
- * List issuing cards
+ * List issuing cards (`GET /v1/issuing/cards`).
  */
 export const list = (
   params?: Stripe.Issuing.CardListParams,

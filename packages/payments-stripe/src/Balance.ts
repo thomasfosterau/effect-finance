@@ -1,23 +1,12 @@
 /**
- * Balance resource operations
+ * Stripe's `/v1/balance` API as a raw resource module, the escape hatch for
+ * what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Balance from "@thomasfosterau/effect-payments-stripe/Balance";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const program = Effect.gen(function* () {
- *   const balance = yield* Balance.retrieve();
- *   return balance;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -26,7 +15,7 @@ import { type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Retrieve the balance
+ * Retrieve the balance (`GET /v1/balance`).
  */
 export const retrieve = (
   params?: Stripe.BalanceRetrieveParams,

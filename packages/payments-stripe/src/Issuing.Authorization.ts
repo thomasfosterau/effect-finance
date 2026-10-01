@@ -1,24 +1,12 @@
 /**
- * Issuing Authorization resource operations
+ * Stripe's `/v1/issuing/authorizations` API as a raw resource module, the
+ * escape hatch for what the neutral capabilities do not cover. Results are
+ * typed with the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as IssuingAuthorization from "@thomasfosterau/effect-payments-stripe/Issuing.Authorization";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const program = Effect.gen(function* () {
- *   const authorization = yield* IssuingAuthorization.retrieve("iauth_xxx");
- *   const approved = yield* IssuingAuthorization.approve(authorization.id);
- *   return approved;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -27,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Retrieve an issuing authorization
+ * Retrieve an issuing authorization (`GET /v1/issuing/authorizations/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -37,7 +25,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/issuing/authorizations/${id}`, params, options);
 
 /**
- * Update an issuing authorization
+ * Update an issuing authorization (`POST /v1/issuing/authorizations/{id}`).
  */
 export const update = (
   id: string,
@@ -47,7 +35,7 @@ export const update = (
   stripeRequest("POST", path`/v1/issuing/authorizations/${id}`, params, options);
 
 /**
- * List issuing authorizations
+ * List issuing authorizations (`GET /v1/issuing/authorizations`).
  */
 export const list = (
   params?: Stripe.Issuing.AuthorizationListParams,
@@ -57,6 +45,7 @@ export const list = (
 
 /**
  * Approve an issuing authorization
+ * (`POST /v1/issuing/authorizations/{id}/approve`).
  */
 export const approve = (
   id: string,
@@ -67,6 +56,7 @@ export const approve = (
 
 /**
  * Decline an issuing authorization
+ * (`POST /v1/issuing/authorizations/{id}/decline`).
  */
 export const decline = (
   id: string,

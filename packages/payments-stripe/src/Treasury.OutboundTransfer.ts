@@ -1,31 +1,12 @@
 /**
- * Treasury.OutboundTransfer resource operations
+ * Stripe's `/v1/treasury/outbound_transfers` API as a raw resource module, the
+ * escape hatch for what the neutral capabilities do not cover. Results are
+ * typed with the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as OutboundTransfer from "@thomasfosterau/effect-payments-stripe/Treasury.OutboundTransfer";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createTransfer = (financialAccountId: string, amount: number) =>
- *   OutboundTransfer.create({
- *     financial_account: financialAccountId,
- *     amount,
- *     currency: "usd",
- *     destination_payment_method: "pm_...",
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const transfer = yield* createTransfer("fa_...", 10000);
- *   return transfer;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -34,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create an outbound transfer
+ * Create an outbound transfer (`POST /v1/treasury/outbound_transfers`).
  */
 export const create = (
   params: Stripe.Treasury.OutboundTransferCreateParams,
@@ -43,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/treasury/outbound_transfers", params, options);
 
 /**
- * Retrieve an outbound transfer
+ * Retrieve an outbound transfer (`GET /v1/treasury/outbound_transfers/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -53,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/treasury/outbound_transfers/${id}`, params, options);
 
 /**
- * List outbound transfers
+ * List outbound transfers (`GET /v1/treasury/outbound_transfers`).
  */
 export const list = (
   params: Stripe.Treasury.OutboundTransferListParams,
@@ -63,6 +44,7 @@ export const list = (
 
 /**
  * Cancel an outbound transfer
+ * (`POST /v1/treasury/outbound_transfers/{id}/cancel`).
  */
 export const cancel = (
   id: string,

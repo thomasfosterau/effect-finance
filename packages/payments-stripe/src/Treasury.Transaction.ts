@@ -1,25 +1,12 @@
 /**
- * Treasury.Transaction resource operations
+ * Stripe's `/v1/treasury/transactions` API as a raw resource module, the escape
+ * hatch for what the neutral capabilities do not cover. Results are typed with
+ * the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Transaction from "@thomasfosterau/effect-payments-stripe/Treasury.Transaction";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const getTransaction = (id: string) => Transaction.retrieve(id);
- *
- * const program = Effect.gen(function* () {
- *   const transaction = yield* getTransaction("trxn_...");
- *   return transaction;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -28,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Retrieve a transaction
+ * Retrieve a transaction (`GET /v1/treasury/transactions/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -38,7 +25,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/treasury/transactions/${id}`, params, options);
 
 /**
- * List transactions
+ * List transactions (`GET /v1/treasury/transactions`).
  */
 export const list = (
   params: Stripe.Treasury.TransactionListParams,

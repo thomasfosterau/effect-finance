@@ -1,30 +1,13 @@
 /**
- * Price resource operations
+ * Stripe's `/v1/prices` API as a raw resource module, the escape hatch for what
+ * the neutral capabilities do not cover. Results are typed with the `stripe`
+ * package's declarations and are not decoded; prefer the neutral `Prices`
+ * capability where it covers the call.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Price from "@thomasfosterau/effect-payments-stripe/Price";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createPrice = (productId: string, amount: number) =>
- *   Price.create({
- *     product: productId,
- *     unit_amount: amount,
- *     currency: "usd",
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const price = yield* createPrice("prod_123", 1999);
- *   return price;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -33,7 +16,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a price
+ * Create a price (`POST /v1/prices`).
  */
 export const create = (
   params: Stripe.PriceCreateParams,
@@ -42,7 +25,7 @@ export const create = (
   stripeRequest("POST", "/v1/prices", params, options);
 
 /**
- * Retrieve a price
+ * Retrieve a price (`GET /v1/prices/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -52,7 +35,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/prices/${id}`, params, options);
 
 /**
- * Update a price
+ * Update a price (`POST /v1/prices/{id}`).
  */
 export const update = (
   id: string,
@@ -62,7 +45,7 @@ export const update = (
   stripeRequest("POST", path`/v1/prices/${id}`, params, options);
 
 /**
- * List prices
+ * List prices (`GET /v1/prices`).
  */
 export const list = (
   params?: Stripe.PriceListParams,

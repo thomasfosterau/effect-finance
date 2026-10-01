@@ -1,28 +1,13 @@
 /**
- * ExternalAccount resource operations
+ * Stripe's `/v1/accounts/{accountId}/external_accounts` API as a raw resource
+ * module, the escape hatch for what the neutral capabilities do not cover.
+ * Results are typed with the `stripe` package's declarations and are not
+ * decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as ExternalAccount from "@thomasfosterau/effect-payments-stripe/ExternalAccount";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createExternalAccount = (accountId: string) =>
- *   ExternalAccount.create(accountId, {
- *     external_account: "btok_123",
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const externalAccount = yield* createExternalAccount("acct_123");
- *   return externalAccount;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -32,6 +17,7 @@ import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create an external account
+ * (`POST /v1/accounts/{accountId}/external_accounts`).
  */
 export const create = (
   accountId: string,
@@ -42,6 +28,7 @@ export const create = (
 
 /**
  * Retrieve an external account
+ * (`GET /v1/accounts/{accountId}/external_accounts/{id}`).
  */
 export const retrieve = (
   accountId: string,
@@ -53,6 +40,7 @@ export const retrieve = (
 
 /**
  * Update an external account
+ * (`POST /v1/accounts/{accountId}/external_accounts/{id}`).
  */
 export const update = (
   accountId: string,
@@ -64,6 +52,7 @@ export const update = (
 
 /**
  * Delete an external account
+ * (`DELETE /v1/accounts/{accountId}/external_accounts/{id}`).
  */
 export const del = (
   accountId: string,
@@ -78,7 +67,7 @@ export const del = (
   );
 
 /**
- * List external accounts
+ * List external accounts (`GET /v1/accounts/{accountId}/external_accounts`).
  */
 export const list = (
   accountId: string,

@@ -1,26 +1,12 @@
 /**
- * Account resource operations
+ * Stripe's `/v1/accounts` API as a raw resource module, the escape hatch for
+ * what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Account from "@thomasfosterau/effect-payments-stripe/Account";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createAccount = (type: "standard" | "express" | "custom") =>
- *   Account.create({ type });
- *
- * const program = Effect.gen(function* () {
- *   const account = yield* createAccount("express");
- *   return account;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create an account
+ * Create an account (`POST /v1/accounts`).
  */
 export const create = (
   params: Stripe.AccountCreateParams,
@@ -38,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/accounts", params, options);
 
 /**
- * Retrieve an account
+ * Retrieve an account (`GET /v1/accounts/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/accounts/${id}`, params, options);
 
 /**
- * Update an account
+ * Update an account (`POST /v1/accounts/{id}`).
  */
 export const update = (
   id: string,
@@ -58,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/accounts/${id}`, params, options);
 
 /**
- * Delete an account
+ * Delete an account (`DELETE /v1/accounts/{id}`).
  */
 export const del = (
   id: string,
@@ -67,7 +53,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/accounts/${id}`, undefined, options);
 
 /**
- * List accounts
+ * List accounts (`GET /v1/accounts`).
  */
 export const list = (
   params?: Stripe.AccountListParams,

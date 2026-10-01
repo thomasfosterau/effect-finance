@@ -1,30 +1,12 @@
 /**
- * Topup resource operations
+ * Stripe's `/v1/topups` API as a raw resource module, the escape hatch for what
+ * the neutral capabilities do not cover. Results are typed with the `stripe`
+ * package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Topup from "@thomasfosterau/effect-payments-stripe/Topup";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createTopup = (amount: number) =>
- *   Topup.create({
- *     amount,
- *     currency: "usd",
- *     description: "Top-up for account",
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const topup = yield* createTopup(1000);
- *   return topup;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -33,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a topup
+ * Create a topup (`POST /v1/topups`).
  */
 export const create = (
   params: Stripe.TopupCreateParams,
@@ -42,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/topups", params, options);
 
 /**
- * Retrieve a topup
+ * Retrieve a topup (`GET /v1/topups/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -52,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/topups/${id}`, params, options);
 
 /**
- * Update a topup
+ * Update a topup (`POST /v1/topups/{id}`).
  */
 export const update = (
   id: string,
@@ -62,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/topups/${id}`, params, options);
 
 /**
- * List topups
+ * List topups (`GET /v1/topups`).
  */
 export const list = (
   params?: Stripe.TopupListParams,

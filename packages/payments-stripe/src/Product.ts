@@ -1,25 +1,13 @@
 /**
- * Product resource operations
+ * Stripe's `/v1/products` API as a raw resource module, the escape hatch for
+ * what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded; prefer the neutral
+ * `Products` capability where it covers the call.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Product from "@thomasfosterau/effect-payments-stripe/Product";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createProduct = (name: string) => Product.create({ name });
- *
- * const program = Effect.gen(function* () {
- *   const product = yield* createProduct("Premium Plan");
- *   return product;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -28,7 +16,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a product
+ * Create a product (`POST /v1/products`).
  */
 export const create = (
   params: Stripe.ProductCreateParams,
@@ -37,7 +25,7 @@ export const create = (
   stripeRequest("POST", "/v1/products", params, options);
 
 /**
- * Retrieve a product
+ * Retrieve a product (`GET /v1/products/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -47,7 +35,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/products/${id}`, params, options);
 
 /**
- * Update a product
+ * Update a product (`POST /v1/products/{id}`).
  */
 export const update = (
   id: string,
@@ -57,7 +45,7 @@ export const update = (
   stripeRequest("POST", path`/v1/products/${id}`, params, options);
 
 /**
- * Delete a product
+ * Delete a product (`DELETE /v1/products/{id}`).
  */
 export const del = (
   id: string,
@@ -66,7 +54,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/products/${id}`, undefined, options);
 
 /**
- * List products
+ * List products (`GET /v1/products`).
  */
 export const list = (
   params?: Stripe.ProductListParams,

@@ -1,30 +1,12 @@
 /**
- * Terminal Reader resource operations
+ * Stripe's `/v1/terminal/readers` API as a raw resource module, the escape
+ * hatch for what the neutral capabilities do not cover. Results are typed with
+ * the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as TerminalReader from "@thomasfosterau/effect-payments-stripe/Terminal.Reader";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const registerReader = (registrationCode: string, locationId: string) =>
- *   TerminalReader.create({
- *     registration_code: registrationCode,
- *     location: locationId,
- *     label: "Front Desk Reader"
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const reader = yield* registerReader("simulated-wpe", "tml_123");
- *   return reader;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -33,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a terminal reader
+ * Create a terminal reader (`POST /v1/terminal/readers`).
  */
 export const create = (
   params: Stripe.Terminal.ReaderCreateParams,
@@ -42,8 +24,9 @@ export const create = (
   stripeRequest("POST", "/v1/terminal/readers", params, options);
 
 /**
- * Retrieve a terminal reader. Stripe answers a deleted one with its
- * `{ deleted: true }` stub, so the result is the SDK's `Reader | DeletedReader`.
+ * Retrieve a terminal reader (`GET /v1/terminal/readers/{id}`). Stripe answers a
+ * deleted one with its `{ deleted: true }` stub, so the result is the SDK's
+ * `Reader | DeletedReader`.
  */
 export const retrieve = (
   id: string,
@@ -53,8 +36,9 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/terminal/readers/${id}`, params, options);
 
 /**
- * Update a terminal reader. Stripe answers a deleted one with its
- * `{ deleted: true }` stub, so the result is the SDK's `Reader | DeletedReader`.
+ * Update a terminal reader (`POST /v1/terminal/readers/{id}`). Stripe answers a
+ * deleted one with its `{ deleted: true }` stub, so the result is the SDK's
+ * `Reader | DeletedReader`.
  */
 export const update = (
   id: string,
@@ -64,7 +48,7 @@ export const update = (
   stripeRequest("POST", path`/v1/terminal/readers/${id}`, params, options);
 
 /**
- * Delete a terminal reader
+ * Delete a terminal reader (`DELETE /v1/terminal/readers/{id}`).
  */
 export const del = (
   id: string,
@@ -73,7 +57,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/terminal/readers/${id}`, undefined, options);
 
 /**
- * List terminal readers
+ * List terminal readers (`GET /v1/terminal/readers`).
  */
 export const list = (
   params?: Stripe.Terminal.ReaderListParams,

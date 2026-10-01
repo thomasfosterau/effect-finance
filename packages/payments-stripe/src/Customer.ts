@@ -1,5 +1,11 @@
 /**
- * Customer resource operations
+ * Stripe's `/v1/customers` API as a raw resource module, the escape hatch for
+ * what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded; prefer the neutral
+ * `Customers` capability where it covers the call.
+ *
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
  * @example
  * ```typescript
@@ -8,19 +14,16 @@
  * import * as Customer from "@thomasfosterau/effect-payments-stripe/Customer";
  * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *
- * const createCustomer = (email: string) =>
- *   Customer.create({ email, name: "John Doe" });
- *
- * const program = Effect.gen(function* () {
- *   const customer = yield* createCustomer("customer@example.com");
- *   return customer;
- * });
- *
  * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
  *   Layer.provide(FetchHttpClient.layer),
  * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+ *
+ * const customers = await Effect.runPromise(
+ *   Customer.list({ limit: 10 }).pipe(Effect.provide(layer)),
+ * );
  * ```
+ *
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +32,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a customer
+ * Create a customer (`POST /v1/customers`).
  */
 export const create = (
   params?: Stripe.CustomerCreateParams,
@@ -38,7 +41,7 @@ export const create = (
   stripeRequest("POST", "/v1/customers", params, options);
 
 /**
- * Retrieve a customer
+ * Retrieve a customer (`GET /v1/customers/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +51,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/customers/${id}`, params, options);
 
 /**
- * Update a customer
+ * Update a customer (`POST /v1/customers/{id}`).
  */
 export const update = (
   id: string,
@@ -58,7 +61,7 @@ export const update = (
   stripeRequest("POST", path`/v1/customers/${id}`, params, options);
 
 /**
- * Delete a customer
+ * Delete a customer (`DELETE /v1/customers/{id}`).
  */
 export const del = (
   id: string,
@@ -67,7 +70,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/customers/${id}`, undefined, options);
 
 /**
- * List customers
+ * List customers (`GET /v1/customers`).
  */
 export const list = (
   params?: Stripe.CustomerListParams,

@@ -1,26 +1,12 @@
 /**
- * SetupIntent resource operations
+ * Stripe's `/v1/setup_intents` API as a raw resource module, the escape hatch
+ * for what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as SetupIntent from "@thomasfosterau/effect-payments-stripe/SetupIntent";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createSetupIntent = () =>
- *   SetupIntent.create({ payment_method_types: ["card"] });
- *
- * const program = Effect.gen(function* () {
- *   const setupIntent = yield* createSetupIntent();
- *   return setupIntent;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a setup intent
+ * Create a setup intent (`POST /v1/setup_intents`).
  */
 export const create = (
   params?: Stripe.SetupIntentCreateParams,
@@ -38,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/setup_intents", params, options);
 
 /**
- * Retrieve a setup intent
+ * Retrieve a setup intent (`GET /v1/setup_intents/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/setup_intents/${id}`, params, options);
 
 /**
- * Update a setup intent
+ * Update a setup intent (`POST /v1/setup_intents/{id}`).
  */
 export const update = (
   id: string,
@@ -58,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/setup_intents/${id}`, params, options);
 
 /**
- * Confirm a setup intent
+ * Confirm a setup intent (`POST /v1/setup_intents/{id}/confirm`).
  */
 export const confirm = (
   id: string,
@@ -68,7 +54,7 @@ export const confirm = (
   stripeRequest("POST", path`/v1/setup_intents/${id}/confirm`, params, options);
 
 /**
- * Cancel a setup intent
+ * Cancel a setup intent (`POST /v1/setup_intents/{id}/cancel`).
  */
 export const cancel = (
   id: string,
@@ -78,7 +64,7 @@ export const cancel = (
   stripeRequest("POST", path`/v1/setup_intents/${id}/cancel`, params, options);
 
 /**
- * List setup intents
+ * List setup intents (`GET /v1/setup_intents`).
  */
 export const list = (
   params?: Stripe.SetupIntentListParams,

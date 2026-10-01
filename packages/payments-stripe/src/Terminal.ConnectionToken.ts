@@ -1,28 +1,12 @@
 /**
- * Terminal ConnectionToken resource operations
+ * Stripe's `/v1/terminal/connection_tokens` API as a raw resource module, the
+ * escape hatch for what the neutral capabilities do not cover. Results are
+ * typed with the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as TerminalConnectionToken from "@thomasfosterau/effect-payments-stripe/Terminal.ConnectionToken";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createToken = (locationId?: string) =>
- *   TerminalConnectionToken.create(
- *     locationId ? { location: locationId } : undefined
- *   );
- *
- * const program = Effect.gen(function* () {
- *   const token = yield* createToken("tml_123");
- *   return token;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -31,11 +15,8 @@ import { type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a terminal connection token
- *
- * Connection tokens are short-lived credentials that authenticate the Stripe Terminal SDK
- * to communicate with a reader. They should be generated on-demand from your backend
- * whenever the Terminal SDK needs to connect to a reader.
+ * Create a terminal connection token (`POST /v1/terminal/connection_tokens`):
+ * a short-lived credential for the Terminal SDK to connect to a reader.
  */
 export const create = (
   params?: Stripe.Terminal.ConnectionTokenCreateParams,

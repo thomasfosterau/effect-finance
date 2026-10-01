@@ -1,23 +1,12 @@
 /**
- * Identity VerificationReport resource operations
+ * Stripe's `/v1/identity/verification_reports` API as a raw resource module,
+ * the escape hatch for what the neutral capabilities do not cover. Results are
+ * typed with the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as IdentityVerificationReport from "@thomasfosterau/effect-payments-stripe/Identity.VerificationReport";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const program = Effect.gen(function* () {
- *   const report = yield* IdentityVerificationReport.retrieve("vr_123");
- *   return report;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -27,11 +16,7 @@ import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a verification report
- *
- * @example
- * ```typescript
- * const report = yield* IdentityVerificationReport.retrieve("vr_123");
- * ```
+ * (`GET /v1/identity/verification_reports/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -41,15 +26,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/identity/verification_reports/${id}`, params, options);
 
 /**
- * List verification reports
- *
- * @example
- * ```typescript
- * const reports = yield* IdentityVerificationReport.list({
- *   limit: 10,
- *   verification_session: "vs_123"
- * });
- * ```
+ * List verification reports (`GET /v1/identity/verification_reports`).
  */
 export const list = (
   params?: Stripe.Identity.VerificationReportListParams,

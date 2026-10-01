@@ -1,30 +1,12 @@
 /**
- * Transfer resource operations
+ * Stripe's `/v1/transfers` API as a raw resource module, the escape hatch for
+ * what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Transfer from "@thomasfosterau/effect-payments-stripe/Transfer";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createTransfer = (amount: number, destination: string) =>
- *   Transfer.create({
- *     amount,
- *     currency: "usd",
- *     destination,
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const transfer = yield* createTransfer(1000, "acct_123");
- *   return transfer;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -33,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a transfer
+ * Create a transfer (`POST /v1/transfers`).
  */
 export const create = (
   params: Stripe.TransferCreateParams,
@@ -42,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/transfers", params, options);
 
 /**
- * Retrieve a transfer
+ * Retrieve a transfer (`GET /v1/transfers/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -52,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/transfers/${id}`, params, options);
 
 /**
- * Update a transfer
+ * Update a transfer (`POST /v1/transfers/{id}`).
  */
 export const update = (
   id: string,
@@ -62,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/transfers/${id}`, params, options);
 
 /**
- * List transfers
+ * List transfers (`GET /v1/transfers`).
  */
 export const list = (
   params?: Stripe.TransferListParams,

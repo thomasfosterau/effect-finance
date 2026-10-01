@@ -1,34 +1,12 @@
 /**
- * Issuing Dispute resource operations
+ * Stripe's `/v1/issuing/disputes` API as a raw resource module, the escape
+ * hatch for what the neutral capabilities do not cover. Results are typed with
+ * the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as IssuingDispute from "@thomasfosterau/effect-payments-stripe/Issuing.Dispute";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createDispute = (transactionId: string) =>
- *   IssuingDispute.create({
- *     transaction: transactionId,
- *     evidence: {
- *       reason: "fraudulent",
- *       fraudulent: {
- *         explanation: "I did not authorize this transaction.",
- *       },
- *     },
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const dispute = yield* createDispute("ipi_xxx");
- *   return dispute;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -37,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create an issuing dispute
+ * Create an issuing dispute (`POST /v1/issuing/disputes`).
  */
 export const create = (
   params: Stripe.Issuing.DisputeCreateParams,
@@ -46,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/issuing/disputes", params, options);
 
 /**
- * Retrieve an issuing dispute
+ * Retrieve an issuing dispute (`GET /v1/issuing/disputes/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -56,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/issuing/disputes/${id}`, params, options);
 
 /**
- * Update an issuing dispute
+ * Update an issuing dispute (`POST /v1/issuing/disputes/{id}`).
  */
 export const update = (
   id: string,
@@ -66,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/issuing/disputes/${id}`, params, options);
 
 /**
- * List issuing disputes
+ * List issuing disputes (`GET /v1/issuing/disputes`).
  */
 export const list = (
   params?: Stripe.Issuing.DisputeListParams,

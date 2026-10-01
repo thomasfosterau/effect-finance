@@ -1,39 +1,12 @@
 /**
- * Issuing Cardholder resource operations
+ * Stripe's `/v1/issuing/cardholders` API as a raw resource module, the escape
+ * hatch for what the neutral capabilities do not cover. Results are typed with
+ * the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as IssuingCardholder from "@thomasfosterau/effect-payments-stripe/Issuing.Cardholder";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
  *
- * const createCardholder = () =>
- *   IssuingCardholder.create({
- *     name: "John Doe",
- *     email: "john.doe@example.com",
- *     phone_number: "+18888675309",
- *     billing: {
- *       address: {
- *         line1: "123 Main Street",
- *         city: "San Francisco",
- *         state: "CA",
- *         postal_code: "94111",
- *         country: "US",
- *       },
- *     },
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const cardholder = yield* createCardholder();
- *   return cardholder;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -42,7 +15,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create an issuing cardholder
+ * Create an issuing cardholder (`POST /v1/issuing/cardholders`).
  */
 export const create = (
   params: Stripe.Issuing.CardholderCreateParams,
@@ -51,7 +24,7 @@ export const create = (
   stripeRequest("POST", "/v1/issuing/cardholders", params, options);
 
 /**
- * Retrieve an issuing cardholder
+ * Retrieve an issuing cardholder (`GET /v1/issuing/cardholders/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -61,7 +34,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/issuing/cardholders/${id}`, params, options);
 
 /**
- * Update an issuing cardholder
+ * Update an issuing cardholder (`POST /v1/issuing/cardholders/{id}`).
  */
 export const update = (
   id: string,
@@ -71,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/issuing/cardholders/${id}`, params, options);
 
 /**
- * List issuing cardholders
+ * List issuing cardholders (`GET /v1/issuing/cardholders`).
  */
 export const list = (
   params?: Stripe.Issuing.CardholderListParams,
