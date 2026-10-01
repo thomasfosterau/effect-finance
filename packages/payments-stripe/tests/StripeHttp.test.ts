@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
 import { ConfigProvider, Effect, Layer, Redacted } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import {
   PaymentAuthenticationError,
   PaymentConfigError,
@@ -568,6 +568,25 @@ describe("StripeHttp configuration", () => {
     );
     expect(error).toBeInstanceOf(PaymentConfigError);
     expect(error.message).toContain("MY_STRIPE_KEY");
+  });
+
+  // Effect rc.118's ConfigProvider treats a literal empty string as a MISSING
+  // value (it was a present "" through rc.117), so an empty key variable is
+  // indistinguishable from an unset one: the same failure, naming the variable.
+  it("treats an empty key variable as absent", async () => {
+    const { http, calls } = stubFetch(ok);
+    const error = await Effect.runPromise(
+      Effect.flip(
+        Layer.build(layerFromEnv()).pipe(
+          Effect.scoped,
+          Effect.provide(http),
+          Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ STRIPE_API_KEY: "" }))),
+        ),
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentConfigError);
+    expect(error.message).toContain("STRIPE_API_KEY");
+    expect(calls).toHaveLength(0);
   });
 });
 

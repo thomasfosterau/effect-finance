@@ -1,12 +1,12 @@
 /**
  * Test doubles shared by the Stripe suites: a fake {@link StripeHttp} that
  * records what the resource modules and capability layers ask for, and a
- * stubbed `fetch` served as `effect/unstable/http`'s `HttpClient` for the
+ * stubbed `fetch` served as `effect/http`'s `HttpClient` for the
  * transport itself. No test reaches `api.stripe.com`.
  */
 
 import { Effect, Fiber, Layer } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 import type { PaymentsError } from "@thomasfosterau/effect-payments";
 import { StripeHttp, type StripeRequest } from "../src/StripeHttp.ts";

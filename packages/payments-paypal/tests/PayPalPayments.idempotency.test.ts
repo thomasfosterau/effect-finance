@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
 import { Effect, Layer, Redacted } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import * as Product from "@thomasfosterau/effect-payments/Product";
 import * as Price from "@thomasfosterau/effect-payments/Price";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";

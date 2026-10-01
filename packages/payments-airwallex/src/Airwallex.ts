@@ -6,7 +6,7 @@
  * caches the token until shortly before it expires, and exposes a single
  * {@link AirwallexClient.request} method that the capability layers build upon.
  *
- * Every call goes through `effect/unstable/http`'s `HttpClient`, which the
+ * Every call goes through `effect/http`'s `HttpClient`, which the
  * layers require: provide `FetchHttpClient.layer` in production, or a stub
  * `HttpClient` (or a stub `FetchHttpClient.Fetch`) in tests.
  *
@@ -31,7 +31,7 @@ import {
   type HttpClientError,
   HttpClientRequest,
   type HttpClientResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 import {
   PaymentConfigError,
   PaymentInvalidRequestError,
@@ -360,6 +360,9 @@ export const layer = (
  * Create an Airwallex client layer from configuration variables (read through
  * the current `ConfigProvider`, which defaults to the process environment).
  * `AIRWALLEX_BASE_URL` optionally overrides the endpoint.
+ * An empty variable counts as unset (Effect rc.118 reads an empty string as
+ * missing): an empty id or key fails with {@link PaymentConfigError}, an
+ * empty `AIRWALLEX_BASE_URL` selects the default endpoint.
  */
 export const layerFromEnv = (
   clientIdVar = "AIRWALLEX_CLIENT_ID",

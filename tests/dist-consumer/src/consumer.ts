@@ -8,7 +8,7 @@
  */
 
 import { type Effect, type Layer, Redacted } from "effect";
-import type { HttpClient } from "effect/unstable/http";
+import type { HttpClient } from "effect/http";
 import type Stripe from "stripe";
 import {
   money,

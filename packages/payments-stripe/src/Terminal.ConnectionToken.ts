@@ -4,7 +4,7 @@
  * @example
  * ```typescript
  * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/unstable/http";
+ * import { FetchHttpClient } from "effect/http";
  * import * as TerminalConnectionToken from "@thomasfosterau/effect-payments-stripe/Terminal.ConnectionToken";
  * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
  *

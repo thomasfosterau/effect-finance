@@ -4,7 +4,7 @@
  * The Stripe implementation of the vendor-neutral
  * `@thomasfosterau/effect-payments` core. It provides:
  *
- * - **`StripeHttp`** — the fetch-only transport over `effect/unstable/http`'s
+ * - **`StripeHttp`** — the fetch-only transport over `effect/http`'s
  *   `HttpClient` (form-encoded bodies, pinned `Stripe-Version`, `Redacted`
  *   key), which runs in a Cloudflare Worker with no Node API and no SDK.
  * - **`StripePayments`** — `Layer`s that implement the neutral capabilities
@@ -26,7 +26,7 @@
  * @example
  * ```typescript
  * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/unstable/http";
+ * import { FetchHttpClient } from "effect/http";
  * import * as Customer from "@thomasfosterau/effect-payments/Customer";
  * import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
  *

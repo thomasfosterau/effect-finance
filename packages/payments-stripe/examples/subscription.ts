@@ -1,5 +1,5 @@
 import { Console, Effect, Layer } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as Product from "@thomasfosterau/effect-payments/Product";
 import * as Price from "@thomasfosterau/effect-payments/Price";

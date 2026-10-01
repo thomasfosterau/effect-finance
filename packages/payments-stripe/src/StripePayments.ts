@@ -15,7 +15,7 @@
  */
 
 import { Effect, Layer } from "effect";
-import type { HttpClient } from "effect/unstable/http";
+import type { HttpClient } from "effect/http";
 import {
   Customer as CustomerNS,
   Product as ProductNS,

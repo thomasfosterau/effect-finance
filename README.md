@@ -38,11 +38,11 @@ The **provider** is chosen at the edge of your application by providing a layer.
 
 ```typescript
 import { Layer, Redacted } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 
 const layer = StripePayments.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
-  Layer.provide(FetchHttpClient.layer), // every provider speaks effect/unstable/http
+  Layer.provide(FetchHttpClient.layer), // every provider speaks effect/http
 );
 
 const result = await Effect.runPromise(
@@ -54,7 +54,7 @@ The same program runs on a different provider by changing only the layer:
 
 ```typescript
 import { Layer, Redacted } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
 
 const layer = AirwallexPayments.layer({ clientId: "...", apiKey: Redacted.make("...") }).pipe(
@@ -70,7 +70,7 @@ Providers may implement only the capabilities they support, and different provid
 npm install @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe effect
 ```
 
-`effect` is a peer dependency of every package. The Stripe provider talks to the API over `fetch` (through `effect/unstable/http`), with no Node API and no SDK, so it runs in a Cloudflare Worker. The official `stripe` package is an **optional** peer (`^18.5.0`, the release for the default API version): the migrated resource modules (`CheckoutSession`, `BillingPortal.Session`; see below) need nothing from it, the other resource modules still take their types from it (a dev dependency is enough), and it is a runtime dependency only to use the SDK transport (`@thomasfosterau/effect-payments-stripe/Stripe`) or the SDK-based `Webhook` verifier.
+`effect` is a peer dependency of every package. The Stripe provider talks to the API over `fetch` (through `effect/http`), with no Node API and no SDK, so it runs in a Cloudflare Worker. The official `stripe` package is an **optional** peer (`^18.5.0`, the release for the default API version): the migrated resource modules (`CheckoutSession`, `BillingPortal.Session`; see below) need nothing from it, the other resource modules still take their types from it (a dev dependency is enough), and it is a runtime dependency only to use the SDK transport (`@thomasfosterau/effect-payments-stripe/Stripe`) or the SDK-based `Webhook` verifier.
 
 ## The vendor-neutral core
 
@@ -149,7 +149,7 @@ yield *
 
 ```typescript
 import { Layer, Redacted } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 
 const layer = StripePayments.layer({
@@ -160,6 +160,7 @@ const layer = StripePayments.layer({
 }).pipe(Layer.provide(FetchHttpClient.layer));
 
 // Or from a configuration variable (STRIPE_API_KEY by default), read as a Redacted:
+// (Effect 4.0.0-rc.118 reads an empty variable as a missing one, so an empty STRIPE_API_KEY fails the build.)
 const fromEnv = StripePayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 ```
 

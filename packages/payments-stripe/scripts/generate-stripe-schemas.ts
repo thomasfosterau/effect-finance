@@ -20,8 +20,8 @@
  */
 
 import { Config, Console, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
-import type { OpenAPISpec } from "effect/unstable/httpapi/OpenApi";
+import { FetchHttpClient, HttpClient } from "effect/http";
+import type { OpenAPISpec } from "effect/http-api/OpenApi";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as OpenApiGenerator from "@effect/openapi-generator/OpenApiGenerator";

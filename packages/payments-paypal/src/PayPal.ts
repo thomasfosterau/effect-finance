@@ -6,7 +6,7 @@
  * caches it until shortly before expiry, and exposes a single
  * {@link PayPalClient.request} method that the capability layers build upon.
  *
- * Every call goes through `effect/unstable/http`'s `HttpClient`, which the
+ * Every call goes through `effect/http`'s `HttpClient`, which the
  * layers require: provide `FetchHttpClient.layer` in production, or a stub
  * `HttpClient` (or a stub `FetchHttpClient.Fetch`) in tests.
  *
@@ -19,19 +19,19 @@ import {
   Context,
   Duration,
   Effect,
-  Encoding,
   Layer,
   Option,
   Redacted,
   Ref,
   Schema,
 } from "effect";
+import { Base64 } from "effect/encoding";
 import {
   HttpClient,
   type HttpClientError,
   HttpClientRequest,
   type HttpClientResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 import {
   PaymentConfigError,
   PaymentInvalidRequestError,
@@ -214,7 +214,7 @@ export const make = (
     const http = yield* HttpClient.HttpClient;
     const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     const basicAuth = Redacted.make(
-      Encoding.encodeBase64(`${config.clientId}:${Redacted.value(config.clientSecret)}`),
+      Base64.encode(`${config.clientId}:${Redacted.value(config.clientSecret)}`),
     );
     const tokenRef = yield* Ref.make(Option.none<TokenState>());
 
@@ -360,6 +360,9 @@ export const layer = (
  * Create a PayPal client layer from configuration variables (read through the
  * current `ConfigProvider`, which defaults to the process environment).
  * `PAYPAL_BASE_URL` optionally overrides the endpoint.
+ * An empty variable counts as unset (Effect rc.118 reads an empty string as
+ * missing): an empty id or secret fails with {@link PaymentConfigError}, an
+ * empty `PAYPAL_BASE_URL` selects the default endpoint.
  */
 export const layerFromEnv = (
   clientIdVar = "PAYPAL_CLIENT_ID",
