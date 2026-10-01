@@ -223,6 +223,10 @@
       "types": "./dist/CheckoutSession.d.ts",
       "default": "./dist/CheckoutSession.js"
     },
+    "./BillingPortal.Session": {
+      "types": "./dist/BillingPortal.Session.d.ts",
+      "default": "./dist/BillingPortal.Session.js"
+    },
     "./SubscriptionSchedule": {
       "types": "./dist/SubscriptionSchedule.d.ts",
       "default": "./dist/SubscriptionSchedule.js"
@@ -235,11 +239,16 @@
   "publishConfig": {
     "access": "public"
   },
+  "scripts": {
+    "generate:schemas": "node scripts/generate-stripe-schemas.ts"
+  },
   "dependencies": {
     "@thomasfosterau/effect-payments": "workspace:^"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
+    "@effect/openapi-generator": "catalog:",
+    "@effect/platform-node": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-istanbul": "catalog:",
     "effect": "catalog:",

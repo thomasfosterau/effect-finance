@@ -35,7 +35,7 @@ import type { StripeHttp } from "./StripeHttp.js";
  */
 export const create = (
   accountId: string,
-  params: Stripe.ExternalAccountCreateParams,
+  params: Stripe.AccountCreateExternalAccountParams,
 ): Effect.Effect<Stripe.BankAccount | Stripe.Card, StripeError, StripeHttp> =>
   stripeRequest("POST", path`/v1/accounts/${accountId}/external_accounts`, params);
 
@@ -45,7 +45,7 @@ export const create = (
 export const retrieve = (
   accountId: string,
   id: string,
-  params?: Stripe.ExternalAccountRetrieveParams,
+  params?: Stripe.AccountRetrieveExternalAccountParams,
 ): Effect.Effect<Stripe.BankAccount | Stripe.Card, StripeError, StripeHttp> =>
   stripeRequest("GET", path`/v1/accounts/${accountId}/external_accounts/${id}`, params);
 
@@ -55,7 +55,7 @@ export const retrieve = (
 export const update = (
   accountId: string,
   id: string,
-  params?: Stripe.ExternalAccountUpdateParams,
+  params?: Stripe.AccountUpdateExternalAccountParams,
 ): Effect.Effect<Stripe.BankAccount | Stripe.Card, StripeError, StripeHttp> =>
   stripeRequest("POST", path`/v1/accounts/${accountId}/external_accounts/${id}`, params);
 
@@ -73,6 +73,6 @@ export const del = (
  */
 export const list = (
   accountId: string,
-  params?: Stripe.ExternalAccountListParams,
+  params?: Stripe.AccountListExternalAccountsParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.BankAccount | Stripe.Card>, StripeError, StripeHttp> =>
   stripeRequest("GET", path`/v1/accounts/${accountId}/external_accounts`, params);

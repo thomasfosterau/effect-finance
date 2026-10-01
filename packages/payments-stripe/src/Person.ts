@@ -36,7 +36,7 @@ import type { StripeHttp } from "./StripeHttp.js";
  */
 export const create = (
   accountId: string,
-  params: Stripe.PersonCreateParams,
+  params: Stripe.AccountCreatePersonParams,
 ): Effect.Effect<Stripe.Person, StripeError, StripeHttp> =>
   stripeRequest("POST", path`/v1/accounts/${accountId}/persons`, params);
 
@@ -46,7 +46,7 @@ export const create = (
 export const retrieve = (
   accountId: string,
   id: string,
-  params?: Stripe.PersonRetrieveParams,
+  params?: Stripe.AccountRetrievePersonParams,
 ): Effect.Effect<Stripe.Person, StripeError, StripeHttp> =>
   stripeRequest("GET", path`/v1/accounts/${accountId}/persons/${id}`, params);
 
@@ -56,7 +56,7 @@ export const retrieve = (
 export const update = (
   accountId: string,
   id: string,
-  params?: Stripe.PersonUpdateParams,
+  params?: Stripe.AccountUpdatePersonParams,
 ): Effect.Effect<Stripe.Person, StripeError, StripeHttp> =>
   stripeRequest("POST", path`/v1/accounts/${accountId}/persons/${id}`, params);
 
@@ -74,6 +74,6 @@ export const del = (
  */
 export const list = (
   accountId: string,
-  params?: Stripe.PersonListParams,
+  params?: Stripe.AccountListPersonsParams,
 ): Effect.Effect<Stripe.ApiList<Stripe.Person>, StripeError, StripeHttp> =>
   stripeRequest("GET", path`/v1/accounts/${accountId}/persons`, params);

@@ -7,7 +7,7 @@ import Stripe from "stripe";
 
 describe("Webhook", () => {
   const mockStripe = new Stripe("sk_test_mock", {
-    apiVersion: "2025-02-24.acacia",
+    apiVersion: "2025-08-27.basil",
   });
 
   const testLayer = Layer.succeed(StripeService, mockStripe);
