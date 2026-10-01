@@ -47,7 +47,7 @@ catalog:
   fallow: 3.30.0
   # The official Stripe SDK: a dev dependency of
   # @thomasfosterau/effect-payments-stripe (its types describe the results of
-  # the resource modules not yet migrated to generated Schema types, #56; its
+  # the resource modules not yet migrated to generated Schema types, #81; its
   # client backs the optional SDK transport and the SDK-based webhook
   # verifier) and an OPTIONAL peer (`catalogs.peers`) — the fetch-only
   # transport (#39) never loads it. 18.5.x is the release whose API version
@@ -86,7 +86,7 @@ catalogs:
     effect: ">=4.0.0-rc.118"
     # Optional (`peerDependenciesMeta`): only the `./Stripe` SDK transport and
     # the SDK-based `./Webhook` verifier load it, plus the resource modules
-    # not yet migrated to generated types (#56) for their types. Caret, not
+    # not yet migrated to generated types (#81) for their types. Caret, not
     # `>=`: the SDK's API version is what it sends and what those types
     # describe (18.5 → 2025-08-27.basil, the fetch transport's
     # DEFAULT_API_VERSION and the pinned OpenAPI spec of

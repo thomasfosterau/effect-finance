@@ -61,7 +61,9 @@ export class Price extends Schema.Class<Price>("@effect-payments/Price")({
 /** Parameters for creating a price. */
 export interface CreateParams {
   readonly product: string;
+  /** Lower-cased ISO 4217 currency code, e.g. `"usd"`. */
   readonly currency: string;
+  /** Unit amount in the smallest currency unit (e.g. `2000` = $20.00). */
   readonly unitAmount: number;
   readonly recurring?: {
     readonly interval: KnownRecurringInterval;
@@ -104,13 +106,20 @@ export class Prices extends Context.Service<
   }
 >()("@effect-payments/Prices") {}
 
-/** Create a price. */
+/**
+ * Create a price. Fails with `PaymentInvalidRequestError` on a provider that
+ * cannot create this kind of price (a one-time price on a recurring-only
+ * provider).
+ */
 export const create = (params: CreateParams): Effect.Effect<Price, PaymentsError, Prices> =>
   Effect.flatMap(Prices, (service) => service.create(params));
 /** Retrieve a price by id. */
 export const retrieve = (id: string): Effect.Effect<Price, PaymentsError, Prices> =>
   Effect.flatMap(Prices, (service) => service.retrieve(id));
-/** Update a price. */
+/**
+ * Update a price. Fails with `PaymentInvalidRequestError` on a provider that
+ * cannot apply the given fields (some can only toggle `active`).
+ */
 export const update = (
   id: string,
   params: UpdateParams,

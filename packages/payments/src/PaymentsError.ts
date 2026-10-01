@@ -2,10 +2,9 @@
  * Vendor-neutral error types for payment operations.
  *
  * These errors form the failure channel of every operation exposed by the
- * payments core. Concrete providers (e.g. the Stripe implementation) are
- * responsible for translating their SDK-specific errors into these neutral
- * variants so that programs written against the core never depend on a
- * particular vendor's error taxonomy.
+ * payments core. Concrete providers translate their vendor's error responses
+ * into these variants, so a program never depends on one vendor's error
+ * taxonomy.
  *
  * @module
  */

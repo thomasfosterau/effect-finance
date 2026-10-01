@@ -7,21 +7,22 @@
  * - **`StripeHttp`** — the fetch-only transport over `effect/http`'s
  *   `HttpClient` (form-encoded bodies, pinned `Stripe-Version`, `Redacted`
  *   key), which runs in a Cloudflare Worker with no Node API and no SDK.
- * - **`StripePayments`** — `Layer`s that implement the neutral capabilities
- *   (`Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`,
- *   `Refunds`) over that transport, plus `layer`/`layerFromEnv` that bundle
- *   the transport and every capability together.
+ * - **`StripePayments`** — `Layer`s that implement every neutral capability
+ *   (including `CheckoutSessions` and `BillingPortalSessions`) over that
+ *   transport, plus the `layer` / `layerFromEnv` / `layerConfig` bundles of
+ *   the transport and every capability.
  * - **Raw resource modules** (`Customer`, `Product`, `Charge`, `Treasury`, …) —
- *   the full-fidelity Stripe escape hatch, typed with the `stripe` package's
- *   declarations, for the many resources that have no vendor-neutral
- *   equivalent.
+ *   the full-fidelity Stripe escape hatch for the many resources that have no
+ *   vendor-neutral equivalent, typed with the `stripe` package's declarations,
+ *   except `CheckoutSession` and `BillingPortal.Session`, which are generated
+ *   from Stripe's OpenAPI spec and decoded.
  *
  * The official SDK is an optional alternative transport, imported from its
  * own subpath (`@thomasfosterau/effect-payments-stripe/Stripe`) and never
  * loaded by this entry point.
  *
- * This mirrors Effect's AI packages: `@effect/ai` defines the abstraction and
- * `@effect/ai-openai` implements it while still exposing provider-specific APIs.
+ * This is the payments analogue of Effect's AI modules: one abstraction, one
+ * package per provider, with provider-specific APIs still exposed.
  *
  * @example
  * ```typescript

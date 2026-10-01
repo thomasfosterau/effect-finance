@@ -19,8 +19,7 @@
  * `@thomasfosterau/effect-payments-stripe`) supplies `Layer`s that implement
  * these capabilities. Programs written against this core can therefore run on
  * any provider without modification — the payments analogue of Effect's AI
- * package, where `@effect/ai` defines the abstraction and `@effect/ai-openai`
- * supplies an implementation.
+ * modules: one abstraction, one package per provider.
  *
  * @example
  * ```typescript

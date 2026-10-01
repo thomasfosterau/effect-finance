@@ -57,7 +57,9 @@ export class PaymentIntent extends Schema.Class<PaymentIntent>("@effect-payments
 
 /** Parameters for creating a payment intent. */
 export interface CreateParams {
+  /** Amount in the smallest currency unit (e.g. `2000` = $20.00). */
   readonly amount: number;
+  /** Lower-cased ISO 4217 currency code, e.g. `"usd"`. */
   readonly currency: string;
   readonly customer?: string | undefined;
   readonly paymentMethod?: string | undefined;
@@ -73,6 +75,7 @@ export interface CreateParams {
 
 /** Parameters for updating a payment intent. */
 export interface UpdateParams {
+  /** Amount in the smallest currency unit (e.g. `2000` = $20.00). */
   readonly amount?: number | undefined;
   readonly description?: string | undefined;
   readonly metadata?: Record<string, string> | undefined;
@@ -125,7 +128,10 @@ export const create = (
 /** Retrieve a payment intent by id. */
 export const retrieve = (id: string): Effect.Effect<PaymentIntent, PaymentsError, PaymentIntents> =>
   Effect.flatMap(PaymentIntents, (service) => service.retrieve(id));
-/** Update a payment intent. */
+/**
+ * Update a payment intent. Fails with `PaymentInvalidRequestError` on a provider
+ * without this operation.
+ */
 export const update = (
   id: string,
   params: UpdateParams,
@@ -137,10 +143,16 @@ export const confirm = (
   params?: ConfirmParams,
 ): Effect.Effect<PaymentIntent, PaymentsError, PaymentIntents> =>
   Effect.flatMap(PaymentIntents, (service) => service.confirm(id, params));
-/** Cancel a payment intent. */
+/**
+ * Cancel a payment intent. Fails with `PaymentInvalidRequestError` on a provider
+ * without this operation.
+ */
 export const cancel = (id: string): Effect.Effect<PaymentIntent, PaymentsError, PaymentIntents> =>
   Effect.flatMap(PaymentIntents, (service) => service.cancel(id));
-/** List payment intents. */
+/**
+ * List payment intents. Fails with `PaymentInvalidRequestError` on a provider
+ * without this operation.
+ */
 export const list = (
   params?: ListParams,
 ): Effect.Effect<Page<PaymentIntent>, PaymentsError, PaymentIntents> =>

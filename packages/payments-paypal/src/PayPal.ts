@@ -65,8 +65,9 @@ export interface PayPalConfig {
    * `PaymentNetworkError`. Defaults to 30 000; `Infinity` disables it, and
    * `0`, a negative number or `NaN` fails with `PaymentConfigError`. Logins are
    * serialised, so a login that never answers would otherwise stall every
-   * request on the client. A caller queued behind a failed login makes its own
-   * attempt, so the k-th queued caller can wait about k × `loginTimeout` (#65).
+   * request on the client. Callers that arrive while a login is in flight
+   * share its outcome, so each waits at most about one `loginTimeout`; the next
+   * call after a failure logs in afresh (#65).
    */
   readonly loginTimeout?: number | undefined;
   /**
@@ -95,7 +96,7 @@ export interface PayPalRequest {
    * documents the header for `POST`, and not for every endpoint: a `POST` to
    * an endpoint that ignores it is simply not deduplicated). PayPal limits the
    * id to about 108 characters and keeps it for a limited time that differs
-   * per API; both figures are unverified here. An empty string fails with
+   * per API; both figures are unverified (#93). An empty string fails with
    * `PaymentInvalidRequestError` before anything is sent, and a `GET`,
    * `PATCH` or `DELETE` carrying one is rejected the same way rather than
    * silently ignoring it.

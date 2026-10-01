@@ -64,8 +64,9 @@ export interface AirwallexConfig {
    * `PaymentNetworkError`. Defaults to 30 000; `Infinity` disables it, and
    * `0`, a negative number or `NaN` fails with `PaymentConfigError`. Logins are
    * serialised, so a login that never answers would otherwise stall every
-   * request on the client. A caller queued behind a failed login makes its own
-   * attempt, so the k-th queued caller can wait about k × `loginTimeout` (#65).
+   * request on the client. Callers that arrive while a login is in flight
+   * share its outcome, so each waits at most about one `loginTimeout`; the next
+   * call after a failure logs in afresh (#65).
    */
   readonly loginTimeout?: number | undefined;
   /**
@@ -92,9 +93,9 @@ export interface AirwallexRequest {
    * call). Makes one logical write safe to repeat: create it once, before the
    * first attempt, and send the same value on every retry of that write;
    * Airwallex then returns the original result for the same parameters (and,
-   * unverified, rejects the same id with different ones). Airwallex limits the id to about
-   * 64 characters (unverified here). An empty string, a non-`POST` request, or
-   * a body that is present but not a JSON object fails with
+   * unverified, rejects the same id with different ones); it limits the id to
+   * about 64 characters. Both claims are unverified (#93). An empty string, a non-`POST`
+   * request, or a body that is present but not a JSON object fails with
    * `PaymentInvalidRequestError` before anything is sent, rather than
    * silently dropping the id.
    */

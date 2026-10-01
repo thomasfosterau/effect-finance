@@ -72,13 +72,19 @@ export const create = (params: CreateParams): Effect.Effect<Product, PaymentsErr
 /** Retrieve a product by id. */
 export const retrieve = (id: string): Effect.Effect<Product, PaymentsError, Products> =>
   Effect.flatMap(Products, (service) => service.retrieve(id));
-/** Update a product. */
+/**
+ * Update a product. Fails with `PaymentInvalidRequestError` on a provider that
+ * cannot apply the given fields.
+ */
 export const update = (
   id: string,
   params: UpdateParams,
 ): Effect.Effect<Product, PaymentsError, Products> =>
   Effect.flatMap(Products, (service) => service.update(id, params));
-/** Delete a product. */
+/**
+ * Delete a product. Fails with `PaymentInvalidRequestError` on a provider
+ * without this operation.
+ */
 export const del = (id: string): Effect.Effect<Deleted, PaymentsError, Products> =>
   Effect.flatMap(Products, (service) => service.del(id));
 /** List products. */

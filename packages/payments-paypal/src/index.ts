@@ -16,7 +16,8 @@
  *
  * @example
  * ```typescript
- * import { Effect, Redacted } from "effect";
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/http";
  * import * as Product from "@thomasfosterau/effect-payments/Product";
  * import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
  *
@@ -25,7 +26,7 @@
  * const layer = PayPalPayments.layer({
  *   clientId: "...",
  *   clientSecret: Redacted.make("..."),
- * });
+ * }).pipe(Layer.provide(FetchHttpClient.layer));
  * const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  *
