@@ -26,15 +26,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a payment intent
  */
 export const create = (
   params: Stripe.PaymentIntentCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/payment_intents", params);
+  stripeRequest("POST", "/v1/payment_intents", params, options);
 
 /**
  * Retrieve a payment intent
@@ -42,8 +43,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.PaymentIntentRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/payment_intents/${id}`, params);
+  stripeRequest("GET", path`/v1/payment_intents/${id}`, params, options);
 
 /**
  * Update a payment intent
@@ -51,8 +53,9 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.PaymentIntentUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/payment_intents/${id}`, params);
+  stripeRequest("POST", path`/v1/payment_intents/${id}`, params, options);
 
 /**
  * Confirm a payment intent
@@ -60,8 +63,9 @@ export const update = (
 export const confirm = (
   id: string,
   params?: Stripe.PaymentIntentConfirmParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/payment_intents/${id}/confirm`, params);
+  stripeRequest("POST", path`/v1/payment_intents/${id}/confirm`, params, options);
 
 /**
  * Cancel a payment intent
@@ -69,13 +73,15 @@ export const confirm = (
 export const cancel = (
   id: string,
   params?: Stripe.PaymentIntentCancelParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.PaymentIntent, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/payment_intents/${id}/cancel`, params);
+  stripeRequest("POST", path`/v1/payment_intents/${id}/cancel`, params, options);
 
 /**
  * List payment intents
  */
 export const list = (
   params?: Stripe.PaymentIntentListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.PaymentIntent>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/payment_intents", params);
+  stripeRequest("GET", "/v1/payment_intents", params, options);

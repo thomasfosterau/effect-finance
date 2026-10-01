@@ -30,15 +30,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a price
  */
 export const create = (
   params: Stripe.PriceCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Price, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/prices", params);
+  stripeRequest("POST", "/v1/prices", params, options);
 
 /**
  * Retrieve a price
@@ -46,8 +47,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.PriceRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Price, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/prices/${id}`, params);
+  stripeRequest("GET", path`/v1/prices/${id}`, params, options);
 
 /**
  * Update a price
@@ -55,13 +57,15 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.PriceUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Price, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/prices/${id}`, params);
+  stripeRequest("POST", path`/v1/prices/${id}`, params, options);
 
 /**
  * List prices
  */
 export const list = (
   params?: Stripe.PriceListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Price>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/prices", params);
+  stripeRequest("GET", "/v1/prices", params, options);

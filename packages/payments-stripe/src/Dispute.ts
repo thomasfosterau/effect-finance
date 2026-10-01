@@ -26,7 +26,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve a dispute
@@ -34,8 +34,9 @@ import type { StripeHttp } from "./StripeHttp.js";
 export const retrieve = (
   id: string,
   params?: Stripe.DisputeRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Dispute, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/disputes/${id}`, params);
+  stripeRequest("GET", path`/v1/disputes/${id}`, params, options);
 
 /**
  * Update a dispute
@@ -43,13 +44,15 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.DisputeUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Dispute, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/disputes/${id}`, params);
+  stripeRequest("POST", path`/v1/disputes/${id}`, params, options);
 
 /**
  * List disputes
  */
 export const list = (
   params?: Stripe.DisputeListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Dispute>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/disputes", params);
+  stripeRequest("GET", "/v1/disputes", params, options);

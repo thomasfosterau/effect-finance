@@ -24,7 +24,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve an event
@@ -32,13 +32,15 @@ import type { StripeHttp } from "./StripeHttp.js";
 export const retrieve = (
   id: string,
   params?: Stripe.EventRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Event, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/events/${id}`, params);
+  stripeRequest("GET", path`/v1/events/${id}`, params, options);
 
 /**
  * List events
  */
 export const list = (
   params?: Stripe.EventListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Event>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/events", params);
+  stripeRequest("GET", "/v1/events", params, options);

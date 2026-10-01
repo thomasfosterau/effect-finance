@@ -106,20 +106,35 @@ export interface StripeHttpConfig {
 /** The HTTP methods Stripe's v1 API uses. */
 export type StripeMethod = "GET" | "POST" | "DELETE";
 
+/**
+ * Per-call options for one Stripe request, the trailing argument of every
+ * resource-module operation (the `stripe` SDK's `RequestOptions`, narrowed to
+ * the two a payments program needs).
+ */
+export interface RequestOptions {
+  /**
+   * An `Idempotency-Key` for a `POST`: make one logical write safe to repeat.
+   * Create it once, before the first attempt, and pass the same value on
+   * every retry of that write; a fresh key per attempt defeats the
+   * deduplication. Stripe ignores it on a `GET` and `DELETE`. Without one, a
+   * `POST` that may be retried by the transport gets a generated key shared
+   * by all of its attempts (which covers the transport's retries only, never
+   * a caller's). The transport sends the value verbatim; Stripe accepts up
+   * to 255 characters and rejects the same key reused with different
+   * parameters.
+   */
+  readonly idempotencyKey?: string | undefined;
+  /** A connected account to act as (`Stripe-Account`), overriding the configured one. */
+  readonly stripeAccount?: string | undefined;
+}
+
 /** One request issued through {@link StripeHttp}. */
-export interface StripeRequest {
+export interface StripeRequest extends RequestOptions {
   readonly method: StripeMethod;
   /** The API path, beginning `/v1/`; path segments already URI-encoded. */
   readonly path: string;
   /** Parameters, form-encoded into the body (`POST`) or the query. */
   readonly params?: StripeParams | undefined;
-  /**
-   * An `Idempotency-Key` for a `POST`. Without one, a `POST` that may be
-   * retried gets a generated key shared by all of its attempts.
-   */
-  readonly idempotencyKey?: string | undefined;
-  /** A connected account to act as, overriding the configured one. */
-  readonly stripeAccount?: string | undefined;
   /**
    * Send the parameters as `multipart/form-data` to the uploads origin (the
    * Files API). A parameter shaped `{ data, name?, type? }` becomes a file

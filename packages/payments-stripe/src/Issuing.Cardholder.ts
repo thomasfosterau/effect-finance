@@ -39,15 +39,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create an issuing cardholder
  */
 export const create = (
   params: Stripe.Issuing.CardholderCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Issuing.Cardholder, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/issuing/cardholders", params);
+  stripeRequest("POST", "/v1/issuing/cardholders", params, options);
 
 /**
  * Retrieve an issuing cardholder
@@ -55,8 +56,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.Issuing.CardholderRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Issuing.Cardholder, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/issuing/cardholders/${id}`, params);
+  stripeRequest("GET", path`/v1/issuing/cardholders/${id}`, params, options);
 
 /**
  * Update an issuing cardholder
@@ -64,13 +66,15 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.Issuing.CardholderUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Issuing.Cardholder, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/issuing/cardholders/${id}`, params);
+  stripeRequest("POST", path`/v1/issuing/cardholders/${id}`, params, options);
 
 /**
  * List issuing cardholders
  */
 export const list = (
   params?: Stripe.Issuing.CardholderListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Issuing.Cardholder>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/issuing/cardholders", params);
+  stripeRequest("GET", "/v1/issuing/cardholders", params, options);

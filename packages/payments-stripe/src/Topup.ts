@@ -30,15 +30,16 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a topup
  */
 export const create = (
   params: Stripe.TopupCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Topup, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/topups", params);
+  stripeRequest("POST", "/v1/topups", params, options);
 
 /**
  * Retrieve a topup
@@ -46,8 +47,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.TopupRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Topup, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/topups/${id}`, params);
+  stripeRequest("GET", path`/v1/topups/${id}`, params, options);
 
 /**
  * Update a topup
@@ -55,13 +57,15 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.TopupUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Topup, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/topups/${id}`, params);
+  stripeRequest("POST", path`/v1/topups/${id}`, params, options);
 
 /**
  * List topups
  */
 export const list = (
   params?: Stripe.TopupListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Topup>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/topups", params);
+  stripeRequest("GET", "/v1/topups", params, options);

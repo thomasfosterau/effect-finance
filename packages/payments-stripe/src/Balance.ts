@@ -23,12 +23,13 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Retrieve the balance
  */
 export const retrieve = (
   params?: Stripe.BalanceRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Balance, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/balance", params);
+  stripeRequest("GET", "/v1/balance", params, options);

@@ -22,7 +22,7 @@ import type { Effect } from "effect";
 import * as Generated from "./internal/generated/schemas.js";
 import { stripeRequestDecoded } from "./internal/decode.js";
 import type { StripeError } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /** The Billing Portal Session object, as a `Schema` (the decoder for the response). */
 export const Session = Generated.Billing_portal_session;
@@ -37,6 +37,7 @@ export type SessionCreateParams = Generated.PostBillingPortalSessionsRequestForm
  */
 export const create = (
   params: SessionCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Session, StripeError, StripeHttp> =>
   stripeRequestDecoded(
     "billing portal session",
@@ -44,4 +45,5 @@ export const create = (
     "POST",
     "/v1/billing_portal/sessions",
     params,
+    options,
   );

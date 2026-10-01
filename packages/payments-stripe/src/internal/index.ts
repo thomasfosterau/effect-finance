@@ -1,6 +1,6 @@
 import { Effect, Predicate } from "effect";
 import { PaymentInvalidRequestError, type PaymentsError } from "@thomasfosterau/effect-payments";
-import { StripeHttp, type StripeMethod } from "../StripeHttp.js";
+import { type RequestOptions, StripeHttp, type StripeMethod } from "../StripeHttp.js";
 import type { StripeParams } from "./params.js";
 
 /**
@@ -52,6 +52,16 @@ export const withPath = <A, E, R>(
   Predicate.isString(requestPath) ? f(requestPath) : Effect.fail(requestPath);
 
 /**
+ * The two fields of a caller's {@link RequestOptions}, and nothing else: an
+ * options object from untyped code must not be able to override the request's
+ * method or path.
+ */
+const pickOptions = (options: RequestOptions | undefined): RequestOptions => ({
+  idempotencyKey: options?.idempotencyKey,
+  stripeAccount: options?.stripeAccount,
+});
+
+/**
  * Issue one Stripe API call through the {@link StripeHttp} transport in
  * context. Every resource module's operations are one call to this.
  *
@@ -64,11 +74,14 @@ export const stripeRequest = <A>(
   method: StripeMethod,
   requestPath: RequestPath,
   params?: StripeParams | undefined,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<A, StripeError, StripeHttp> =>
   // SAFETY: NOT checked — see above. The shape is the one the Stripe API
   // documents for this path at the pinned `Stripe-Version`.
   withPath(requestPath, (valid) =>
-    Effect.flatMap(StripeHttp, (http) => http.request({ method, path: valid, params })),
+    Effect.flatMap(StripeHttp, (http) =>
+      http.request({ method, path: valid, params, ...pickOptions(options) }),
+    ),
   ) as Effect.Effect<A, StripeError, StripeHttp>;
 
 /**
@@ -79,10 +92,11 @@ export const stripeRequest = <A>(
 export const stripeUpload = <A>(
   requestPath: RequestPath,
   params: StripeParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<A, StripeError, StripeHttp> =>
   // SAFETY: NOT checked — see `stripeRequest`.
   withPath(requestPath, (valid) =>
     Effect.flatMap(StripeHttp, (http) =>
-      http.request({ method: "POST", path: valid, params, upload: true }),
+      http.request({ method: "POST", path: valid, params, upload: true, ...pickOptions(options) }),
     ),
   ) as Effect.Effect<A, StripeError, StripeHttp>;

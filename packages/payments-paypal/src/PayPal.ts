@@ -34,6 +34,7 @@ import {
 } from "effect/unstable/http";
 import {
   PaymentConfigError,
+  PaymentInvalidRequestError,
   PaymentNetworkError,
   PaymentProviderError,
   type PaymentsError,
@@ -84,6 +85,20 @@ export interface PayPalRequest {
   readonly path: string;
   readonly query?: Record<string, string | number | undefined> | undefined;
   readonly body?: unknown | undefined;
+  /**
+   * A `PayPal-Request-Id` for a `POST`: makes one logical write safe to
+   * repeat. Create it once, before the first attempt, and send the same value
+   * on every retry of that write; PayPal then returns the original outcome
+   * instead of applying the write again. Sent verbatim, on `POST` only (PayPal
+   * documents the header for `POST`, and not for every endpoint: a `POST` to
+   * an endpoint that ignores it is simply not deduplicated). PayPal limits the
+   * id to about 108 characters and keeps it for a limited time that differs
+   * per API; both figures are unverified here. An empty string fails with
+   * `PaymentInvalidRequestError` before anything is sent, and a `GET`,
+   * `PATCH` or `DELETE` carrying one is rejected the same way rather than
+   * silently ignoring it.
+   */
+  readonly requestId?: string | undefined;
 }
 
 /**
@@ -162,6 +177,26 @@ const timeoutOf = (
           message: `PayPal ${name} must be a positive number of milliseconds, or Infinity for none (got ${millis})`,
         }),
       );
+
+/**
+ * Why a `requestId` cannot be honoured, or `undefined` when it can: it is
+ * empty, or the method is not a `POST`. Refusing beats sending a header
+ * PayPal ignores, which would leave the caller believing a retry is safe.
+ */
+const requestIdRejection = (
+  method: PayPalRequest["method"],
+  requestId: string,
+): PaymentInvalidRequestError | undefined => {
+  if (requestId === "") {
+    return new PaymentInvalidRequestError({ message: "PayPal requestId must not be empty" });
+  }
+  if (method !== "POST") {
+    return new PaymentInvalidRequestError({
+      message: `PayPal requestId applies to POST requests only (got ${method})`,
+    });
+  }
+  return undefined;
+};
 
 /**
  * Build a PayPal client from configuration.
@@ -269,10 +304,23 @@ export const make = (
 
     const request = (req: PayPalRequest): Effect.Effect<unknown, PaymentsError> =>
       Effect.gen(function* () {
+        if (req.requestId !== undefined) {
+          const rejection = requestIdRejection(req.method, req.requestId);
+          if (rejection !== undefined) return yield* rejection;
+        }
         const token = yield* getToken;
         const base = HttpClientRequest.make(req.method)(
           buildUrl(baseUrl, req.path, req.query),
-        ).pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.acceptJson);
+        ).pipe(
+          HttpClientRequest.bearerToken(token),
+          HttpClientRequest.acceptJson,
+          // `PayPal-Request-Id` (validated above): how a retried write is
+          // recognised as the same write.
+          (built) =>
+            req.requestId === undefined
+              ? built
+              : HttpClientRequest.setHeader(built, "PayPal-Request-Id", req.requestId),
+        );
         // `Content-Type: application/json` goes on EVERY request, body or not,
         // as it did before the move to HttpClient: PayPal answers a bodyless
         // POST (`/v1/billing/plans/{id}/activate`) without it with 415.

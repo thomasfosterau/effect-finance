@@ -26,7 +26,7 @@
 import type { Effect } from "effect";
 import type Stripe from "stripe";
 import { path, type StripeError, stripeRequest } from "./internal/index.js";
-import type { StripeHttp } from "./StripeHttp.js";
+import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
  * Create a verification session
@@ -41,8 +41,9 @@ import type { StripeHttp } from "./StripeHttp.js";
  */
 export const create = (
   params: Stripe.Identity.VerificationSessionCreateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/identity/verification_sessions", params);
+  stripeRequest("POST", "/v1/identity/verification_sessions", params, options);
 
 /**
  * Retrieve a verification session
@@ -55,8 +56,9 @@ export const create = (
 export const retrieve = (
   id: string,
   params?: Stripe.Identity.VerificationSessionRetrieveParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/identity/verification_sessions/${id}`, params);
+  stripeRequest("GET", path`/v1/identity/verification_sessions/${id}`, params, options);
 
 /**
  * Update a verification session
@@ -71,8 +73,9 @@ export const retrieve = (
 export const update = (
   id: string,
   params?: Stripe.Identity.VerificationSessionUpdateParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/identity/verification_sessions/${id}`, params);
+  stripeRequest("POST", path`/v1/identity/verification_sessions/${id}`, params, options);
 
 /**
  * Cancel a verification session
@@ -86,8 +89,9 @@ export const update = (
  */
 export const cancel = (
   id: string,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/identity/verification_sessions/${id}/cancel`);
+  stripeRequest("POST", path`/v1/identity/verification_sessions/${id}/cancel`, undefined, options);
 
 /**
  * Redact a verification session
@@ -103,8 +107,9 @@ export const cancel = (
  */
 export const redact = (
   id: string,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.Identity.VerificationSession, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/identity/verification_sessions/${id}/redact`);
+  stripeRequest("POST", path`/v1/identity/verification_sessions/${id}/redact`, undefined, options);
 
 /**
  * List verification sessions
@@ -119,5 +124,6 @@ export const redact = (
  */
 export const list = (
   params?: Stripe.Identity.VerificationSessionListParams,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<Stripe.ApiList<Stripe.Identity.VerificationSession>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/identity/verification_sessions", params);
+  stripeRequest("GET", "/v1/identity/verification_sessions", params, options);

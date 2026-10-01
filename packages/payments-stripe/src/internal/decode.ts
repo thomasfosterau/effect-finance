@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import { PaymentProviderError } from "@thomasfosterau/effect-payments";
-import type { StripeHttp, StripeMethod } from "../StripeHttp.js";
+import type { RequestOptions, StripeHttp, StripeMethod } from "../StripeHttp.js";
 import { PROVIDER } from "./error.js";
 import { type RequestPath, type StripeError, stripeRequest } from "./index.js";
 import type { StripeParams } from "./params.js";
@@ -29,8 +29,9 @@ export const stripeRequestDecoded = <S extends Schema.Codec<unknown, unknown>>(
   method: StripeMethod,
   requestPath: RequestPath,
   params?: StripeParams | undefined,
+  options?: RequestOptions | undefined,
 ): Effect.Effect<S["Type"], StripeError, StripeHttp> =>
-  stripeRequest<unknown>(method, requestPath, params).pipe(
+  stripeRequest<unknown>(method, requestPath, params, options).pipe(
     Effect.flatMap((body) =>
       Schema.decodeUnknownEffect(schema)(body).pipe(
         Effect.mapError((cause): StripeError => malformed(what, cause)),
