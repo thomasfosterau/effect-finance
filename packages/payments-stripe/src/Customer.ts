@@ -4,6 +4,25 @@
  * `stripe` package's declarations and are not decoded; prefer the neutral
  * `Customers` capability where it covers the call.
  *
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
+ *
+ * @example
+ * ```typescript
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/http";
+ * import * as Customer from "@thomasfosterau/effect-payments-stripe/Customer";
+ * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
+ *
+ * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
+ *
+ * const customers = await Effect.runPromise(
+ *   Customer.list({ limit: 10 }).pipe(Effect.provide(layer)),
+ * );
+ * ```
+ *
  * @module
  */
 

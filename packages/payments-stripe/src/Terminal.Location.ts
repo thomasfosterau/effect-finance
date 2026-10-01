@@ -3,6 +3,9 @@
  * hatch for what the neutral capabilities do not cover. Results are typed with
  * the `stripe` package's declarations and are not decoded.
  *
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
+ *
  * @module
  */
 
@@ -21,8 +24,9 @@ export const create = (
   stripeRequest("POST", "/v1/terminal/locations", params, options);
 
 /**
- * Retrieve a terminal location. Stripe answers a deleted one with its
- * `{ deleted: true }` stub, so the result is the SDK's `Location | DeletedLocation`.
+ * Retrieve a terminal location (`GET /v1/terminal/locations/{id}`). Stripe answers a
+ * deleted one with its `{ deleted: true }` stub, so the result is the SDK's
+ * `Location | DeletedLocation`.
  */
 export const retrieve = (
   id: string,
@@ -35,8 +39,9 @@ export const retrieve = (
 > => stripeRequest("GET", path`/v1/terminal/locations/${id}`, params, options);
 
 /**
- * Update a terminal location. Stripe answers a deleted one with its
- * `{ deleted: true }` stub, so the result is the SDK's `Location | DeletedLocation`.
+ * Update a terminal location (`POST /v1/terminal/locations/{id}`). Stripe answers a
+ * deleted one with its `{ deleted: true }` stub, so the result is the SDK's
+ * `Location | DeletedLocation`.
  */
 export const update = (
   id: string,

@@ -3,6 +3,9 @@
  * hatch for what the neutral capabilities do not cover. Results are typed with
  * the `stripe` package's declarations and are not decoded.
  *
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
+ *
  * @module
  */
 
@@ -21,8 +24,9 @@ export const create = (
   stripeRequest("POST", "/v1/terminal/readers", params, options);
 
 /**
- * Retrieve a terminal reader. Stripe answers a deleted one with its
- * `{ deleted: true }` stub, so the result is the SDK's `Reader | DeletedReader`.
+ * Retrieve a terminal reader (`GET /v1/terminal/readers/{id}`). Stripe answers a
+ * deleted one with its `{ deleted: true }` stub, so the result is the SDK's
+ * `Reader | DeletedReader`.
  */
 export const retrieve = (
   id: string,
@@ -32,8 +36,9 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/terminal/readers/${id}`, params, options);
 
 /**
- * Update a terminal reader. Stripe answers a deleted one with its
- * `{ deleted: true }` stub, so the result is the SDK's `Reader | DeletedReader`.
+ * Update a terminal reader (`POST /v1/terminal/readers/{id}`). Stripe answers a
+ * deleted one with its `{ deleted: true }` stub, so the result is the SDK's
+ * `Reader | DeletedReader`.
  */
 export const update = (
   id: string,

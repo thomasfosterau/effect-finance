@@ -4,6 +4,9 @@
  * (each also published on its own `./Treasury.<Name>` subpath). Results are
  * typed with the `stripe` package's declarations and are not decoded.
  *
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
+ *
  * @module
  */
 

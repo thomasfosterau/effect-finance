@@ -4,6 +4,9 @@
  * package's declarations and are not decoded; prefer the neutral `Prices`
  * capability where it covers the call.
  *
+ * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
+ * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
+ *
  * @module
  */
 
