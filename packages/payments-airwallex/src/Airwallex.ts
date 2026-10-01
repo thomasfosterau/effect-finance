@@ -6,7 +6,7 @@
  * caches the token until shortly before it expires, and exposes a single
  * {@link AirwallexClient.request} method that the capability layers build upon.
  *
- * Every call goes through `effect/unstable/http`'s `HttpClient`, which the
+ * Every call goes through `effect/http`'s `HttpClient`, which the
  * layers require: provide `FetchHttpClient.layer` in production, or a stub
  * `HttpClient` (or a stub `FetchHttpClient.Fetch`) in tests.
  *
@@ -31,7 +31,7 @@ import {
   type HttpClientError,
   HttpClientRequest,
   type HttpClientResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 import {
   PaymentConfigError,
   PaymentInvalidRequestError,
@@ -53,7 +53,11 @@ export interface AirwallexConfig {
   readonly clientId: string;
   /** The API key, kept `Redacted` so it never reaches a log line or an error. */
   readonly apiKey: Redacted.Redacted<string>;
-  /** Override the API base URL (defaults to the production endpoint). */
+  /**
+   * Override the API base URL (defaults to the production endpoint). Must be an
+   * absolute http(s) URL: an empty or relative value fails `make` with
+   * {@link PaymentConfigError} rather than falling back to production.
+   */
   readonly baseUrl?: string | undefined;
   /**
    * How long the token login may take, in milliseconds, before it fails with
@@ -209,6 +213,16 @@ const withRequestId = (
   return Effect.succeed({ ...req.body, request_id: req.requestId });
 };
 
+/** Whether `value` parses as an absolute `http:` or `https:` URL (an empty string does not). */
+const isAbsoluteHttpUrl = (value: string): boolean => {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Build an Airwallex client from configuration.
  */
@@ -219,6 +233,13 @@ export const make = (
     if (!config.clientId || !Redacted.value(config.apiKey)) {
       return yield* new PaymentConfigError({
         message: "Airwallex clientId and apiKey are required",
+      });
+    }
+
+    if (config.baseUrl !== undefined && !isAbsoluteHttpUrl(config.baseUrl)) {
+      return yield* new PaymentConfigError({
+        message:
+          "Airwallex baseUrl must be an absolute http(s) URL (omit it for the live endpoint)",
       });
     }
 
@@ -360,6 +381,9 @@ export const layer = (
  * Create an Airwallex client layer from configuration variables (read through
  * the current `ConfigProvider`, which defaults to the process environment).
  * `AIRWALLEX_BASE_URL` optionally overrides the endpoint.
+ * An empty variable counts as unset (Effect rc.118 reads an empty string as
+ * missing): an empty id or key fails with {@link PaymentConfigError}, an
+ * empty `AIRWALLEX_BASE_URL` selects the default endpoint.
  */
 export const layerFromEnv = (
   clientIdVar = "AIRWALLEX_CLIENT_ID",

@@ -1,5 +1,5 @@
 import { Console, Effect, Layer, Redacted } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
@@ -50,7 +50,7 @@ const program = Effect.gen(function* () {
 
 // Choose the provider here. To run on Stripe from an env var instead, use
 // `StripePayments.layerFromEnv()`.
-// The fetch transport runs on `effect/unstable/http`'s `HttpClient`: provide
+// The fetch transport runs on `effect/http`'s `HttpClient`: provide
 // `FetchHttpClient.layer` (Node, Workers, browsers). The key is a `Redacted`.
 const layer = StripePayments.layer({
   apiKey: Redacted.make(process.env.STRIPE_API_KEY || "sk_test_..."),

@@ -6,7 +6,7 @@
  * caches it until shortly before expiry, and exposes a single
  * {@link PayPalClient.request} method that the capability layers build upon.
  *
- * Every call goes through `effect/unstable/http`'s `HttpClient`, which the
+ * Every call goes through `effect/http`'s `HttpClient`, which the
  * layers require: provide `FetchHttpClient.layer` in production, or a stub
  * `HttpClient` (or a stub `FetchHttpClient.Fetch`) in tests.
  *
@@ -19,19 +19,19 @@ import {
   Context,
   Duration,
   Effect,
-  Encoding,
   Layer,
   Option,
   Redacted,
   Ref,
   Schema,
 } from "effect";
+import { Base64 } from "effect/encoding";
 import {
   HttpClient,
   type HttpClientError,
   HttpClientRequest,
   type HttpClientResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 import {
   PaymentConfigError,
   PaymentInvalidRequestError,
@@ -55,7 +55,9 @@ export interface PayPalConfig {
   readonly clientSecret: Redacted.Redacted<string>;
   /**
    * Override the API base URL. Defaults to the production endpoint; use
-   * `https://api-m.sandbox.paypal.com` for sandbox.
+   * `https://api-m.sandbox.paypal.com` for sandbox. Must be an absolute
+   * http(s) URL: an empty or relative value fails `make` with
+   * {@link PaymentConfigError} rather than falling back to production.
    */
   readonly baseUrl?: string | undefined;
   /**
@@ -198,6 +200,16 @@ const requestIdRejection = (
   return undefined;
 };
 
+/** Whether `value` parses as an absolute `http:` or `https:` URL (an empty string does not). */
+const isAbsoluteHttpUrl = (value: string): boolean => {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Build a PayPal client from configuration.
  */
@@ -211,10 +223,16 @@ export const make = (
       });
     }
 
+    if (config.baseUrl !== undefined && !isAbsoluteHttpUrl(config.baseUrl)) {
+      return yield* new PaymentConfigError({
+        message: "PayPal baseUrl must be an absolute http(s) URL (omit it for the live endpoint)",
+      });
+    }
+
     const http = yield* HttpClient.HttpClient;
     const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     const basicAuth = Redacted.make(
-      Encoding.encodeBase64(`${config.clientId}:${Redacted.value(config.clientSecret)}`),
+      Base64.encode(`${config.clientId}:${Redacted.value(config.clientSecret)}`),
     );
     const tokenRef = yield* Ref.make(Option.none<TokenState>());
 
@@ -360,6 +378,9 @@ export const layer = (
  * Create a PayPal client layer from configuration variables (read through the
  * current `ConfigProvider`, which defaults to the process environment).
  * `PAYPAL_BASE_URL` optionally overrides the endpoint.
+ * An empty variable counts as unset (Effect rc.118 reads an empty string as
+ * missing): an empty id or secret fails with {@link PaymentConfigError}, an
+ * empty `PAYPAL_BASE_URL` selects the default endpoint.
  */
 export const layerFromEnv = (
   clientIdVar = "PAYPAL_CLIENT_ID",

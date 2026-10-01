@@ -2,7 +2,7 @@
 
 The **Stripe implementation** of the vendor-neutral [`@thomasfosterau/effect-payments`](../payments) core.
 
-It provides `Layer`s that satisfy the neutral capabilities over a fetch-only Stripe transport (`StripeHttp`, on `effect/unstable/http` — no Node API, no SDK, so it runs in a Cloudflare Worker), and exposes the full set of Stripe-specific resource modules as a provider escape hatch.
+It provides `Layer`s that satisfy the neutral capabilities over a fetch-only Stripe transport (`StripeHttp`, on `effect/http` — no Node API, no SDK, so it runs in a Cloudflare Worker), and exposes the full set of Stripe-specific resource modules as a provider escape hatch.
 
 ## Installation
 
@@ -18,7 +18,7 @@ Write your program against the neutral core, then provide a Stripe layer:
 
 ```typescript
 import { Effect, Layer, Redacted } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 
@@ -28,6 +28,7 @@ const layer = StripePayments.layer({ apiKey: Redacted.make("sk_test_...") }).pip
   Layer.provide(FetchHttpClient.layer),
 );
 // StripePayments.layerFromEnv() reads STRIPE_API_KEY as a Redacted, failing the build without it.
+// (Effect 4.0.0-rc.118 reads an empty variable as a missing one, so an empty STRIPE_API_KEY fails it too.)
 // StripePayments.layerConfig() reads it on every call instead: the layer always builds, and a
 // call made while it is absent fails with PaymentsUnavailable ("not configured ≡ down").
 

@@ -3,7 +3,7 @@
  *
  * `StripeHttp` is the one service every Stripe resource module and capability
  * layer runs on: a single {@link StripeHttp.request} that speaks Stripe's v1
- * wire protocol over `effect/unstable/http`'s `HttpClient`. It needs no Node
+ * wire protocol over `effect/http`'s `HttpClient`. It needs no Node
  * API and no SDK, so it runs unchanged in a Cloudflare Worker — provide
  * `FetchHttpClient.layer` in production, or a stubbed `FetchHttpClient.Fetch`
  * in tests.
@@ -52,12 +52,7 @@ import {
   Redacted,
   Schema,
 } from "effect";
-import {
-  FetchHttpClient,
-  HttpClient,
-  type HttpClientError,
-  HttpClientRequest,
-} from "effect/unstable/http";
+import { FetchHttpClient, HttpClient, type HttpClientError, HttpClientRequest } from "effect/http";
 import {
   PaymentConfigError,
   PaymentInvalidRequestError,

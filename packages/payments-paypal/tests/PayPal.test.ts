@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vite-plus/test";
 import { Cause, ConfigProvider, Effect, Fiber, Layer, Predicate, Redacted } from "effect";
 import { TestClock } from "effect/testing";
-import { FetchHttpClient, type HttpClient } from "effect/unstable/http";
+import { FetchHttpClient, type HttpClient } from "effect/http";
 import {
   PaymentAuthenticationError,
   PaymentConfigError,
@@ -39,7 +39,7 @@ const jsonResponse = (status: number, body: unknown): Response =>
 
 /**
  * A stub `fetch` that answers the LOGIN_PATH handshake then delegates to
- * `handler`, served to the client as `effect/unstable/http`'s `HttpClient`
+ * `handler`, served to the client as `effect/http`'s `HttpClient`
  * through `FetchHttpClient.layer`. No test here reaches the vendor.
  */
 const stubFetch = (handler: (request: CapturedRequest) => Response) => {
@@ -667,5 +667,97 @@ describe("PayPal client requestId (PayPal-Request-Id)", () => {
     );
     for (const error of errors) expect(error).toBeInstanceOf(PaymentInvalidRequestError);
     expect(calls).toEqual([]);
+  });
+});
+
+// Effect rc.118's ConfigProvider treats a literal empty string as a MISSING
+// value (it was a present "" through rc.117). For the credentials that changes
+// nothing observable (an empty value never authenticated); for the base URL it
+// means `PAYPAL_BASE_URL=` falls back to the default endpoint instead of
+// producing an unusable request URL.
+describe("PayPal layerFromEnv and empty variables", () => {
+  const build = (
+    values: Record<string, string>,
+    options: { readonly preserveEmptyStrings?: boolean } = {},
+  ) => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+    const program = Effect.flatMap(PayPalClient, (client) =>
+      client.request({ method: "GET", path: "/probe" }),
+    ).pipe(
+      Effect.provide(layerFromEnv()),
+      Effect.provide(http),
+      Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: values, ...options }))),
+    );
+    return { program, calls };
+  };
+
+  it("fails with PaymentConfigError when the client id variable is empty", async () => {
+    const { program, calls } = build({ PAYPAL_CLIENT_ID: "", PAYPAL_CLIENT_SECRET: "secret_env" });
+    const error = await Effect.runPromise(Effect.flip(program));
+    expect(error).toBeInstanceOf(PaymentConfigError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("fails with PaymentConfigError when the client secret variable is empty", async () => {
+    const { program, calls } = build({ PAYPAL_CLIENT_ID: "client_env", PAYPAL_CLIENT_SECRET: "" });
+    const error = await Effect.runPromise(Effect.flip(program));
+    expect(error).toBeInstanceOf(PaymentConfigError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("uses the default endpoint when PAYPAL_BASE_URL is empty", async () => {
+    const { program, calls } = build({
+      PAYPAL_CLIENT_ID: "client_env",
+      PAYPAL_CLIENT_SECRET: "secret_env",
+      PAYPAL_BASE_URL: "",
+    });
+    await Effect.runPromise(program);
+    expect(calls[0]?.url).toBe(`https://api-m.paypal.com${LOGIN_PATH}`);
+  });
+
+  it("still honours a non-empty PAYPAL_BASE_URL", async () => {
+    const { program, calls } = build({
+      PAYPAL_CLIENT_ID: "client_env",
+      PAYPAL_CLIENT_SECRET: "secret_env",
+      PAYPAL_BASE_URL: "https://sandbox.example.test",
+    });
+    await Effect.runPromise(program);
+    expect(calls[0]?.url).toBe(`https://sandbox.example.test${LOGIN_PATH}`);
+  });
+
+  it("fails loudly with PaymentConfigError, not the live default, when a preserving provider keeps a blank PAYPAL_BASE_URL", async () => {
+    const { program, calls } = build(
+      { PAYPAL_CLIENT_ID: "client_env", PAYPAL_CLIENT_SECRET: "secret_env", PAYPAL_BASE_URL: "" },
+      { preserveEmptyStrings: true },
+    );
+    const error = await Effect.runPromise(Effect.flip(program));
+    expect(error).toBeInstanceOf(PaymentConfigError);
+    expect(error.message).toContain("baseUrl");
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("PayPal make validates baseUrl", () => {
+  const attempt = (baseUrl: string) => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+    const program = make(config({ baseUrl })).pipe(Effect.provide(http));
+    return { program, calls };
+  };
+
+  for (const bad of ["", "   ", "api.example.test", "/v1", "ftp://example.test", "not a url"]) {
+    it(`rejects ${JSON.stringify(bad)} with PaymentConfigError and sends nothing`, async () => {
+      const { program, calls } = attempt(bad);
+      const error = await Effect.runPromise(Effect.flip(program));
+      expect(error).toBeInstanceOf(PaymentConfigError);
+      expect(error.message).toContain("baseUrl");
+      expect(calls).toHaveLength(0);
+    });
+  }
+
+  it("accepts an absolute https URL and an http one (a local mock)", async () => {
+    for (const ok of ["https://sandbox.example.test", "http://localhost:8080"]) {
+      const { program } = attempt(ok);
+      await Effect.runPromise(program);
+    }
   });
 });
