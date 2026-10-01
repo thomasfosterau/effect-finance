@@ -41,6 +41,18 @@ const spec: JsonObject = {
           },
         },
         responses: {
+          "201": {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    url: { type: "string", maxLength: 5000, enum: ["a"], nullable: true },
+                  },
+                },
+              },
+            },
+          },
           "200": {
             content: { "application/json": { schema: { $ref: "#/components/schemas/thing" } } },
           },
@@ -59,6 +71,8 @@ const spec: JsonObject = {
         properties: {
           url: { type: "string", pattern: "^/v1/things", maxLength: 10 },
           count: { type: "integer", minimum: 0 },
+          maximum: { type: "integer", maximum: 100, minimum: 1 },
+          minimum: { type: "string", maxLength: 3 },
           customer: {
             anyOf: [{ type: "string", maxLength: 5000 }, { $ref: "#/components/schemas/customer" }],
             nullable: true,
@@ -86,7 +100,7 @@ describe("prepareSpec", () => {
     const responses = (
       ((prepared["paths"] as JsonObject)["/kept"] as JsonObject)["get"] as JsonObject
     )["responses"] as JsonObject;
-    expect(Object.keys(responses)).toEqual(["200"]);
+    expect(Object.keys(responses)).toEqual(["200", "201"]);
   });
 
   it("collapses an expandable field to its id or an open object, and drops the ref list", () => {
@@ -112,6 +126,30 @@ describe("prepareSpec", () => {
   it("strips list-URL patterns and the response checks that could only fail a decode", () => {
     expect(property(prepare(["/kept"]), "url")).toEqual({ type: "string" });
     expect(property(prepare(["/kept"]), "count")).toEqual({ type: "number" });
+  });
+
+  it("keeps a response property that is named like a JSON Schema keyword", () => {
+    const thing = schema(prepare(["/kept"]), "thing");
+    const properties = thing["properties"] as JsonObject;
+    expect(properties["maximum"]).toEqual({ type: "number" });
+    expect(properties["minimum"]).toEqual({ type: "string" });
+    expect(Object.keys(properties)).toContain("maximum");
+  });
+
+  it("treats an inline response schema as the response side", () => {
+    const inline = (
+      (((prepare(["/kept"])["paths"] as JsonObject)["/kept"] as JsonObject)["get"] as JsonObject)[
+        "responses"
+      ] as JsonObject
+    )["201"] as JsonObject;
+    const url = (
+      (
+        ((inline["content"] as JsonObject)["application/json"] as JsonObject)[
+          "schema"
+        ] as JsonObject
+      )["properties"] as JsonObject
+    )["url"] as JsonObject;
+    expect(url).toEqual({ type: "string", nullable: true, enum: ["a", null] });
   });
 
   it("keeps the checks, and the type, of a request schema", () => {

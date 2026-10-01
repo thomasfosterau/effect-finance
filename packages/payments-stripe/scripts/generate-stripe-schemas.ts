@@ -55,7 +55,12 @@ const program = Effect.gen(function* () {
     onNone: () => {
       const url = `https://raw.githubusercontent.com/${pin.repository}/${pin.tag}/${pin.specPath}`;
       return Console.log(`Downloading ${url}`).pipe(
-        Effect.andThen(HttpClient.get(url)),
+        // A 404 or 5xx is a failed download, not a spec with the wrong hash.
+        Effect.andThen(
+          Effect.flatMap(HttpClient.HttpClient, (client) =>
+            HttpClient.filterStatusOk(client).get(url),
+          ),
+        ),
         Effect.flatMap((response) => response.text),
       );
     },

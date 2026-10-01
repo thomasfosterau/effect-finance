@@ -115,8 +115,17 @@ describe("CheckoutSession (generated basil types)", () => {
 
   it("accepts an optional parameter an exactOptionalPropertyTypes caller forwards as undefined", async () => {
     const customer: string | undefined = undefined;
+    const price: string | undefined = "price_123";
     const { http, exit } = run(
-      CheckoutSession.create({ mode: "payment", customer, cancel_url: undefined }),
+      CheckoutSession.create({
+        mode: "payment",
+        customer,
+        cancel_url: undefined,
+        // Nested objects carry an open rest; an optional forwarded as undefined must pass it too.
+        adaptive_pricing: { enabled: customer === undefined ? undefined : true },
+        line_items: [{ price, quantity: 1 }],
+        after_expiration: { recovery: { enabled: true, allow_promotion_codes: undefined } },
+      }),
       () => checkoutSession,
     );
     expect(Exit.isSuccess(await exit)).toBe(true);

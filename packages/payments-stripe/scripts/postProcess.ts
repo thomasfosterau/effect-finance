@@ -104,6 +104,16 @@ export const optionalUndefined = (type: string): string =>
     .toSorted((a, b) => b - a)
     .reduce((text, at) => `${text.slice(0, at)} | undefined${text.slice(at)}`, type);
 
+/**
+ * A request type as callers should see it: every optional member accepts
+ * `undefined`, and the open rest every object carries (`& { [x: string]: Json }`)
+ * is dropped. The rest cannot accept `undefined` for a nested optional (an
+ * object holding an `undefined` is no `Json`), and a request is built from the
+ * parameters the spec lists, so excess-property checks are the better guard.
+ */
+const requestType = (type: string): string =>
+  optionalUndefined(type).replaceAll(" & { readonly [x: string]: Schema.Json }", "");
+
 const DECLARATION = /^export (type|const) ([A-Za-z0-9_]+) = (.*)$/;
 
 /**
@@ -138,7 +148,7 @@ export const postProcess = (generated: string): Effect.Effect<string, Unexpected
       }
       const [, kind, name = "", rest = ""] = declaration;
       if (REQUEST_NAME.test(name)) {
-        if (kind === "type") lines.push(`export type ${name} = ${optionalUndefined(rest)}`);
+        if (kind === "type") lines.push(`export type ${name} = ${requestType(rest)}`);
         continue;
       }
       if (kind === "type") {

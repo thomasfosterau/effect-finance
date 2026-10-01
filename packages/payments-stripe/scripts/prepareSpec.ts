@@ -106,17 +106,31 @@ const withoutResponseChecks = (node: JsonObject): JsonObject => {
 /** The `pattern`s Stripe puts on list-URL templates, which describe no value. */
 const URL_TEMPLATE_PATTERN = /^\^\/v1\//;
 
-const rewrite = (node: Json, side: Side): Json => {
+/**
+ * The keys whose value is a map from a name chosen by the API (a property, a
+ * schema) to a schema. Such a map is not itself a schema: a response property
+ * called `maximum` is a field, and must neither be mistaken for the JSON
+ * Schema keyword nor lose its entry.
+ */
+const NAME_MAPS = new Set(["properties", "schemas"]);
+
+const rewrite = (node: Json, side: Side, isNameMap = false): Json => {
   if (Array.isArray(node)) return node.map((item) => rewrite(item, side));
   if (!isObject(node)) return node;
   const entries = Object.entries(node).flatMap(([key, value]): Array<[string, Json]> => {
     // The effect generator rejects a `pattern` it cannot revive (rc.117).
     // Only list-URL templates are dropped; `findUnsupportedPattern` has
     // already refused any other, so none reaches here.
-    if (key === "pattern" && typeof value === "string" && node["type"] === "string") return [];
-    return [[key, rewrite(value, side)]];
+    if (!isNameMap && key === "pattern" && typeof value === "string" && node["type"] === "string") {
+      return [];
+    }
+    // What a path's operation answers with is the response side, even when
+    // its schema is inline rather than a component.
+    const valueSide = !isNameMap && key === "responses" ? "response" : side;
+    return [[key, rewrite(value, valueSide, !isNameMap && NAME_MAPS.has(key))]];
   });
   const rewritten: JsonObject = Object.fromEntries(entries);
+  if (isNameMap) return rewritten;
   if (rewritten["style"] === "deepObject") return optionalDeepObject(rewritten);
   const collapsed = EXPANSION in rewritten ? collapseExpansion(rewritten) : rewritten;
   // Stripe sends `null` for an absent nested object or enum value in a

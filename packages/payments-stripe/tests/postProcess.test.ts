@@ -45,6 +45,15 @@ describe("postProcess", () => {
     );
   });
 
+  it("drops the open rest of a request object, which could not accept a nested undefined", () => {
+    const exit = run(
+      'export type PostThingsRequestFormUrlEncoded = { readonly "a"?: { readonly "b"?: string } & { readonly [x: string]: Schema.Json } }',
+    );
+    expect(Exit.isSuccess(exit) && exit.value).toBe(
+      'export type PostThingsRequestFormUrlEncoded = { readonly "a"?: { readonly "b"?: string | undefined } | undefined }',
+    );
+  });
+
   it("types a response as its schema's Type and marks the schema pure", () => {
     const exit = run(
       [
