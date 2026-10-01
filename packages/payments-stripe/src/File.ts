@@ -1,26 +1,9 @@
 /**
- * File resource operations
+ * Stripe's `/v1/files` API as a raw resource module, the escape hatch for what
+ * the neutral capabilities do not cover. Results are typed with the `stripe`
+ * package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as File from "@thomasfosterau/effect-payments-stripe/File";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createFile = (file: Buffer, purpose: string) =>
- *   File.create({ file, purpose });
- *
- * const program = Effect.gen(function* () {
- *   const fileObj = yield* createFile(Buffer.from("..."), "dispute_evidence");
- *   return fileObj;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +12,7 @@ import { path, type StripeError, stripeRequest, stripeUpload } from "./internal/
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a file
+ * Upload a file (multipart `POST /v1/files` on `files.stripe.com`).
  */
 export const create = (
   params: Stripe.FileCreateParams,
@@ -38,7 +21,7 @@ export const create = (
   stripeUpload("/v1/files", params, options);
 
 /**
- * Retrieve a file
+ * Retrieve a file (`GET /v1/files/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +31,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/files/${id}`, params, options);
 
 /**
- * List files
+ * List files (`GET /v1/files`).
  */
 export const list = (
   params?: Stripe.FileListParams,

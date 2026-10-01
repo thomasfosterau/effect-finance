@@ -1,29 +1,9 @@
 /**
- * Person resource operations
+ * Stripe's `/v1/accounts/{accountId}/persons` API as a raw resource module, the
+ * escape hatch for what the neutral capabilities do not cover. Results are
+ * typed with the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Person from "@thomasfosterau/effect-payments-stripe/Person";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createPerson = (accountId: string) =>
- *   Person.create(accountId, {
- *     first_name: "Jane",
- *     last_name: "Doe",
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const person = yield* createPerson("acct_123");
- *   return person;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -32,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a person
+ * Create a person (`POST /v1/accounts/{accountId}/persons`).
  */
 export const create = (
   accountId: string,
@@ -42,7 +22,7 @@ export const create = (
   stripeRequest("POST", path`/v1/accounts/${accountId}/persons`, params, options);
 
 /**
- * Retrieve a person
+ * Retrieve a person (`GET /v1/accounts/{accountId}/persons/{id}`).
  */
 export const retrieve = (
   accountId: string,
@@ -53,7 +33,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/accounts/${accountId}/persons/${id}`, params, options);
 
 /**
- * Update a person
+ * Update a person (`POST /v1/accounts/{accountId}/persons/{id}`).
  */
 export const update = (
   accountId: string,
@@ -64,7 +44,7 @@ export const update = (
   stripeRequest("POST", path`/v1/accounts/${accountId}/persons/${id}`, params, options);
 
 /**
- * Delete a person
+ * Delete a person (`DELETE /v1/accounts/{accountId}/persons/{id}`).
  */
 export const del = (
   accountId: string,
@@ -74,7 +54,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/accounts/${accountId}/persons/${id}`, undefined, options);
 
 /**
- * List persons
+ * List persons (`GET /v1/accounts/{accountId}/persons`).
  */
 export const list = (
   accountId: string,

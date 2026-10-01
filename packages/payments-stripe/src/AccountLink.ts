@@ -1,31 +1,9 @@
 /**
- * AccountLink resource operations
+ * Stripe's `/v1/account_links` API as a raw resource module, the escape hatch
+ * for what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as AccountLink from "@thomasfosterau/effect-payments-stripe/AccountLink";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createAccountLink = (accountId: string) =>
- *   AccountLink.create({
- *     account: accountId,
- *     type: "account_onboarding",
- *     refresh_url: "https://example.com/reauth",
- *     return_url: "https://example.com/return",
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const accountLink = yield* createAccountLink("acct_123");
- *   return accountLink;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -34,7 +12,7 @@ import { type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create an account link
+ * Create an account link (`POST /v1/account_links`).
  */
 export const create = (
   params: Stripe.AccountLinkCreateParams,

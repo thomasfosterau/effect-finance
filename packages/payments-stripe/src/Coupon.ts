@@ -1,26 +1,9 @@
 /**
- * Coupon resource operations
+ * Stripe's `/v1/coupons` API as a raw resource module, the escape hatch for
+ * what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Coupon from "@thomasfosterau/effect-payments-stripe/Coupon";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createCoupon = (percentOff: number) =>
- *   Coupon.create({ percent_off: percentOff, duration: "once" });
- *
- * const program = Effect.gen(function* () {
- *   const coupon = yield* createCoupon(25);
- *   return coupon;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a coupon
+ * Create a coupon (`POST /v1/coupons`).
  */
 export const create = (
   params: Stripe.CouponCreateParams,
@@ -38,7 +21,7 @@ export const create = (
   stripeRequest("POST", "/v1/coupons", params, options);
 
 /**
- * Retrieve a coupon
+ * Retrieve a coupon (`GET /v1/coupons/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +31,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/coupons/${id}`, params, options);
 
 /**
- * Update a coupon
+ * Update a coupon (`POST /v1/coupons/{id}`).
  */
 export const update = (
   id: string,
@@ -58,7 +41,7 @@ export const update = (
   stripeRequest("POST", path`/v1/coupons/${id}`, params, options);
 
 /**
- * Delete a coupon
+ * Delete a coupon (`DELETE /v1/coupons/{id}`).
  */
 export const del = (
   id: string,
@@ -67,7 +50,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/coupons/${id}`, undefined, options);
 
 /**
- * List coupons
+ * List coupons (`GET /v1/coupons`).
  */
 export const list = (
   params?: Stripe.CouponListParams,

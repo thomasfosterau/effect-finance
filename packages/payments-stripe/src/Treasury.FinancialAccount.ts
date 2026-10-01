@@ -1,26 +1,9 @@
 /**
- * Treasury.FinancialAccount resource operations
+ * Stripe's `/v1/treasury/financial_accounts` API as a raw resource module, the
+ * escape hatch for what the neutral capabilities do not cover. Results are
+ * typed with the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as FinancialAccount from "@thomasfosterau/effect-payments-stripe/Treasury.FinancialAccount";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createAccount = (supportedCurrencies: string[]) =>
- *   FinancialAccount.create({ supported_currencies: supportedCurrencies });
- *
- * const program = Effect.gen(function* () {
- *   const account = yield* createAccount(["usd"]);
- *   return account;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a financial account
+ * Create a financial account (`POST /v1/treasury/financial_accounts`).
  */
 export const create = (
   params: Stripe.Treasury.FinancialAccountCreateParams,
@@ -38,7 +21,7 @@ export const create = (
   stripeRequest("POST", "/v1/treasury/financial_accounts", params, options);
 
 /**
- * Retrieve a financial account
+ * Retrieve a financial account (`GET /v1/treasury/financial_accounts/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +31,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/treasury/financial_accounts/${id}`, params, options);
 
 /**
- * Update a financial account
+ * Update a financial account (`POST /v1/treasury/financial_accounts/{id}`).
  */
 export const update = (
   id: string,
@@ -58,7 +41,7 @@ export const update = (
   stripeRequest("POST", path`/v1/treasury/financial_accounts/${id}`, params, options);
 
 /**
- * List financial accounts
+ * List financial accounts (`GET /v1/treasury/financial_accounts`).
  */
 export const list = (
   params?: Stripe.Treasury.FinancialAccountListParams,
@@ -68,6 +51,7 @@ export const list = (
 
 /**
  * Close a financial account
+ * (`POST /v1/treasury/financial_accounts/{id}/close`).
  */
 export const close = (
   id: string,
@@ -77,6 +61,7 @@ export const close = (
 
 /**
  * Retrieve features of a financial account
+ * (`GET /v1/treasury/financial_accounts/{id}/features`).
  */
 export const retrieveFeatures = (
   id: string,
@@ -87,6 +72,7 @@ export const retrieveFeatures = (
 
 /**
  * Update features of a financial account
+ * (`POST /v1/treasury/financial_accounts/{id}/features`).
  */
 export const updateFeatures = (
   id: string,

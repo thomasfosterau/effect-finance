@@ -1,31 +1,9 @@
 /**
- * Treasury.InboundTransfer resource operations
+ * Stripe's `/v1/treasury/inbound_transfers` API as a raw resource module, the
+ * escape hatch for what the neutral capabilities do not cover. Results are
+ * typed with the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as InboundTransfer from "@thomasfosterau/effect-payments-stripe/Treasury.InboundTransfer";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createTransfer = (financialAccountId: string, amount: number) =>
- *   InboundTransfer.create({
- *     financial_account: financialAccountId,
- *     amount,
- *     currency: "usd",
- *     origin_payment_method: "pm_...",
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const transfer = yield* createTransfer("fa_...", 10000);
- *   return transfer;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -34,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create an inbound transfer
+ * Create an inbound transfer (`POST /v1/treasury/inbound_transfers`).
  */
 export const create = (
   params: Stripe.Treasury.InboundTransferCreateParams,
@@ -43,7 +21,7 @@ export const create = (
   stripeRequest("POST", "/v1/treasury/inbound_transfers", params, options);
 
 /**
- * Retrieve an inbound transfer
+ * Retrieve an inbound transfer (`GET /v1/treasury/inbound_transfers/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -53,7 +31,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/treasury/inbound_transfers/${id}`, params, options);
 
 /**
- * List inbound transfers
+ * List inbound transfers (`GET /v1/treasury/inbound_transfers`).
  */
 export const list = (
   params: Stripe.Treasury.InboundTransferListParams,
@@ -63,6 +41,7 @@ export const list = (
 
 /**
  * Cancel an inbound transfer
+ * (`POST /v1/treasury/inbound_transfers/{id}/cancel`).
  */
 export const cancel = (
   id: string,

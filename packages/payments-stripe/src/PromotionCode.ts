@@ -1,26 +1,9 @@
 /**
- * PromotionCode resource operations
+ * Stripe's `/v1/promotion_codes` API as a raw resource module, the escape hatch
+ * for what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as PromotionCode from "@thomasfosterau/effect-payments-stripe/PromotionCode";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createPromoCode = (couponId: string, code: string) =>
- *   PromotionCode.create({ coupon: couponId, code });
- *
- * const program = Effect.gen(function* () {
- *   const promoCode = yield* createPromoCode("coupon_123", "SAVE10");
- *   return promoCode;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a promotion code
+ * Create a promotion code (`POST /v1/promotion_codes`).
  */
 export const create = (
   params: Stripe.PromotionCodeCreateParams,
@@ -38,7 +21,7 @@ export const create = (
   stripeRequest("POST", "/v1/promotion_codes", params, options);
 
 /**
- * Retrieve a promotion code
+ * Retrieve a promotion code (`GET /v1/promotion_codes/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +31,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/promotion_codes/${id}`, params, options);
 
 /**
- * Update a promotion code
+ * Update a promotion code (`POST /v1/promotion_codes/{id}`).
  */
 export const update = (
   id: string,
@@ -58,7 +41,7 @@ export const update = (
   stripeRequest("POST", path`/v1/promotion_codes/${id}`, params, options);
 
 /**
- * List promotion codes
+ * List promotion codes (`GET /v1/promotion_codes`).
  */
 export const list = (
   params?: Stripe.PromotionCodeListParams,

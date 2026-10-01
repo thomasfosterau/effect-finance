@@ -1,26 +1,9 @@
 /**
- * Charge resource operations
+ * Stripe's `/v1/charges` API as a raw resource module, the escape hatch for
+ * what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Charge from "@thomasfosterau/effect-payments-stripe/Charge";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createCharge = (amount: number, currency: string, source: string) =>
- *   Charge.create({ amount, currency, source });
- *
- * const program = Effect.gen(function* () {
- *   const charge = yield* createCharge(2000, "usd", "tok_visa");
- *   return charge;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a charge
+ * Create a charge (`POST /v1/charges`).
  */
 export const create = (
   params: Stripe.ChargeCreateParams,
@@ -38,7 +21,7 @@ export const create = (
   stripeRequest("POST", "/v1/charges", params, options);
 
 /**
- * Retrieve a charge
+ * Retrieve a charge (`GET /v1/charges/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +31,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/charges/${id}`, params, options);
 
 /**
- * Update a charge
+ * Update a charge (`POST /v1/charges/{id}`).
  */
 export const update = (
   id: string,
@@ -58,7 +41,7 @@ export const update = (
   stripeRequest("POST", path`/v1/charges/${id}`, params, options);
 
 /**
- * List charges
+ * List charges (`GET /v1/charges`).
  */
 export const list = (
   params?: Stripe.ChargeListParams,

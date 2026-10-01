@@ -1,35 +1,9 @@
 /**
- * Terminal Location resource operations
+ * Stripe's `/v1/terminal/locations` API as a raw resource module, the escape
+ * hatch for what the neutral capabilities do not cover. Results are typed with
+ * the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as TerminalLocation from "@thomasfosterau/effect-payments-stripe/Terminal.Location";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createLocation = () =>
- *   TerminalLocation.create({
- *     display_name: "HQ",
- *     address: {
- *       line1: "1272 Valencia Street",
- *       city: "San Francisco",
- *       state: "CA",
- *       country: "US",
- *       postal_code: "94110"
- *     }
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const location = yield* createLocation();
- *   return location;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -38,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a terminal location
+ * Create a terminal location (`POST /v1/terminal/locations`).
  */
 export const create = (
   params: Stripe.Terminal.LocationCreateParams,
@@ -75,7 +49,7 @@ export const update = (
 > => stripeRequest("POST", path`/v1/terminal/locations/${id}`, params, options);
 
 /**
- * Delete a terminal location
+ * Delete a terminal location (`DELETE /v1/terminal/locations/{id}`).
  */
 export const del = (
   id: string,
@@ -84,7 +58,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/terminal/locations/${id}`, undefined, options);
 
 /**
- * List terminal locations
+ * List terminal locations (`GET /v1/terminal/locations`).
  */
 export const list = (
   params?: Stripe.Terminal.LocationListParams,

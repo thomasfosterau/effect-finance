@@ -1,24 +1,9 @@
 /**
- * Event resource operations
+ * Stripe's `/v1/events` API as a raw resource module, the escape hatch for what
+ * the neutral capabilities do not cover. Results are typed with the `stripe`
+ * package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Event from "@thomasfosterau/effect-payments-stripe/Event";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const program = Effect.gen(function* () {
- *   const event = yield* Event.retrieve("evt_123");
- *   const events = yield* Event.list({ limit: 10 });
- *   return { event, events };
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -27,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Retrieve an event
+ * Retrieve an event (`GET /v1/events/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -37,7 +22,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/events/${id}`, params, options);
 
 /**
- * List events
+ * List events (`GET /v1/events`).
  */
 export const list = (
   params?: Stripe.EventListParams,

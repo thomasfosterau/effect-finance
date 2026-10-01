@@ -1,30 +1,9 @@
 /**
- * Terminal Reader resource operations
+ * Stripe's `/v1/terminal/readers` API as a raw resource module, the escape
+ * hatch for what the neutral capabilities do not cover. Results are typed with
+ * the `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as TerminalReader from "@thomasfosterau/effect-payments-stripe/Terminal.Reader";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const registerReader = (registrationCode: string, locationId: string) =>
- *   TerminalReader.create({
- *     registration_code: registrationCode,
- *     location: locationId,
- *     label: "Front Desk Reader"
- *   });
- *
- * const program = Effect.gen(function* () {
- *   const reader = yield* registerReader("simulated-wpe", "tml_123");
- *   return reader;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -33,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a terminal reader
+ * Create a terminal reader (`POST /v1/terminal/readers`).
  */
 export const create = (
   params: Stripe.Terminal.ReaderCreateParams,
@@ -64,7 +43,7 @@ export const update = (
   stripeRequest("POST", path`/v1/terminal/readers/${id}`, params, options);
 
 /**
- * Delete a terminal reader
+ * Delete a terminal reader (`DELETE /v1/terminal/readers/{id}`).
  */
 export const del = (
   id: string,
@@ -73,7 +52,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/terminal/readers/${id}`, undefined, options);
 
 /**
- * List terminal readers
+ * List terminal readers (`GET /v1/terminal/readers`).
  */
 export const list = (
   params?: Stripe.Terminal.ReaderListParams,

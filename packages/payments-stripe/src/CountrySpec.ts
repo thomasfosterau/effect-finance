@@ -1,24 +1,9 @@
 /**
- * CountrySpec resource operations
+ * Stripe's `/v1/country_specs` API as a raw resource module, the escape hatch
+ * for what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as CountrySpec from "@thomasfosterau/effect-payments-stripe/CountrySpec";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const program = Effect.gen(function* () {
- *   const usSpec = yield* CountrySpec.retrieve("US");
- *   const allSpecs = yield* CountrySpec.list({ limit: 10 });
- *   return { usSpec, allSpecs };
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -27,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Retrieve a country spec
+ * Retrieve a country spec (`GET /v1/country_specs/{country}`).
  */
 export const retrieve = (
   country: string,
@@ -37,7 +22,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/country_specs/${country}`, params, options);
 
 /**
- * List country specs
+ * List country specs (`GET /v1/country_specs`).
  */
 export const list = (
   params?: Stripe.CountrySpecListParams,

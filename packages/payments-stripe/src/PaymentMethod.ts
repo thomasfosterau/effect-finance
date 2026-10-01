@@ -1,26 +1,9 @@
 /**
- * PaymentMethod resource operations
+ * Stripe's `/v1/payment_methods` API as a raw resource module, the escape hatch
+ * for what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as PaymentMethod from "@thomasfosterau/effect-payments-stripe/PaymentMethod";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createPaymentMethod = (type: string) =>
- *   PaymentMethod.create({ type });
- *
- * const program = Effect.gen(function* () {
- *   const paymentMethod = yield* createPaymentMethod("card");
- *   return paymentMethod;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create a payment method
+ * Create a payment method (`POST /v1/payment_methods`).
  */
 export const create = (
   params: Stripe.PaymentMethodCreateParams,
@@ -38,7 +21,7 @@ export const create = (
   stripeRequest("POST", "/v1/payment_methods", params, options);
 
 /**
- * Retrieve a payment method
+ * Retrieve a payment method (`GET /v1/payment_methods/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +31,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/payment_methods/${id}`, params, options);
 
 /**
- * Update a payment method
+ * Update a payment method (`POST /v1/payment_methods/{id}`).
  */
 export const update = (
   id: string,
@@ -59,6 +42,7 @@ export const update = (
 
 /**
  * Attach a payment method to a customer
+ * (`POST /v1/payment_methods/{id}/attach`).
  */
 export const attach = (
   id: string,
@@ -69,6 +53,7 @@ export const attach = (
 
 /**
  * Detach a payment method from a customer
+ * (`POST /v1/payment_methods/{id}/detach`).
  */
 export const detach = (
   id: string,
@@ -78,7 +63,7 @@ export const detach = (
   stripeRequest("POST", path`/v1/payment_methods/${id}/detach`, params, options);
 
 /**
- * List payment methods
+ * List payment methods (`GET /v1/payment_methods`).
  */
 export const list = (
   params: Stripe.PaymentMethodListParams,

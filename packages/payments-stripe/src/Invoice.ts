@@ -1,26 +1,9 @@
 /**
- * Invoice resource operations
+ * Stripe's `/v1/invoices` API as a raw resource module, the escape hatch for
+ * what the neutral capabilities do not cover. Results are typed with the
+ * `stripe` package's declarations and are not decoded.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Invoice from "@thomasfosterau/effect-payments-stripe/Invoice";
- * import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
- *
- * const createInvoice = (customerId: string) =>
- *   Invoice.create({ customer: customerId });
- *
- * const program = Effect.gen(function* () {
- *   const invoice = yield* createInvoice("cus_123");
- *   return invoice;
- * });
- *
- * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * @module
  */
 
 import type { Effect } from "effect";
@@ -29,7 +12,7 @@ import { path, type StripeError, stripeRequest } from "./internal/index.js";
 import type { RequestOptions, StripeHttp } from "./StripeHttp.js";
 
 /**
- * Create an invoice
+ * Create an invoice (`POST /v1/invoices`).
  */
 export const create = (
   params: Stripe.InvoiceCreateParams,
@@ -38,7 +21,7 @@ export const create = (
   stripeRequest("POST", "/v1/invoices", params, options);
 
 /**
- * Retrieve an invoice
+ * Retrieve an invoice (`GET /v1/invoices/{id}`).
  */
 export const retrieve = (
   id: string,
@@ -48,7 +31,7 @@ export const retrieve = (
   stripeRequest("GET", path`/v1/invoices/${id}`, params, options);
 
 /**
- * Update an invoice
+ * Update an invoice (`POST /v1/invoices/{id}`).
  */
 export const update = (
   id: string,
@@ -58,7 +41,7 @@ export const update = (
   stripeRequest("POST", path`/v1/invoices/${id}`, params, options);
 
 /**
- * Delete an invoice
+ * Delete an invoice (`DELETE /v1/invoices/{id}`).
  */
 export const del = (
   id: string,
@@ -67,7 +50,7 @@ export const del = (
   stripeRequest("DELETE", path`/v1/invoices/${id}`, undefined, options);
 
 /**
- * List invoices
+ * List invoices (`GET /v1/invoices`).
  */
 export const list = (
   params?: Stripe.InvoiceListParams,
