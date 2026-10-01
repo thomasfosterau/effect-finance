@@ -7,7 +7,7 @@ This repository is the **`@thomasfosterau/effect-payments` package family**: a v
 | Package | Directory | What it is |
 | --- | --- | --- |
 | `@thomasfosterau/effect-payments` | `packages/payments` | The vendor-neutral core: capabilities (`Customers`, `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds`), neutral entities, `Money`, `Page`, and the `PaymentsError` channel. Peer: `effect` only. |
-| `@thomasfosterau/effect-payments-stripe` | `packages/payments-stripe` | Stripe: the neutral capabilities as `Layer`s (`StripePayments`) plus the full set of Stripe resource modules as a provider escape hatch, over the fetch-only `StripeHttp` transport. The official `stripe` SDK is an optional peer (resource-module types; an alternative SDK transport). |
+| `@thomasfosterau/effect-payments-stripe` | `packages/payments-stripe` | Stripe: the neutral capabilities as `Layer`s (`StripePayments`) plus the full set of Stripe resource modules as a provider escape hatch, over the fetch-only `StripeHttp` transport. The official `stripe` SDK is an optional peer (types of the resource modules not yet migrated to the generated Schemas of #56; an alternative SDK transport). |
 | `@thomasfosterau/effect-payments-paypal` | `packages/payments-paypal` | PayPal REST: `Products`, `Prices` (billing plans), `PaymentIntents` (orders), `Subscriptions`, `Refunds`. No `Customers` — PayPal has no customer resource. |
 | `@thomasfosterau/effect-payments-airwallex` | `packages/payments-airwallex` | Airwallex payment acceptance: `Customers`, `PaymentIntents`, `Refunds`. |
 
@@ -49,6 +49,7 @@ Everything else that must be visible when touching a package is in that package'
 - `vp run -r test:unit` — unit tests (every vendor seam stubbed; nothing needs a credential).
 - `vp run -r build` — `vp pack` → every package's `dist/`.
 - `vp run test:coverage` — every package's unit suite under one Istanbul map at `coverage/coverage-final.json`, which `fallow audit` reads for exact per-function CRAP scores. Run it before the audit.
+- `vp run --filter ./packages/payments-stripe generate:schemas` — regenerate `packages/payments-stripe/src/internal/generated/schemas.ts` from the pinned Stripe OpenAPI spec (`scripts/stripe-spec.json`); needs network unless `STRIPE_SPEC_FILE` points at the pinned `spec3.json`. Never hand-edit the generated file.
 - `pnpm changeset` — add a changeset; every change to a published package's behaviour needs one. Releases are cut by the `Release` workflow on `main` — see [PUBLISHING.md](PUBLISHING.md).
 
 Invoke everything through `vp` (`vp exec` instead of `npx`; `vp run <task>` instead of bare `pnpm`). The sanctioned non-`vp` invocations: `pnpm install` (`--frozen-lockfile` in CI), `pnpm changeset` / `pnpm publish` on the release path.

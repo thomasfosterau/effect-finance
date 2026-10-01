@@ -73,7 +73,7 @@ import type { StripeParams } from "./internal/params.js";
  * names another. It matches the version the `stripe` SDK's types (which the
  * resource modules return) describe.
  */
-export const DEFAULT_API_VERSION = "2025-02-24.acacia";
+export const DEFAULT_API_VERSION = "2025-08-27.basil";
 
 const DEFAULT_BASE_URL = "https://api.stripe.com";
 const DEFAULT_UPLOADS_BASE_URL = "https://files.stripe.com";

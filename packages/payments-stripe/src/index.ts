@@ -92,6 +92,7 @@ export * as TaxRate from "./TaxRate.js";
 export * as PromotionCode from "./PromotionCode.js";
 export * as Coupon from "./Coupon.js";
 export * as CheckoutSession from "./CheckoutSession.js";
+export * as BillingPortalSession from "./BillingPortal.Session.js";
 export * as SubscriptionSchedule from "./SubscriptionSchedule.js";
 export * as Webhook from "./Webhook.js";
 

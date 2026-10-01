@@ -30,6 +30,8 @@ import * as BillingPortal from "@thomasfosterau/effect-payments/BillingPortal";
 import * as Stub from "@thomasfosterau/effect-payments/Stub";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 import * as StripeCustomer from "@thomasfosterau/effect-payments-stripe/Customer";
+import * as StripeCheckoutSession from "@thomasfosterau/effect-payments-stripe/CheckoutSession";
+import * as StripeBillingPortalSession from "@thomasfosterau/effect-payments-stripe/BillingPortal.Session";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
 import * as StripeSdk from "@thomasfosterau/effect-payments-stripe/Stripe";
 import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
@@ -75,6 +77,15 @@ export const airwallexLayer = AirwallexPayments.layer({
   apiKey: Redacted.make("key"),
 });
 export const stripeCustomer = StripeCustomer.retrieve("cus_123");
+export const stripeCheckoutSession = StripeCheckoutSession.create({
+  mode: "payment",
+  line_items: [{ price: "price_123", quantity: 1 }],
+  success_url: "https://example.com/success",
+});
+export const stripePortalSession = StripeBillingPortalSession.create({
+  customer: "cus_123",
+  return_url: "https://example.com/account",
+});
 export const event = Webhook.constructEvent("{}", "t=1,v1=sig", "whsec_123");
 
 /**
@@ -140,6 +151,18 @@ export type Checks = [
   >,
   /** _stripeResourceIsTyped */ Assert<
     Equals<Effect.Success<typeof stripeCustomer>, Stripe.Customer | Stripe.DeletedCustomer>
+  >,
+  /** _stripeCheckoutIsGenerated */ Assert<
+    Equals<Effect.Success<typeof stripeCheckoutSession>, StripeCheckoutSession.Session>
+  >,
+  /** _stripeCheckoutRequiresTransport */ Assert<
+    Equals<Effect.Services<typeof stripeCheckoutSession>, StripeHttp.StripeHttp>
+  >,
+  /** _stripePortalIsGenerated */ Assert<
+    Equals<Effect.Success<typeof stripePortalSession>, StripeBillingPortalSession.Session>
+  >,
+  /** _stripePortalUrlIsRequired */ Assert<
+    Equals<StripeBillingPortalSession.Session["url"], string>
   >,
   /** _stripeHttpNeedsHttpClient */ Assert<
     Equals<Layer.Services<typeof stripeHttpLayer>, HttpClient.HttpClient>

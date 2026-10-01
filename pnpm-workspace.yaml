@@ -26,6 +26,8 @@ catalog:
   "@changesets/changelog-github": ^1.0.1
   "@changesets/cli": ^3.0.3
   "@effect/language-service": ^0.87.2
+  "@effect/openapi-generator": 4.0.0-rc.117
+  "@effect/platform-node": 4.0.0-rc.117
   # Effect Language Service as a native (TypeScript-Go) binary — the TS7 side
   # of the 6/7 split. `effect-tsgo patch` overwrites the native `tsc` binary
   # with an Effect-patched build matched by gitHead, so this pins in lockstep
@@ -44,11 +46,13 @@ catalog:
   effect-solutions: ^0.5.3
   fallow: 3.30.0
   # The official Stripe SDK: a dev dependency of
-  # @thomasfosterau/effect-payments-stripe (its types describe the resource
-  # modules' results; its client backs the optional SDK transport and the
-  # SDK-based webhook verifier) and an OPTIONAL peer (`catalogs.peers`) — the
-  # fetch-only transport (#39) never loads it.
-  stripe: ^17.6.0
+  # @thomasfosterau/effect-payments-stripe (its types describe the results of
+  # the resource modules not yet migrated to generated Schema types, #56; its
+  # client backs the optional SDK transport and the SDK-based webhook
+  # verifier) and an OPTIONAL peer (`catalogs.peers`) — the fetch-only
+  # transport (#39) never loads it. 18.5.x is the release whose API version
+  # is 2025-08-27.basil, the version this package pins.
+  stripe: ^18.5.0
   # TypeScript 6/7 side-by-side: TS7 (the native Go compiler) ships no JS API
   # until 7.1, so JS-API consumers (@effect/language-service, tsdown's
   # declaration bundler) stay on TS6 while native `tsc` type-checks. The alias
@@ -80,11 +84,14 @@ catalogs:
     # version the consuming applications and the sibling libraries pin.
     effect: ">=4.0.0-rc.115"
     # Optional (`peerDependenciesMeta`): only the `./Stripe` SDK transport and
-    # the SDK-based `./Webhook` verifier load it; the types the resource
-    # modules return come from it too. Caret, not `>=`: those types describe
-    # the SDK major's API version (17 → 2025-02-24.acacia, the fetch
-    # transport's DEFAULT_API_VERSION), so a new major moves both together.
-    stripe: ^17.6.0
+    # the SDK-based `./Webhook` verifier load it, plus the resource modules
+    # not yet migrated to generated types (#56) for their types. Caret, not
+    # `>=`: the SDK's API version is what it sends and what those types
+    # describe (18.5 → 2025-08-27.basil, the fetch transport's
+    # DEFAULT_API_VERSION and the pinned OpenAPI spec of
+    # packages/payments-stripe/scripts/stripe-spec.json), so a new release
+    # moves all of them together.
+    stripe: ^18.5.0
 
 overrides:
   vite: "catalog:"

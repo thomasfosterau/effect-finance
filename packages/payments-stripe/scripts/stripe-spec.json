@@ -1,0 +1,15 @@
+{
+  "$comment": "The pinned input of scripts/generate-stripe-schemas.ts. Changing any field is a deliberate act: re-run `vp run --filter ./packages/payments-stripe generate:schemas` and commit the regenerated src/internal/generated/schemas.ts with it.",
+  "apiVersion": "2025-08-27.basil",
+  "repository": "stripe/openapi",
+  "tag": "v1928",
+  "commit": "ea6d566248e549196d8406153b6d4d75b1787019",
+  "specPath": "openapi/spec3.json",
+  "sha256": "248f8ada847fa7f3f5b7ba328ab5a9e01ba6094c9b3a7c95dc0fa23e3ccbbd49",
+  "paths": [
+    "/v1/billing_portal/sessions",
+    "/v1/checkout/sessions",
+    "/v1/checkout/sessions/{session}",
+    "/v1/checkout/sessions/{session}/expire"
+  ]
+}

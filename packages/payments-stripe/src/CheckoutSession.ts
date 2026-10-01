@@ -1,6 +1,14 @@
 /**
  * CheckoutSession resource operations
  *
+ * The types here are **generated** from Stripe's OpenAPI spec at the pinned
+ * API version (`scripts/generate-stripe-schemas.ts`), not taken from the
+ * `stripe` package, and every response is **decoded** with the generated
+ * {@link Session} schema: a body that does not match fails with
+ * `PaymentProviderError` instead of being cast. An expandable field
+ * (`customer`, `payment_intent`, `subscription`, …) decodes as its id or, when
+ * expanded, an open JSON object; its own resource module types it in full.
+ *
  * @example
  * ```typescript
  * import { Effect, Layer, Redacted } from "effect";
@@ -29,40 +37,78 @@
  */
 
 import type { Effect } from "effect";
-import type Stripe from "stripe";
-import { path, type StripeError, stripeRequest } from "./internal/index.js";
+import * as Generated from "./internal/generated/schemas.js";
+import { stripeRequestDecoded } from "./internal/decode.js";
+import { path, type StripeError } from "./internal/index.js";
 import type { StripeHttp } from "./StripeHttp.js";
+
+/** The Checkout Session object, as a `Schema` (the decoder for every response here). */
+export const Session = Generated.Checkout_session;
+/** The Checkout Session object. */
+export type Session = Generated.Checkout_session;
+
+/** A page of Checkout Sessions, as a `Schema`. */
+export const SessionList = Generated.GetCheckoutSessions200;
+/** A page of Checkout Sessions. */
+export type SessionList = Generated.GetCheckoutSessions200;
+
+/** The parameters of {@link create}. */
+export type SessionCreateParams = Generated.PostCheckoutSessionsRequestFormUrlEncoded;
+/** The parameters of {@link retrieve}. */
+export type SessionRetrieveParams = Generated.GetCheckoutSessionsSessionParams;
+/** The parameters of {@link expire}. */
+export type SessionExpireParams = Generated.PostCheckoutSessionsSessionExpireRequestFormUrlEncoded;
+/** The parameters of {@link list}. */
+export type SessionListParams = Generated.GetCheckoutSessionsParams;
 
 /**
  * Create a checkout session
  */
 export const create = (
-  params: Stripe.Checkout.SessionCreateParams,
-): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeHttp> =>
-  stripeRequest("POST", "/v1/checkout/sessions", params);
+  params: SessionCreateParams,
+): Effect.Effect<Session, StripeError, StripeHttp> =>
+  stripeRequestDecoded("checkout session", Session, "POST", "/v1/checkout/sessions", params);
 
 /**
  * Retrieve a checkout session
  */
 export const retrieve = (
   id: string,
-  params?: Stripe.Checkout.SessionRetrieveParams,
-): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeHttp> =>
-  stripeRequest("GET", path`/v1/checkout/sessions/${id}`, params);
+  params?: SessionRetrieveParams,
+): Effect.Effect<Session, StripeError, StripeHttp> =>
+  stripeRequestDecoded(
+    "checkout session",
+    Session,
+    "GET",
+    path`/v1/checkout/sessions/${id}`,
+    params,
+  );
 
 /**
  * Expire a checkout session
  */
 export const expire = (
   id: string,
-  params?: Stripe.Checkout.SessionExpireParams,
-): Effect.Effect<Stripe.Checkout.Session, StripeError, StripeHttp> =>
-  stripeRequest("POST", path`/v1/checkout/sessions/${id}/expire`, params);
+  params?: SessionExpireParams,
+): Effect.Effect<Session, StripeError, StripeHttp> =>
+  stripeRequestDecoded(
+    "checkout session",
+    Session,
+    "POST",
+    path`/v1/checkout/sessions/${id}/expire`,
+    params,
+  );
 
 /**
  * List checkout sessions
  */
 export const list = (
-  params?: Stripe.Checkout.SessionListParams,
-): Effect.Effect<Stripe.ApiList<Stripe.Checkout.Session>, StripeError, StripeHttp> =>
-  stripeRequest("GET", "/v1/checkout/sessions", params);
+  params?: SessionListParams,
+): Effect.Effect<SessionList, StripeError, StripeHttp> =>
+  stripeRequestDecoded(
+    "checkout session list",
+    SessionList,
+    "GET",
+    "/v1/checkout/sessions",
+    params,
+  );

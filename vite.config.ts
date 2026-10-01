@@ -23,7 +23,10 @@ export default defineConfig({
     "*.{js,ts,css,json,md}": "vp check --fix",
   },
   fmt: {
-    ignorePatterns: ["**/dist/**", "**/coverage/**", "pnpm-lock.yaml"],
+    // `**/generated/**`: machine-written (packages/payments-stripe/src/internal/generated,
+    // scripts/generate-stripe-schemas.ts); formatting it would only make the
+    // next regeneration a diff of whitespace.
+    ignorePatterns: ["**/dist/**", "**/coverage/**", "**/generated/**", "pnpm-lock.yaml"],
     overrides: [
       {
         files: ["**/*.md"],
@@ -34,7 +37,7 @@ export default defineConfig({
     ],
   },
   lint: {
-    ignorePatterns: ["**/dist/**", "**/coverage/**", "**/node_modules/**"],
+    ignorePatterns: ["**/dist/**", "**/coverage/**", "**/generated/**", "**/node_modules/**"],
     extends: [recommended, effect.configs.recommended],
     categories: {
       correctness: "error",

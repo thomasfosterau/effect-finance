@@ -332,8 +332,8 @@ export type SubscriptionObject = typeof SubscriptionObject.Type;
  * The `invoice` fields a dunning handler reads: who to tell.
  *
  * The subscription is decoded from both places Stripe has put it: the
- * top-level `subscription` (API versions up to `2025-02-24.acacia`, the one
- * this package pins) and `parent.subscription_details.subscription` (from
+ * top-level `subscription` (API versions up to `2025-02-24.acacia`, an
+ * account's older pin) and `parent.subscription_details.subscription` (from
  * `2025-03-31.basil`, which removed the top-level field). Read it with
  * {@link invoiceSubscription}, which prefers the newer location.
  */

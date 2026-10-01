@@ -31,10 +31,10 @@ import {
   Refund as RefundNS,
   CheckoutSession as CheckoutSessionNS,
   BillingPortal as BillingPortalNS,
-  PaymentProviderError,
+  type PaymentProviderError,
   type Page,
 } from "@thomasfosterau/effect-payments";
-import { PROVIDER } from "./error.js";
+import { malformed } from "./decode.js";
 
 /** The vendor data was decoded just before construction. */
 const TRUSTED: Schema.MakeOptions = { disableChecks: true };
@@ -321,13 +321,6 @@ const toBillingPortalSession = (
 // ---------------------------------------------------------------------------
 // Decoders
 // ---------------------------------------------------------------------------
-
-const malformed = (what: string, cause?: unknown): PaymentProviderError =>
-  new PaymentProviderError({
-    message: `Stripe returned a malformed ${what} response`,
-    provider: PROVIDER,
-    cause,
-  });
 
 /**
  * Decode a response body with `schema` and map it, failing with
