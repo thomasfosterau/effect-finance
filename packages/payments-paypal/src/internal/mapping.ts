@@ -12,7 +12,8 @@
  * 2xx whose body does not decode fails with {@link PaymentProviderError}
  * rather than producing an entity built from `undefined`. Unknown fields are
  * ignored. Statuses decode as strings and are normalised by the `to*Status`
- * functions below (an unrecognised one maps to a neutral fallback, as before).
+ * functions below; a status they do not recognise becomes `Enumeration.Other`
+ * carrying the raw string, so it never fails an object or a list page.
  * Entities are then constructed with schema checks disabled: the vendor data
  * has just been decoded.
  *
@@ -21,6 +22,7 @@
 
 import { Effect, Schema } from "effect";
 import {
+  Enumeration,
   Product as ProductNS,
   Price as PriceNS,
   PaymentIntent as PaymentIntentNS,
@@ -167,8 +169,10 @@ const toInterval = (unit: string | null | undefined): PriceNS.RecurringInterval 
     case "YEAR":
       return "year";
     case "MONTH":
-    default:
+    case "":
       return "month";
+    default:
+      return Enumeration.other(unit ?? "");
   }
 };
 
@@ -187,7 +191,7 @@ export const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus =
     case "VOIDED":
       return "canceled";
     default:
-      return "processing";
+      return Enumeration.other(status);
   }
 };
 
@@ -204,8 +208,9 @@ export const toSubscriptionStatus = (status: string): SubscriptionNS.Subscriptio
       return "incomplete_expired";
     case "APPROVAL_PENDING":
     case "APPROVED":
-    default:
       return "incomplete";
+    default:
+      return Enumeration.other(status);
   }
 };
 
@@ -219,8 +224,11 @@ export const toRefundStatus = (status: string | null | undefined): RefundNS.Refu
     case "CANCELLED":
       return "canceled";
     case "PENDING":
-    default:
+    case null:
+    case undefined:
       return "pending";
+    default:
+      return Enumeration.other(status);
   }
 };
 

@@ -66,6 +66,10 @@
       "types": "./dist/BillingPortal.d.ts",
       "default": "./dist/BillingPortal.js"
     },
+    "./Enumeration": {
+      "types": "./dist/Enumeration.d.ts",
+      "default": "./dist/Enumeration.js"
+    },
     "./Money": {
       "types": "./dist/Money.d.ts",
       "default": "./dist/Money.js"

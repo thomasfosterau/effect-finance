@@ -5,13 +5,32 @@
  */
 
 import { Context, Effect, Schema } from "effect";
+import * as Enumeration from "./Enumeration.js";
 import { Metadata } from "./Money.js";
 import type { Page } from "./Page.js";
 import type { PaymentsError } from "./PaymentsError.js";
 
-/** A recurring billing interval. */
-export const RecurringInterval = Schema.Literals(["day", "week", "month", "year"]);
+/** The recurring billing intervals that this library models. */
+export const KnownRecurringInterval = Schema.Literals(["day", "week", "month", "year"]);
+export type KnownRecurringInterval = typeof KnownRecurringInterval.Type;
+
+/**
+ * A recurring billing interval: a {@link KnownRecurringInterval}, or `Other`
+ * carrying the raw interval a provider sent that is not modelled.
+ */
+export const RecurringInterval = Enumeration.lenient(KnownRecurringInterval);
 export type RecurringInterval = typeof RecurringInterval.Type;
+
+/** The price types that this library models. */
+export const KnownPriceType = Schema.Literals(["one_time", "recurring"]);
+export type KnownPriceType = typeof KnownPriceType.Type;
+
+/**
+ * Whether a price is charged once or on a schedule: a {@link KnownPriceType},
+ * or `Other` carrying the raw type a provider sent that is not modelled.
+ */
+export const PriceType = Enumeration.lenient(KnownPriceType);
+export type PriceType = typeof PriceType.Type;
 
 /** The recurring schedule of a price, when it is not a one-time price. */
 export class Recurring extends Schema.Class<Recurring>("@effect-payments/Recurring")({
@@ -31,7 +50,7 @@ export class Price extends Schema.Class<Price>("@effect-payments/Price")({
   currency: Schema.String,
   /** Amount in the smallest currency unit, or `null` for some price types. */
   unitAmount: Schema.NullOr(Schema.Number),
-  type: Schema.Literals(["one_time", "recurring"]),
+  type: PriceType,
   recurring: Schema.NullOr(Recurring),
   metadata: Metadata,
   /** Creation time as a Unix timestamp in seconds. */
@@ -44,7 +63,7 @@ export interface CreateParams {
   readonly currency: string;
   readonly unitAmount: number;
   readonly recurring?: {
-    readonly interval: RecurringInterval;
+    readonly interval: KnownRecurringInterval;
     readonly intervalCount?: number | undefined;
   };
   readonly active?: boolean | undefined;

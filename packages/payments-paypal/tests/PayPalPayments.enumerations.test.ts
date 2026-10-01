@@ -1,0 +1,136 @@
+import { describe, it, expect } from "vite-plus/test";
+import { Effect, Layer } from "effect";
+import * as Price from "@thomasfosterau/effect-payments/Price";
+import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
+import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
+import * as Refund from "@thomasfosterau/effect-payments/Refund";
+import { PayPalClient } from "../src/PayPal.ts";
+import * as PayPalPayments from "../src/PayPalPayments.ts";
+
+/**
+ * A value PayPal sends that the neutral model does not cover must decode to
+ * `Other` carrying the raw string, never fail the object or the page (#58).
+ */
+const run = <A, E>(
+  effect: Effect.Effect<A, E, Layer.Success<typeof PayPalPayments.capabilities>>,
+  body: unknown,
+): Promise<A> =>
+  Effect.runPromise(
+    effect.pipe(
+      Effect.provide(
+        Layer.provide(
+          PayPalPayments.capabilities,
+          Layer.succeed(PayPalClient, PayPalClient.of({ request: () => Effect.succeed(body) })),
+        ),
+      ),
+    ),
+  );
+
+const other = (raw: string) => ({ _tag: "Other", raw });
+
+const order = (status: string) => ({
+  id: "ORD-1",
+  status,
+  purchase_units: [{ amount: { currency_code: "USD", value: "20.00" } }],
+});
+
+const subscription = (status: string) => ({
+  id: "SUB-1",
+  status,
+  plan_id: "P-1",
+  start_time: "2026-01-01T00:00:00Z",
+  billing_info: { next_billing_time: "2026-02-01T00:00:00Z" },
+});
+
+const refund = (status: string) => ({
+  id: "REF-1",
+  status,
+  amount: { currency_code: "USD", value: "5.00" },
+});
+
+const plan = (id: string, unit: string) => ({
+  id,
+  product_id: "PROD-1",
+  status: "ACTIVE",
+  billing_cycles: [
+    {
+      tenure_type: "REGULAR",
+      frequency: { interval_unit: unit, interval_count: 1 },
+      pricing_scheme: { fixed_price: { currency_code: "USD", value: "10.00" } },
+    },
+  ],
+});
+
+describe("PayPalPayments lenient enumerations", () => {
+  it("decodes an unknown order status to Other with the raw value", async () => {
+    const result = await run(PaymentIntent.retrieve("ORD-1"), order("BRAND_NEW"));
+    expect(result.status).toEqual(other("BRAND_NEW"));
+  });
+
+  it("decodes an unknown subscription status to Other with the raw value", async () => {
+    const result = await run(Subscription.retrieve("SUB-1"), subscription("BRAND_NEW"));
+    expect(result.status).toEqual(other("BRAND_NEW"));
+  });
+
+  it("decodes an unknown refund status to Other with the raw value", async () => {
+    const result = await run(Refund.retrieve("REF-1"), refund("BRAND_NEW"));
+    expect(result.status).toEqual(other("BRAND_NEW"));
+  });
+
+  it("decodes an unknown billing interval unit to Other inside a plan list, leaving the rest", async () => {
+    const page = await run(Price.list(), {
+      plans: [plan("P-1", "MONTH"), plan("P-2", "DECADE"), plan("P-3", "YEAR")],
+    });
+    expect(page.data.map((item) => item.recurring?.interval)).toEqual([
+      "month",
+      other("DECADE"),
+      "year",
+    ]);
+  });
+
+  it("keeps every known order, subscription and refund status unchanged", async () => {
+    const orders: Array<[string, string]> = [
+      ["CREATED", "requires_confirmation"],
+      ["SAVED", "requires_confirmation"],
+      ["PAYER_ACTION_REQUIRED", "requires_action"],
+      ["APPROVED", "requires_capture"],
+      ["COMPLETED", "succeeded"],
+      ["VOIDED", "canceled"],
+    ];
+    for (const [wire, neutral] of orders) {
+      expect((await run(PaymentIntent.retrieve("ORD-1"), order(wire))).status).toBe(neutral);
+    }
+    const subscriptions: Array<[string, string]> = [
+      ["ACTIVE", "active"],
+      ["SUSPENDED", "paused"],
+      ["CANCELLED", "canceled"],
+      ["EXPIRED", "incomplete_expired"],
+      ["APPROVAL_PENDING", "incomplete"],
+      ["APPROVED", "incomplete"],
+    ];
+    for (const [wire, neutral] of subscriptions) {
+      expect((await run(Subscription.retrieve("SUB-1"), subscription(wire))).status).toBe(neutral);
+    }
+    const refunds: Array<[string, string]> = [
+      ["COMPLETED", "succeeded"],
+      ["FAILED", "failed"],
+      ["CANCELLED", "canceled"],
+      ["PENDING", "pending"],
+    ];
+    for (const [wire, neutral] of refunds) {
+      expect((await run(Refund.retrieve("REF-1"), refund(wire))).status).toBe(neutral);
+    }
+    const intervals: Array<[string, string]> = [
+      ["DAY", "day"],
+      ["WEEK", "week"],
+      ["MONTH", "month"],
+      ["YEAR", "year"],
+    ];
+    const page = await run(Price.list(), {
+      plans: intervals.map(([wire], index) => plan(`P-${index}`, wire)),
+    });
+    expect(page.data.map((item) => item.recurring?.interval)).toEqual(
+      intervals.map(([, neutral]) => neutral),
+    );
+  });
+});

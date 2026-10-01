@@ -5,14 +5,16 @@
  */
 
 import { Context, Effect, Schema } from "effect";
+import * as Enumeration from "./Enumeration.js";
 import { Metadata } from "./Money.js";
 import type { Page } from "./Page.js";
 import type { PaymentsError } from "./PaymentsError.js";
 
 /**
- * The status of a subscription, normalized across providers.
+ * The subscription statuses that this library models, normalized across
+ * providers.
  */
-export const SubscriptionStatus = Schema.Literals([
+export const KnownSubscriptionStatus = Schema.Literals([
   "active",
   "past_due",
   "unpaid",
@@ -22,6 +24,13 @@ export const SubscriptionStatus = Schema.Literals([
   "trialing",
   "paused",
 ]);
+export type KnownSubscriptionStatus = typeof KnownSubscriptionStatus.Type;
+
+/**
+ * The status of a subscription: a {@link KnownSubscriptionStatus}, or `Other`
+ * carrying the raw status a provider sent that is not modelled.
+ */
+export const SubscriptionStatus = Enumeration.lenient(KnownSubscriptionStatus);
 export type SubscriptionStatus = typeof SubscriptionStatus.Type;
 
 /** A single line item of a subscription, billed against a price. */
@@ -75,7 +84,8 @@ export interface UpdateParams {
 export interface ListParams {
   readonly limit?: number | undefined;
   readonly customer?: string | undefined;
-  readonly status?: SubscriptionStatus | undefined;
+  /** A status to filter by; only a known status can be requested. */
+  readonly status?: KnownSubscriptionStatus | undefined;
   readonly startingAfter?: string | undefined;
 }
 
