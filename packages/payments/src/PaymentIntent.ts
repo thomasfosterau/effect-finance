@@ -11,6 +11,7 @@ import { Context, Effect, Schema } from "effect";
 import * as Enumeration from "./Enumeration.js";
 import { Metadata } from "./Money.js";
 import type { Page } from "./Page.js";
+import type { IdempotencyKey } from "./IdempotencyKey.js";
 import type { PaymentsError } from "./PaymentsError.js";
 
 /**
@@ -62,6 +63,12 @@ export interface CreateParams {
   readonly paymentMethod?: string | undefined;
   readonly description?: string | undefined;
   readonly metadata?: Record<string, string> | undefined;
+  /**
+   * Makes this write safe to repeat: create one with `IdempotencyKey.generate`
+   * before the first attempt and pass the same key on every retry (see
+   * `IdempotencyKey` for the contract).
+   */
+  readonly idempotencyKey?: IdempotencyKey | undefined;
 }
 
 /** Parameters for updating a payment intent. */
@@ -74,6 +81,12 @@ export interface UpdateParams {
 /** Parameters for confirming a payment intent. */
 export interface ConfirmParams {
   readonly paymentMethod?: string | undefined;
+  /**
+   * Makes this write safe to repeat: create one with `IdempotencyKey.generate`
+   * before the first attempt and pass the same key on every retry (see
+   * `IdempotencyKey` for the contract).
+   */
+  readonly idempotencyKey?: IdempotencyKey | undefined;
 }
 
 /** Parameters for listing payment intents. */

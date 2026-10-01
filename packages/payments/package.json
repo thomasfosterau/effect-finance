@@ -70,6 +70,10 @@
       "types": "./dist/Enumeration.d.ts",
       "default": "./dist/Enumeration.js"
     },
+    "./IdempotencyKey": {
+      "types": "./dist/IdempotencyKey.d.ts",
+      "default": "./dist/IdempotencyKey.js"
+    },
     "./Money": {
       "types": "./dist/Money.d.ts",
       "default": "./dist/Money.js"

@@ -25,6 +25,7 @@ import {
   Refund as RefundNS,
   CheckoutSession as CheckoutSessionNS,
   BillingPortal as BillingPortalNS,
+  IdempotencyKey as IdempotencyKeyNS,
   type PaymentConfigError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
@@ -60,6 +61,8 @@ import {
 /**
  * One call through the transport, its response decoded by `decode`. Parameter
  * objects are passed as assembled: the form encoder skips `undefined` values.
+ * `idempotencyKey` is the neutral key of a create or confirm operation, sent
+ * as the `Idempotency-Key` header.
  */
 const call =
   (http: StripeHttp["Service"]) =>
@@ -68,9 +71,14 @@ const call =
     requestPath: RequestPath,
     params: StripeParams | undefined,
     decode: (body: unknown) => Effect.Effect<A, PaymentsError>,
+    idempotencyKey?: string | undefined,
   ): Effect.Effect<A, PaymentsError> =>
-    withPath(requestPath, (valid) =>
-      Effect.flatMap(http.request({ method, path: valid, params }), decode),
+    // The key is checked before anything is sent: the brand guarantees its
+    // shape for typed callers, this refuses a raw string from untyped code.
+    Effect.flatMap(IdempotencyKeyNS.validate(idempotencyKey), (key) =>
+      withPath(requestPath, (valid) =>
+        Effect.flatMap(http.request({ method, path: valid, params, idempotencyKey: key }), decode),
+      ),
     );
 
 // ---------------------------------------------------------------------------
@@ -90,7 +98,8 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, StripeHttp
       metadata: params.metadata,
     });
     return CustomerNS.Customers.of({
-      create: (params) => request("POST", "/v1/customers", fields(params), decodeCustomer),
+      create: (params) =>
+        request("POST", "/v1/customers", fields(params), decodeCustomer, params.idempotencyKey),
       retrieve: (id) => request("GET", path`/v1/customers/${id}`, undefined, decodeCustomer),
       update: (id, params) =>
         request("POST", path`/v1/customers/${id}`, fields(params), decodeCustomer),
@@ -122,7 +131,8 @@ export const productsLayer: Layer.Layer<ProductNS.Products, never, StripeHttp> =
       metadata: params.metadata,
     });
     return ProductNS.Products.of({
-      create: (params) => request("POST", "/v1/products", fields(params), decodeProduct),
+      create: (params) =>
+        request("POST", "/v1/products", fields(params), decodeProduct, params.idempotencyKey),
       retrieve: (id) => request("GET", path`/v1/products/${id}`, undefined, decodeProduct),
       update: (id, params) =>
         request("POST", path`/v1/products/${id}`, fields(params), decodeProduct),
@@ -164,6 +174,7 @@ export const pricesLayer: Layer.Layer<PriceNS.Prices, never, StripeHttp> = Layer
             metadata: params.metadata,
           },
           decodePrice,
+          params.idempotencyKey,
         ),
       retrieve: (id) => request("GET", path`/v1/prices/${id}`, undefined, decodePrice),
       update: (id, params) =>
@@ -213,6 +224,7 @@ export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, ne
               metadata: params.metadata,
             },
             decodePaymentIntent,
+            params.idempotencyKey,
           ),
         retrieve: (id) =>
           request("GET", path`/v1/payment_intents/${id}`, undefined, decodePaymentIntent),
@@ -229,6 +241,7 @@ export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, ne
             path`/v1/payment_intents/${id}/confirm`,
             { payment_method: params?.paymentMethod },
             decodePaymentIntent,
+            params?.idempotencyKey,
           ),
         cancel: (id) =>
           request("POST", path`/v1/payment_intents/${id}/cancel`, undefined, decodePaymentIntent),
@@ -269,6 +282,7 @@ export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never
               metadata: params.metadata,
             },
             decodeSubscription,
+            params.idempotencyKey,
           ),
         retrieve: (id) =>
           request("GET", path`/v1/subscriptions/${id}`, undefined, decodeSubscription),
@@ -321,6 +335,7 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, StripeHttp> = La
             metadata: params.metadata,
           },
           decodeRefund,
+          params.idempotencyKey,
         ),
       retrieve: (id) => request("GET", path`/v1/refunds/${id}`, undefined, decodeRefund),
       update: (id, params) =>
@@ -381,6 +396,7 @@ export const checkoutSessionsLayer: Layer.Layer<
                 : undefined,
           },
           decodeCheckoutSession,
+          params.idempotencyKey,
         ),
     });
   }),

@@ -31,6 +31,7 @@
  */
 
 import { Context, Effect, Schema } from "effect";
+import type { IdempotencyKey } from "./IdempotencyKey.js";
 import type { PaymentsError } from "./PaymentsError.js";
 
 /**
@@ -71,6 +72,12 @@ export interface CommonParams {
   readonly cancelUrl: string;
   /** Metadata stored on the checkout session itself. */
   readonly metadata?: Record<string, string> | undefined;
+  /**
+   * Makes this write safe to repeat: create one with `IdempotencyKey.generate`
+   * before the first attempt and pass the same key on every retry (see
+   * `IdempotencyKey` for the contract).
+   */
+  readonly idempotencyKey?: IdempotencyKey | undefined;
 }
 
 /** A checkout for a one-off payment. */

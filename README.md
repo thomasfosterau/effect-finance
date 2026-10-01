@@ -121,6 +121,26 @@ const program = Customer.create({ email: "jane@example.com" }).pipe(
 );
 ```
 
+### Retrying a write safely
+
+A write that fails with `PaymentNetworkError` (or a provider 5xx, which surfaces as `PaymentProviderError` with `statusCode >= 500`) has an unknown outcome; retrying it blindly can double-charge. Create one `IdempotencyKey` per logical write _before the first attempt_, pass it as `idempotencyKey` on the create / confirm operation (`Customer.create`, `Product.create`, `Price.create`, `PaymentIntent.create` / `confirm`, `Subscription.create`, `Refund.create`, `CheckoutSession.create`) and reuse the same key on every retry:
+
+```typescript
+const idempotencyKey = yield * IdempotencyKey.generate; // once per logical write
+yield *
+  Refund.create({ paymentIntent, idempotencyKey }).pipe(
+    Effect.retry({
+      while: (e) =>
+        e._tag === "PaymentNetworkError" ||
+        e._tag === "PaymentRateLimitError" ||
+        (e._tag === "PaymentProviderError" && (e.statusCode ?? 0) >= 500),
+      times: 3,
+    }),
+  );
+```
+
+`Subscription.cancel` and `PaymentIntent.cancel` take no key. The key is 1 to 64 characters from `A-Z a-z 0-9 _ -`; the vendors' own limits and replay windows are unverified. The rules and the per-provider mapping are in the [core README](packages/payments/README.md#retrying-a-write-safely).
+
 ## The Stripe provider
 
 ### Providing the capabilities
