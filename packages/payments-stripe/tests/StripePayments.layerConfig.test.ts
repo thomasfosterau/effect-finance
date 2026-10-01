@@ -158,6 +158,23 @@ describe("StripePayments.layerConfig", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("treats an empty key a preserveEmptyStrings provider keeps as absent", async () => {
+    const { http, calls } = stubFetch(customer);
+    const error = await Effect.runPromise(
+      Effect.flip(Customer.retrieve("cus_1")).pipe(
+        Effect.provide(StripePayments.layerConfig()),
+        Effect.provide(http),
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({ env: { STRIPE_API_KEY: "" }, preserveEmptyStrings: true }),
+          ),
+        ),
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentsUnavailable);
+    expect(calls).toHaveLength(0);
+  });
+
   it("reads a named variable and forwards the transport options", async () => {
     const { http, calls } = stubFetch(customer);
     const layer = StripePayments.layerConfig({

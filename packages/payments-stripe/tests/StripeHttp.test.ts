@@ -588,6 +588,26 @@ describe("StripeHttp configuration", () => {
     expect(error.message).toContain("STRIPE_API_KEY");
     expect(calls).toHaveLength(0);
   });
+
+  it("still rejects an empty key variable a preserveEmptyStrings provider keeps", async () => {
+    const { http, calls } = stubFetch(ok);
+    const error = await Effect.runPromise(
+      Effect.flip(
+        Layer.build(layerFromEnv()).pipe(
+          Effect.scoped,
+          Effect.provide(http),
+          Effect.provide(
+            ConfigProvider.layer(
+              ConfigProvider.fromEnv({ env: { STRIPE_API_KEY: "" }, preserveEmptyStrings: true }),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentConfigError);
+    expect(error.message).toContain("STRIPE_API_KEY");
+    expect(calls).toHaveLength(0);
+  });
 });
 
 describe("resource modules over the fetch transport", () => {

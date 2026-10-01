@@ -55,7 +55,9 @@ export interface PayPalConfig {
   readonly clientSecret: Redacted.Redacted<string>;
   /**
    * Override the API base URL. Defaults to the production endpoint; use
-   * `https://api-m.sandbox.paypal.com` for sandbox.
+   * `https://api-m.sandbox.paypal.com` for sandbox. Must be an absolute
+   * http(s) URL: an empty or relative value fails `make` with
+   * {@link PaymentConfigError} rather than falling back to production.
    */
   readonly baseUrl?: string | undefined;
   /**
@@ -198,6 +200,16 @@ const requestIdRejection = (
   return undefined;
 };
 
+/** Whether `value` parses as an absolute `http:` or `https:` URL (an empty string does not). */
+const isAbsoluteHttpUrl = (value: string): boolean => {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Build a PayPal client from configuration.
  */
@@ -208,6 +220,12 @@ export const make = (
     if (!config.clientId || !Redacted.value(config.clientSecret)) {
       return yield* new PaymentConfigError({
         message: "PayPal clientId and clientSecret are required",
+      });
+    }
+
+    if (config.baseUrl !== undefined && !isAbsoluteHttpUrl(config.baseUrl)) {
+      return yield* new PaymentConfigError({
+        message: "PayPal baseUrl must be an absolute http(s) URL (omit it for the live endpoint)",
       });
     }
 
