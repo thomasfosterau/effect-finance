@@ -1,13 +1,13 @@
 name: Effect Canary
 
-# Runs the gate against the newest Effect *prerelease* (the "rc" npm dist-tag)
+# Runs the gate against the newest Effect release (the `latest` npm dist-tag)
 # instead of the version pinned in pnpm-workspace.yaml / pnpm-lock.yaml, so
 # upstream breakage surfaces here on a schedule rather than in a consumer's
 # build. Copied from the effect-email library (itself from effect-jsonapi),
 # with the effect-web library's float step: the catalog entry is pinned to the
-# exact version `effect@rc` names, since `catalogMode: strict` rejects
-# `pnpm add effect@rc` and a bare dist-tag would bypass the lockfile's record
-# of which prerelease was tested.
+# exact version `effect@latest` names, since `catalogMode: strict` rejects
+# `pnpm add effect@latest` and a bare dist-tag would bypass the lockfile's
+# record of which release was tested.
 #
 # Scheduled + manual only — this never runs on push or pull_request, so a red
 # run can never block a PR merge. The job still finishes red in the Actions
@@ -28,7 +28,7 @@ permissions: {}
 
 jobs:
   canary:
-    name: Typecheck, test & build against effect@rc
+    name: Typecheck, test & build against effect@latest
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -40,15 +40,17 @@ jobs:
           persist-credentials: false
 
       # Float the catalog's `effect` pin (and the singleton override, which
-      # shares the two-space indent) onto the newest prerelease. The "rc"
-      # dist-tag is the pre-4.0 release-candidate line this repo tracks —
-      # switch it if the project moves to another line. `minimumReleaseAge`
-      # still applies, so an rc younger than a day fails the install loudly.
-      - name: Float the catalog onto the latest Effect prerelease
+      # shares the two-space indent) onto the newest release. The `latest`
+      # dist-tag is the stable 4.x line this repo tracks since 4.0.0 shipped;
+      # the old `rc` tag stopped moving at 4.0.0-rc.118, so floating onto it
+      # would downgrade the run below the pin (#103). Switch the tag if the
+      # project moves to tracking a prerelease line. `minimumReleaseAge` still
+      # applies, so a release younger than a day fails the install loudly.
+      - name: Float the catalog onto the latest Effect release
         run: |
           set -euo pipefail
-          latest="$(npm view effect@rc version)"
-          echo "effect@rc is $latest"
+          latest="$(npm view effect@latest version)"
+          echo "effect@latest is $latest"
           sed -i -E "s/^(  effect: ).*$/\1$latest/" pnpm-workspace.yaml
           grep -n '^  effect: ' pnpm-workspace.yaml
 
@@ -101,19 +103,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          title="Effect canary is red against effect@rc"
+          title="Effect canary is red against effect@latest"
 
           body=$(jq -n \
             --arg run "$RUN_URL" \
             --arg typecheck "$TYPECHECK_OUTCOME" \
             --arg test "$TEST_OUTCOME" \
             --arg build "$BUILD_OUTCOME" \
-            '"The scheduled Effect canary failed against the latest `effect` prerelease (the `rc` npm dist-tag).\n\n" +
+            '"The scheduled Effect canary failed against the latest `effect` release (the `latest` npm dist-tag).\n\n" +
              "- typecheck: " + $typecheck + "\n" +
              "- test: " + $test + "\n" +
              "- build: " + $build + "\n\n" +
              "Run: " + $run + "\n\n" +
-             "This does not block any PR by itself — it means the next Effect prerelease is likely to break this library once it stabilizes. Investigate the run, then either fix the break ahead of time or close this out if it turns out to be a fluke in that prerelease."')
+             "This does not block any PR by itself — it means the newest Effect release breaks this library, so the next bump of the `effect` pin will too. Investigate the run, then either fix the break ahead of time or close this out if it turns out to be a fluke in that release."')
 
           existing=$(curl -sS -G \
             -H "Authorization: Bearer $GITHUB_TOKEN" \

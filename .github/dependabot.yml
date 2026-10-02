@@ -5,12 +5,22 @@
 # `groups` collect dependencies that MUST move together: the Effect 4 release
 # line is a lockstep-versioned singleton set (moved with the consuming
 # applications, and floated weekly by the Effect Canary workflow); the vitest
-# toolchain is pinned to
-# vite-plus's exact versions, so version updates to any of the three are
-# ignored (they move together by hand, with the @effect/tsgo pin — see
-# pnpm-workspace.yaml) while SECURITY updates stay enabled (the ignore is
-# scoped to the `version-update:semver-*` update types; a bare
-# `dependency-name` ignore would block security updates too).
+# toolchain is pinned to vite-plus's exact versions. Version updates to the
+# vitest toolchain are ignored (they move together by hand, with the
+# @effect/tsgo pin — see pnpm-workspace.yaml).
+#
+# @effect/tsgo, `typescript` (the TS6 alias) and @typescript/native are also
+# ignored for version updates: `effect-tsgo patch` matches the native `tsc`
+# and vite-plus's `oxlint` by gitHead / version and fails `pnpm install` on
+# any pairing it has no artifact for, so a PR that moves one of them alone
+# goes red. The three move by hand as a set with vite-plus, after checking the
+# `components` table in node_modules/@effect/tsgo/dist/effect-tsgo.cjs; the
+# `effect` group excludes @effect/tsgo so its `@effect/*` pattern never pulls
+# it in (#103).
+#
+# Every ignore is scoped to the `version-update:semver-*` update types, so
+# SECURITY updates stay enabled; a bare `dependency-name` ignore would block
+# them too.
 #
 # `cooldown` mirrors pnpm-workspace.yaml's `minimumReleaseAge`.
 version: 2
@@ -35,12 +45,35 @@ updates:
         patterns:
           - "effect"
           - "@effect/*"
+        exclude-patterns:
+          - "@effect/tsgo"
       vitest-toolchain:
         patterns:
           - "vitest"
           - "@vitest/coverage-istanbul"
           - "vite-plus"
     ignore:
+      - dependency-name: "@effect/tsgo"
+        update-types:
+          [
+            "version-update:semver-major",
+            "version-update:semver-minor",
+            "version-update:semver-patch",
+          ]
+      - dependency-name: "typescript"
+        update-types:
+          [
+            "version-update:semver-major",
+            "version-update:semver-minor",
+            "version-update:semver-patch",
+          ]
+      - dependency-name: "@typescript/native"
+        update-types:
+          [
+            "version-update:semver-major",
+            "version-update:semver-minor",
+            "version-update:semver-patch",
+          ]
       - dependency-name: "vite"
         update-types:
           [
