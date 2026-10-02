@@ -39,8 +39,11 @@ jobs:
         with:
           persist-credentials: false
 
-      # Float the catalog's `effect` pin (and the singleton override, which
-      # shares the two-space indent) onto the newest release. The `latest`
+      # Float the catalog's `effect` pin onto the newest release. The `sed` is
+      # scoped to the `catalog:` block, so the `overrides:` entry
+      # `effect: "catalog:"` stays a catalog reference and nothing else moves;
+      # the `test` fails the step if the catalog line was not rewritten
+      # exactly once (e.g. the key gets quoted). The `latest`
       # dist-tag is the stable 4.x line this repo tracks since 4.0.0 shipped;
       # the old `rc` tag stopped moving at 4.0.0-rc.118, so floating onto it
       # would downgrade the run below the pin (#103). Switch the tag if the
@@ -50,8 +53,10 @@ jobs:
         run: |
           set -euo pipefail
           latest="$(npm view effect@latest version)"
+          if [ -z "$latest" ]; then echo "::error::npm view effect@latest returned no version"; exit 1; fi
           echo "effect@latest is $latest"
-          sed -i -E "s/^(  effect: ).*$/\1$latest/" pnpm-workspace.yaml
+          sed -i -E "/^catalog:$/,/^[^ #]/ s/^(  effect: ).*$/\1${latest}/" pnpm-workspace.yaml
+          test "$(grep -cxF "  effect: ${latest}" pnpm-workspace.yaml)" -eq 1
           grep -n '^  effect: ' pnpm-workspace.yaml
 
       - name: Setup pnpm
