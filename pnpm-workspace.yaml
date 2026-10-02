@@ -25,7 +25,7 @@ catalogMode: strict
 catalog:
   "@changesets/changelog-github": ^1.0.1
   "@changesets/cli": ^3.0.3
-  "@effect/language-service": ^0.87.2
+  "@effect/language-service": ^0.87.3
   "@effect/openapi-generator": 4.0.0
   "@effect/platform-node": 4.0.0
   # Effect Language Service as a native (TypeScript-Go) binary — the TS7 side
@@ -38,7 +38,7 @@ catalog:
   # on any other component version, failing `pnpm install` itself. Read the
   # `components` table in node_modules/@effect/tsgo/dist/effect-tsgo.cjs
   # before bumping any of the three.
-  "@effect/tsgo": 0.45.0
+  "@effect/tsgo": 0.47.2
   "@mpsuesser/oxlint-plugin-effect": ^0.5.0
   "@types/node": ^26.6.3
   "@vitest/coverage-istanbul": 4.1.11
