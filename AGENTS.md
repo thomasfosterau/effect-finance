@@ -55,13 +55,13 @@ Before you report work as done, run the gates below in order and quote each comm
 3. `vp run -r test:unit`
 4. `vp run -r build`
 5. If you touched `packages/payments-stripe/scripts/` or the spec pin: `vp run --filter ./packages/payments-stripe generate:schemas && git diff --exit-code -- packages/payments-stripe/src/internal/generated`. CI runs it; it fetches the spec from GitHub, so where the network is blocked set `STRIPE_SPEC_FILE` to the pinned `spec3.json`.
-6. `vp run test:coverage`, then `fallow audit --base origin/main` (the fallow gate; see [Agent sessions](#agent-sessions)).
+6. `vp run test:coverage`, then `fallow audit --base origin/trunk` (the fallow gate; see [Agent sessions](#agent-sessions)).
 
 CI runs 1–5 plus `pnpm audit --audit-level high`. For CI parity, start from a clean tree: `rm -rf node_modules packages/*/node_modules packages/*/dist && pnpm install --frozen-lockfile`. A warm local tree hides a missing peer: a required peer of a dependency must be a declared dependency, or CI fails on a fresh runner while the local tree passes.
 
 ## Branches and pull requests
 
-- Branch off `main`; PR against `main`; squash-merge with a conventional prefix (`feat:`, `fix:`, `docs:`, `chore:`). Rebase onto `origin/main` before opening or updating a PR; never merge `main` into your branch (GitHub's Update-branch button merges).
+- Branch off `trunk`; PR against `trunk`; squash-merge with a conventional prefix (`feat:`, `fix:`, `docs:`, `chore:`). Rebase onto `origin/trunk` before opening or updating a PR; never merge `trunk` into your branch (GitHub's Update-branch button merges).
 - Agent work uses git worktrees under `.claude/worktrees/`, one per branch, named `issue-<n>-<slug>` for issue-linked work. Start every command that targets a worktree with an explicit `cd` and confirm with `git log -1` before committing. The linked `vp` at `~/.local/bin/vp` re-execs the nearest project-local `node_modules/vite-plus/bin/vp`, so a worktree needs its own `pnpm install` first.
 - Every change to a published package's behaviour carries a changeset (`pnpm changeset`); docs-, CI- and tooling-only changes need none. Never publish or version by hand: the Release workflow opens the "Version Packages" PR and the owner merges it ([PUBLISHING.md](PUBLISHING.md)).
 - These are standing approvals: open a PR once a branch has a pushed commit, watch it to merge or close (investigate CI failures and review comments; rebase when it goes conflicting), and keep the PR body current with what the branch does.
@@ -70,7 +70,7 @@ CI runs 1–5 plus `pnpm audit --audit-level high`. For CI parity, start from a 
 ## Work tracker
 
 - Issues are the backlog: when you find work you can't do now, file an issue rather than leaving a TODO. Epic #36 carries the plan; its open sub-issues are the remaining slices. Adoption by an application is tracked in that application's tracker (gardeneria#1269).
-- The issue is the spec — read its comments; later comments override the body. Decisions recorded on #36 and website#2015 override anything older. Re-verify code claims against current `main` (and gardeneria's current `trunk` for the behavioural spec) before editing.
+- The issue is the spec — read its comments; later comments override the body. Decisions recorded on #36 and website#2015 override anything older. Re-verify code claims against current `trunk` (and gardeneria's current `trunk` for the behavioural spec) before editing.
 - Record decisions and findings as issue comments.
 - Stop-and-report is a valid outcome: on a blocker outside the issue's scope, comment the evidence on the issue and stop. Scope cut mid-PR becomes a linked issue before merge.
 
@@ -81,7 +81,7 @@ Consult effect-solutions before writing Effect code (`vp exec effect-solutions l
 ## Agent sessions
 
 - The SessionStart hook (`.claude/hooks/session-start.sh`) installs dependencies against the lockfile and puts `vp` and `fallow` on PATH for non-interactive shells. It hydrates no secrets: nothing here needs one, and nothing here can publish.
-- `.claude/settings.json` also formats every file an Edit / Write touches (`vp fmt --write`), and a PreToolUse hook (`.claude/hooks/fallow-gate.sh`) runs `fallow audit --base origin/main` before `git commit` / `git push` and blocks on a `fail` verdict. The git pre-commit hook runs only `vp staged`.
+- `.claude/settings.json` also formats every file an Edit / Write touches (`vp fmt --write`), and a PreToolUse hook (`.claude/hooks/fallow-gate.sh`) runs `fallow audit --base origin/trunk` before `git commit` / `git push` and blocks on a `fail` verdict. The git pre-commit hook runs only `vp staged`.
 - Won't run in an agent session without network: `generate:schemas` (fetches the spec; use `STRIPE_SPEC_FILE`). Say so in the PR body.
 
 ## Documentation surfaces
