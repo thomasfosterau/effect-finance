@@ -39,4 +39,4 @@ export * as Payments from "@thomasfosterau/effect-payments";
 export * as Airwallex from "./Airwallex.js";
 export * as AirwallexPayments from "./AirwallexPayments.js";
 
-export type { AirwallexConfig, AirwallexRequest } from "./Airwallex.js";
+export type { AirwallexConfig, AirwallexEnvironment, AirwallexRequest } from "./Airwallex.js";

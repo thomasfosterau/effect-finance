@@ -70,7 +70,7 @@ Because each capability is an independent Effect service, this provider simply d
 | Module | Purpose |
 | --- | --- |
 | `AirwallexPayments` | `layer` / `layerFromEnv` (client + every supported capability; need an `HttpClient`), `capabilities` (over an existing `AirwallexClient`), the individual capability layers, and the `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs. |
-| `Airwallex` | The `AirwallexClient` service (token handshake, cached token, `request`), `layer` / `layerFromEnv` / `make`, and the `AirwallexConfig` / `AirwallexRequest` types. |
+| `Airwallex` | The `AirwallexClient` service (token handshake, cached token, `request`), `layer` / `layerFromEnv` / `make`, and the `AirwallexConfig` / `AirwallexEnvironment` / `AirwallexRequest` types. |
 
 The root entry re-exports both as namespaces, plus the core as `Payments`.
 
