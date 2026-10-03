@@ -533,6 +533,7 @@ describe("Airwallex client secrets", () => {
             ConfigProvider.fromUnknown({
               AIRWALLEX_CLIENT_ID: "client_env",
               AIRWALLEX_API_KEY: "secret_env",
+              AIRWALLEX_ENV: "live",
             }),
           ),
         ),
@@ -551,7 +552,12 @@ describe("Airwallex client secrets", () => {
           Effect.scoped,
           Effect.provide(http),
           Effect.provide(
-            ConfigProvider.layer(ConfigProvider.fromUnknown({ AIRWALLEX_CLIENT_ID: "client_env" })),
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown({
+                AIRWALLEX_CLIENT_ID: "client_env",
+                AIRWALLEX_ENV: "live",
+              }),
+            ),
           ),
         ),
       ),
@@ -696,7 +702,11 @@ describe("Airwallex layerFromEnv and empty variables", () => {
     ).pipe(
       Effect.provide(layerFromEnv()),
       Effect.provide(http),
-      Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: values, ...options }))),
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({ env: { AIRWALLEX_ENV: "live", ...values }, ...options }),
+        ),
+      ),
     );
     return { program, calls };
   };
@@ -715,7 +725,7 @@ describe("Airwallex layerFromEnv and empty variables", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("uses the default endpoint when AIRWALLEX_BASE_URL is empty", async () => {
+  it("uses the AIRWALLEX_ENV endpoint when AIRWALLEX_BASE_URL is empty", async () => {
     const { program, calls } = build({
       AIRWALLEX_CLIENT_ID: "client_env",
       AIRWALLEX_API_KEY: "secret_env",
@@ -748,6 +758,83 @@ describe("Airwallex layerFromEnv and empty variables", () => {
     expect(error).toBeInstanceOf(PaymentConfigError);
     expect(error.message).toContain("baseUrl");
     expect(calls).toHaveLength(0);
+  });
+});
+
+// #90: AIRWALLEX_ENV is required and selects the endpoint; AIRWALLEX_BASE_URL,
+// when set, still wins.
+describe("Airwallex AIRWALLEX_ENV", () => {
+  const CREDENTIALS = { AIRWALLEX_CLIENT_ID: "client_env", AIRWALLEX_API_KEY: "secret_env" };
+  const build = (values: Record<string, string>) => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+    const program = Effect.flatMap(AirwallexClient, (client) =>
+      client.request({ method: "GET", path: "/probe" }),
+    ).pipe(
+      Effect.provide(layerFromEnv()),
+      Effect.provide(http),
+      Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: values }))),
+    );
+    return { program, calls };
+  };
+
+  for (const [environment, host] of [
+    ["live", "https://api.airwallex.com"],
+    ["sandbox", "https://api.sandbox.airwallex.com"],
+  ] as const) {
+    it(`sends ${environment} requests to ${host}`, async () => {
+      const { program, calls } = build({ ...CREDENTIALS, AIRWALLEX_ENV: environment });
+      await Effect.runPromise(program);
+      expect(calls.map((call) => call.url)).toEqual([`${host}${LOGIN_PATH}`, `${host}/probe`]);
+    });
+  }
+
+  for (const [label, values] of [
+    ["is unset", CREDENTIALS],
+    ["is empty", { ...CREDENTIALS, AIRWALLEX_ENV: "" }],
+    ["is not live or sandbox", { ...CREDENTIALS, AIRWALLEX_ENV: "production" }],
+    [
+      "is unset, even with AIRWALLEX_BASE_URL",
+      { ...CREDENTIALS, AIRWALLEX_BASE_URL: "https://proxy.example.test" },
+    ],
+  ] as const) {
+    it(`fails with a PaymentConfigError naming AIRWALLEX_ENV when it ${label}`, async () => {
+      const { program, calls } = build(values);
+      const error = await Effect.runPromise(Effect.flip(program));
+      expect(error).toBeInstanceOf(PaymentConfigError);
+      expect(error.message).toContain("AIRWALLEX_ENV");
+      expect(calls).toHaveLength(0);
+    });
+  }
+
+  it("lets AIRWALLEX_BASE_URL override the AIRWALLEX_ENV endpoint", async () => {
+    const { program, calls } = build({
+      ...CREDENTIALS,
+      AIRWALLEX_ENV: "sandbox",
+      AIRWALLEX_BASE_URL: "https://proxy.example.test",
+    });
+    await Effect.runPromise(program);
+    expect(calls[0]?.url).toBe(`https://proxy.example.test${LOGIN_PATH}`);
+  });
+
+  it("maps make's environment option, live by default, with baseUrl winning", async () => {
+    const loginUrl = async (over: Partial<AirwallexConfig>) => {
+      const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+      await Effect.runPromise(
+        make(config(over)).pipe(
+          Effect.flatMap((client) => client.request({ method: "GET", path: "/probe" })),
+          Effect.provide(http),
+        ),
+      );
+      return calls[0]?.url;
+    };
+    expect(await loginUrl({})).toBe(`https://api.airwallex.com${LOGIN_PATH}`);
+    expect(await loginUrl({ environment: "live" })).toBe(`https://api.airwallex.com${LOGIN_PATH}`);
+    expect(await loginUrl({ environment: "sandbox" })).toBe(
+      `https://api.sandbox.airwallex.com${LOGIN_PATH}`,
+    );
+    expect(await loginUrl({ environment: "sandbox", baseUrl: "https://proxy.example.test" })).toBe(
+      `https://proxy.example.test${LOGIN_PATH}`,
+    );
   });
 });
 
