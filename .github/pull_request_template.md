@@ -4,7 +4,7 @@ Describe what changed and why. If this closes an issue, add `Closes #N` so it au
 
 ## Verification
 
-Run the gates in [AGENTS.md → Verification](https://github.com/thomasfosterau/effect-stripe/blob/trunk/AGENTS.md#verification) and list each command with its final pass/fail. Name any gate that could not run, and why.
+Run the gates in [AGENTS.md → Verification](https://github.com/thomasfosterau/effect-payments/blob/trunk/AGENTS.md#verification) and list each command with its final pass/fail. Name any gate that could not run, and why.
 
 ## Changeset
 

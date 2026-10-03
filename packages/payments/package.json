@@ -9,15 +9,15 @@
     "payments",
     "typescript"
   ],
-  "homepage": "https://github.com/thomasfosterau/effect-stripe#readme",
+  "homepage": "https://github.com/thomasfosterau/effect-payments#readme",
   "bugs": {
-    "url": "https://github.com/thomasfosterau/effect-stripe/issues"
+    "url": "https://github.com/thomasfosterau/effect-payments/issues"
   },
   "license": "MIT",
   "author": "Thomas Foster <me@thomasfoster.au>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/thomasfosterau/effect-stripe.git",
+    "url": "https://github.com/thomasfosterau/effect-payments.git",
     "directory": "packages/payments"
   },
   "files": [

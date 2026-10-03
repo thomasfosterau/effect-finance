@@ -2,8 +2,6 @@
 
 A vendor-neutral payments core for Effect, with Stripe, PayPal and Airwallex providers. Write a program against the core's capabilities; choose the provider by the layer you provide.
 
-The GitHub repository is still named `effect-stripe`; it will be renamed `effect-payments` (#36).
-
 | Package | Purpose |
 | --- | --- |
 | [`@thomasfosterau/effect-payments`](packages/payments) | The core: capability services, neutral entities, `Money`, `Page`, `IdempotencyKey`, `Stub` and the `PaymentsError` channel. Peer: `effect`. |

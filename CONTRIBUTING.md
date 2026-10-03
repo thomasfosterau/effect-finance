@@ -1,6 +1,6 @@
 # Contributing
 
-Maintained by Thomas Foster, with a workflow meant to be approachable for both humans and coding agents. The GitHub repository is still named `effect-stripe`; it publishes the `@thomasfosterau/effect-payments*` packages and will be renamed `effect-payments` (#36).
+Maintained by Thomas Foster, with a workflow meant to be approachable for both humans and coding agents.
 
 Branch model, pre-PR gates and changeset rules: [AGENTS.md](AGENTS.md#branches-and-pull-requests) and [Verification](AGENTS.md#verification).
 
