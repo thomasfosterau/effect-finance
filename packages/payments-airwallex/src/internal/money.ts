@@ -42,10 +42,12 @@ import {
   scaleToMinor,
 } from "@thomasfosterau/effect-payments/internal";
 
-// NOTE: the exponent table below is Stripe's zero- and three-decimal list, not
-// Airwallex's. It has NOT been verified against Airwallex's own currency
-// reference (#74); until it is, an amount in a currency whose exponent
-// Airwallex defines differently is scaled by the wrong factor.
+// NOTE: the exponent table below started as Stripe's zero- and three-decimal
+// list. The owner reviewed it on #74 against search summaries of Airwallex's
+// currency pages (the pages themselves were not read from the agent sandbox):
+// ISK is zero-decimal; HUF, IDR and TWD keep their ISO 4217 exponent of 2,
+// although Airwallex's fee-rounding page lists them as zero-decimal; IQD and
+// LYD keep their ISO 4217 exponent of 3, as no Airwallex page covers them.
 
 // Currencies with no minor unit (1 major unit == 1 minor unit).
 const ZERO_DECIMAL = new Set([
@@ -53,6 +55,7 @@ const ZERO_DECIMAL = new Set([
   "clp",
   "djf",
   "gnf",
+  "isk",
   "jpy",
   "kmf",
   "krw",
