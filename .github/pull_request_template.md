@@ -1,10 +1,10 @@
 ## Summary
 
-Describe what changed and why. If this closes an issue, add `Closes #N` so it auto-closes on merge to `main`. For a port of application behaviour (gardeneria's `packages/billing` is the reference for #36), name the app files it supersedes — the app's adoption issue deletes them.
+Describe what changed and why. If this closes an issue, add `Closes #N` so it auto-closes on merge to `trunk`. For a port of application behaviour (gardeneria's `packages/billing` is the reference for #36), name the app files it supersedes — the app's adoption issue deletes them.
 
 ## Verification
 
-Run the gates in [AGENTS.md → Verification](https://github.com/thomasfosterau/effect-stripe/blob/main/AGENTS.md#verification) and list each command with its final pass/fail. Name any gate that could not run, and why.
+Run the gates in [AGENTS.md → Verification](https://github.com/thomasfosterau/effect-stripe/blob/trunk/AGENTS.md#verification) and list each command with its final pass/fail. Name any gate that could not run, and why.
 
 ## Changeset
 
