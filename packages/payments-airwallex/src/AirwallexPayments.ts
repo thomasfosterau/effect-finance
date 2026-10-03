@@ -337,8 +337,10 @@ export const layer = (config: AirwallexConfig) => Layer.provide(capabilities, cl
 
 /**
  * The Airwallex client and its capabilities in one layer, with the client
- * built from environment variables. Requires an `HttpClient`
- * (`FetchHttpClient.layer`).
+ * built from environment variables (`AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY`,
+ * the required `AIRWALLEX_ENV` of `live` or `sandbox`, and the optional
+ * `AIRWALLEX_BASE_URL` override; see `Airwallex.layerFromEnv`). Requires an
+ * `HttpClient` (`FetchHttpClient.layer`).
  */
 export const layerFromEnv = (clientIdVar?: string, apiKeyVar?: string) =>
   Layer.provide(capabilities, clientLayerFromEnv(clientIdVar, apiKeyVar));

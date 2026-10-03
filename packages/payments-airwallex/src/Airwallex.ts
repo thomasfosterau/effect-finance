@@ -42,7 +42,17 @@ import {
 import { shareLogin } from "@thomasfosterau/effect-payments/internal";
 import { AirwallexErrorBody, handleAirwallexError, PROVIDER } from "./internal/error.js";
 
-const DEFAULT_BASE_URL = "https://api.airwallex.com";
+/**
+ * Which Airwallex environment a client talks to: `live` (real money) or
+ * `sandbox` (Airwallex's test environment).
+ */
+export type AirwallexEnvironment = "live" | "sandbox";
+
+/** The API base URL of each {@link AirwallexEnvironment}; request paths carry `/api/v1`. */
+const BASE_URLS: Readonly<Record<AirwallexEnvironment, string>> = {
+  live: "https://api.airwallex.com",
+  sandbox: "https://api.sandbox.airwallex.com",
+};
 /** A login that has not answered after 30 s is abandoned. */
 const DEFAULT_LOGIN_TIMEOUT_MS = 30_000;
 /** A resource request is abandoned after 80 s, the Stripe transport default. */
@@ -54,9 +64,18 @@ export interface AirwallexConfig {
   /** The API key, kept `Redacted` so it never reaches a log line or an error. */
   readonly apiKey: Redacted.Redacted<string>;
   /**
-   * Override the API base URL (defaults to the production endpoint). Must be an
-   * absolute http(s) URL: an empty or relative value fails `make` with
-   * {@link PaymentConfigError} rather than falling back to production.
+   * The environment to talk to, which selects the API base URL: `live`
+   * (`https://api.airwallex.com`) or `sandbox`
+   * (`https://api.sandbox.airwallex.com`). Defaults to `live`; `baseUrl`, when
+   * set, wins over it. `layerFromEnv` always passes it (`AIRWALLEX_ENV` is
+   * required there).
+   */
+  readonly environment?: AirwallexEnvironment | undefined;
+  /**
+   * Override the API base URL (by default the {@link AirwallexConfig.environment}'s
+   * endpoint). Must be an absolute http(s) URL: an empty or relative value
+   * fails `make` with {@link PaymentConfigError} rather than falling back to
+   * an environment's endpoint.
    */
   readonly baseUrl?: string | undefined;
   /**
@@ -240,12 +259,12 @@ export const make = (
     if (config.baseUrl !== undefined && !isAbsoluteHttpUrl(config.baseUrl)) {
       return yield* new PaymentConfigError({
         message:
-          "Airwallex baseUrl must be an absolute http(s) URL (omit it for the live endpoint)",
+          "Airwallex baseUrl must be an absolute http(s) URL (omit it for the environment's endpoint)",
       });
     }
 
     const http = yield* HttpClient.HttpClient;
-    const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+    const baseUrl = config.baseUrl ?? BASE_URLS[config.environment ?? "live"];
     const tokenRef = yield* Ref.make(Option.none<TokenState>());
 
     const loginTimeout = yield* timeoutOf(
@@ -381,10 +400,15 @@ export const layer = (
 /**
  * Create an Airwallex client layer from configuration variables (read through
  * the current `ConfigProvider`, which defaults to the process environment).
- * `AIRWALLEX_BASE_URL` optionally overrides the endpoint.
+ * `AIRWALLEX_ENV` is required and must be `live` or `sandbox`: it selects the
+ * endpoint, so a missing or misspelt value fails with
+ * {@link PaymentConfigError} instead of silently selecting live.
+ * `AIRWALLEX_BASE_URL`, when set, overrides the endpoint `AIRWALLEX_ENV`
+ * selects (`AIRWALLEX_ENV` is still required).
  * An empty variable counts as unset (Effect rc.118 reads an empty string as
- * missing): an empty id or key fails with {@link PaymentConfigError}, an
- * empty `AIRWALLEX_BASE_URL` selects the default endpoint.
+ * missing): an empty id, key or `AIRWALLEX_ENV` fails with
+ * {@link PaymentConfigError}, an empty `AIRWALLEX_BASE_URL` selects the
+ * `AIRWALLEX_ENV` endpoint.
  */
 export const layerFromEnv = (
   clientIdVar = "AIRWALLEX_CLIENT_ID",
@@ -395,8 +419,14 @@ export const layerFromEnv = (
     Effect.gen(function* () {
       const clientId = yield* Config.String(clientIdVar).pipe(Config.withDefault(""));
       const apiKey = yield* Config.Redacted(apiKeyVar).pipe(Config.withDefault(Redacted.make("")));
+      const environment = yield* Config.Literals(["live", "sandbox"], "AIRWALLEX_ENV");
       const baseUrl = yield* Config.option(Config.String("AIRWALLEX_BASE_URL"));
-      return yield* make({ clientId, apiKey, baseUrl: Option.getOrUndefined(baseUrl) });
+      return yield* make({
+        clientId,
+        apiKey,
+        environment,
+        baseUrl: Option.getOrUndefined(baseUrl),
+      });
     }).pipe(
       Effect.catchTag("ConfigError", (error) =>
         Effect.fail(new PaymentConfigError({ message: error.message })),
