@@ -777,18 +777,16 @@ describe("Airwallex AIRWALLEX_ENV", () => {
     return { program, calls };
   };
 
-  for (const [environment, host] of [
+  it.each([
     ["live", "https://api.airwallex.com"],
     ["sandbox", "https://api.sandbox.airwallex.com"],
-  ] as const) {
-    it(`sends ${environment} requests to ${host}`, async () => {
-      const { program, calls } = build({ ...CREDENTIALS, AIRWALLEX_ENV: environment });
-      await Effect.runPromise(program);
-      expect(calls.map((call) => call.url)).toEqual([`${host}${LOGIN_PATH}`, `${host}/probe`]);
-    });
-  }
+  ] as const)("sends %s requests to %s", async (environment, host) => {
+    const { program, calls } = build({ ...CREDENTIALS, AIRWALLEX_ENV: environment });
+    await Effect.runPromise(program);
+    expect(calls.map((call) => call.url)).toEqual([`${host}${LOGIN_PATH}`, `${host}/probe`]);
+  });
 
-  for (const [label, values] of [
+  it.each([
     ["is unset", CREDENTIALS],
     ["is empty", { ...CREDENTIALS, AIRWALLEX_ENV: "" }],
     ["is not live or sandbox", { ...CREDENTIALS, AIRWALLEX_ENV: "production" }],
@@ -796,15 +794,16 @@ describe("Airwallex AIRWALLEX_ENV", () => {
       "is unset, even with AIRWALLEX_BASE_URL",
       { ...CREDENTIALS, AIRWALLEX_BASE_URL: "https://proxy.example.test" },
     ],
-  ] as const) {
-    it(`fails with a PaymentConfigError naming AIRWALLEX_ENV when it ${label}`, async () => {
+  ] as const)(
+    "fails with a PaymentConfigError naming AIRWALLEX_ENV when it %s",
+    async (_label, values) => {
       const { program, calls } = build(values);
       const error = await Effect.runPromise(Effect.flip(program));
       expect(error).toBeInstanceOf(PaymentConfigError);
       expect(error.message).toContain("AIRWALLEX_ENV");
       expect(calls).toHaveLength(0);
-    });
-  }
+    },
+  );
 
   it("lets AIRWALLEX_BASE_URL override the AIRWALLEX_ENV endpoint", async () => {
     const { program, calls } = build({
