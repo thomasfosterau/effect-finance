@@ -31,8 +31,24 @@ const CURRENCIES = [
 ] as const;
 
 describe("Airwallex money: currency exponents", () => {
-  it("keeps the existing (unverified) table: zero, two and three decimals", () => {
+  it("keeps the table: zero, two and three decimals", () => {
     for (const { code, digits } of CURRENCIES) expect(exponent(code)).toBe(digits);
+  });
+
+  it("treats ISK as zero-decimal (#74)", () => {
+    expect(exponent("isk")).toBe(0);
+    expect(exponent("ISK")).toBe(0);
+    expect(parseMinorUnits(2000, "isk")).toBe(2000);
+    expect(parseMinorUnits(20.5, "isk")).toBeUndefined();
+  });
+
+  it("keeps HUF, IDR and TWD at two decimals, their ISO 4217 exponent (#74)", () => {
+    for (const code of ["huf", "idr", "twd", "HUF", "IDR", "TWD"]) expect(exponent(code)).toBe(2);
+    expect(parseMinorUnits(20.5, "huf")).toBe(2050);
+  });
+
+  it("keeps IQD and LYD at three decimals, their ISO 4217 exponent (#74)", () => {
+    for (const code of ["iqd", "lyd"]) expect(exponent(code)).toBe(3);
   });
 });
 
