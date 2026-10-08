@@ -11,7 +11,7 @@ These examples demonstrate `@thomasfosterau/effect-payments` (the vendor-neutral
    vp run -r build
    ```
 
-2. Set your Stripe API key:
+2. Set your Stripe API key (`basic.ts` and `subscription.ts` call the Stripe test-mode API; `webhooks.ts` runs offline and needs no key):
 
    ```bash
    export STRIPE_API_KEY=sk_test_your_key_here
@@ -35,7 +35,7 @@ Vendor-neutral subscription workflow: create a customer, a product, a recurring 
 
 ### webhooks.ts
 
-Stripe-specific: the SDK-based `Webhook.constructEvent` verifier and event handling (needs the optional `stripe` peer). The default, Workers-safe `Webhook.verify` is shown in the package README; rewriting this example onto it is #96.
+Stripe-specific: a web-standard `Request` → `Response` webhook endpoint on the default, Workers-safe WebCrypto `Webhook.verify`. It verifies the raw body bytes against the `Stripe-Signature` header (`Webhook.SIGNATURE_HEADER`), reads the signing secret as a `Redacted` through `Config` (`STRIPE_WEBHOOK_SECRET`), answers every `SignatureVerificationError` with a bare 400, and narrows verified events to the handled types with `Webhook.decodeHandledEvent`, acknowledging the rest. Its demo signs test deliveries with `Webhook.signatureHeader` (a valid one, an unhandled type, a tampered body, a missing header, the wrong secret, a stale timestamp), so it needs neither a Stripe API key nor the network, and the optional `stripe` peer is not used. The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an alternative that needs `stripe` and `Stripe.layer`.
 
 ## Note
 

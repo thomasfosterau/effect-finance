@@ -1,344 +1,200 @@
 /**
- * Example: Handling Stripe webhooks with @thomasfosterau/effect-payments-stripe
+ * Example: handling Stripe webhooks with @thomasfosterau/effect-payments-stripe
  *
  * This example demonstrates how to:
- * - Verify webhook signatures
- * - Handle different event types
- * - Use Effect for composable error handling
- * - Process webhook events safely
- */
-
-import { Effect, Redacted } from "effect";
-import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
-import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
-import * as Customer from "@thomasfosterau/effect-payments-stripe/Customer";
-import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
-
-/**
- * Handle a webhook event based on its type
- */
-const handleEvent = (event: import("stripe").Stripe.Event) =>
-  Effect.gen(function* () {
-    console.log(`Received event: ${event.type}`);
-
-    switch (event.type) {
-      case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object as any;
-        console.log(
-          `PaymentIntent ${paymentIntent.id} succeeded for ${paymentIntent.amount} ${paymentIntent.currency}`,
-        );
-        break;
-      }
-
-      case "payment_intent.payment_failed": {
-        const paymentIntent = event.data.object as any;
-        console.log(
-          `PaymentIntent ${paymentIntent.id} failed: ${paymentIntent.last_payment_error?.message}`,
-        );
-        break;
-      }
-
-      case "customer.created": {
-        const customer = event.data.object as any;
-        console.log(`New customer created: ${customer.id} (${customer.email})`);
-        break;
-      }
-
-      case "customer.updated": {
-        const customer = event.data.object as any;
-        console.log(`Customer updated: ${customer.id}`);
-        break;
-      }
-
-      case "customer.deleted": {
-        const customer = event.data.object as any;
-        console.log(`Customer deleted: ${customer.id}`);
-        break;
-      }
-
-      case "charge.succeeded": {
-        const charge = event.data.object as any;
-        console.log(`Charge ${charge.id} succeeded for ${charge.amount} ${charge.currency}`);
-        break;
-      }
-
-      case "charge.failed": {
-        const charge = event.data.object as any;
-        console.log(`Charge ${charge.id} failed: ${charge.failure_message}`);
-        break;
-      }
-
-      case "invoice.payment_succeeded": {
-        const invoice = event.data.object as any;
-        console.log(`Invoice ${invoice.id} paid for ${invoice.amount_paid} ${invoice.currency}`);
-        break;
-      }
-
-      case "invoice.payment_failed": {
-        const invoice = event.data.object as any;
-        console.log(`Invoice ${invoice.id} payment failed`);
-        break;
-      }
-
-      case "checkout.session.completed": {
-        const session = event.data.object as any;
-        console.log(`Checkout session ${session.id} completed`);
-
-        // You can fetch the full customer details if needed
-        if (session.customer) {
-          const customer = yield* Customer.retrieve(session.customer as string);
-          if (!("deleted" in customer)) {
-            console.log(`Customer email: ${customer.email}`);
-          }
-        }
-        break;
-      }
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`);
-    }
-
-    return event;
-  });
-
-/**
- * Process a webhook request
+ * - Verify a delivery with the WebCrypto `Webhook.verify` (no `stripe` SDK, no
+ *   Node API, so the same handler runs in a Cloudflare Worker)
+ * - Pass the raw body bytes, never a re-serialised parsed object
+ * - Read the signing secret as a `Redacted` through `Config`
+ * - Answer every `SignatureVerificationError` with a bare 400
+ * - Narrow a verified event to the handled types with `decodeHandledEvent`
+ * - Sign a test delivery with `Webhook.signatureHeader` to exercise the handler
  *
- * This would typically be called from an HTTP endpoint handler
- * (e.g., Express, Fastify, Next.js API route, etc.)
+ * It needs no Stripe account, API key or network: the demo at the bottom signs
+ * its own deliveries with a test secret.
+ *
+ * The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an
+ * optional alternative; they need the `stripe` peer and the SDK client from
+ * `Stripe.layer`.
  */
-const processWebhook = (payload: string | Buffer, signature: string, webhookSecret: string) =>
-  Effect.gen(function* () {
-    // Verify the webhook signature and construct the event
-    const event = yield* Webhook.constructEvent(payload, signature, webhookSecret);
 
-    // Handle the event based on its type
-    yield* handleEvent(event);
+import { Clock, Config, ConfigProvider, Console, Effect, Match, Option, Redacted } from "effect";
+import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
 
-    return { received: true };
-  });
+/** The variable the endpoint's signing secret (`whsec_…`) is read from. */
+const SECRET_VAR = "STRIPE_WEBHOOK_SECRET";
+
+/** Act on a subscription state change: every `customer.subscription.*` type. */
+const subscriptionChanged = (event: {
+  readonly type: string;
+  readonly data: { readonly object: Webhook.SubscriptionObject };
+}) => {
+  const subscription = event.data.object;
+  return Console.log(
+    `${event.type}: ${subscription.id} is ${subscription.status} for ${subscription.customer}`,
+  );
+};
 
 /**
- * Example: Express-style webhook endpoint
+ * Act on a handled event. Each branch sees `data.object` decoded by the schema
+ * for its type, so the fields a handler reads are typed, and a handled type
+ * without a branch fails to compile.
  */
-const expressExample = () => {
-  console.log("\n=== Express Webhook Handler Example ===\n");
-
-  // Simulated Express request
-  const simulatedRequest = {
-    body: JSON.stringify({
-      id: "evt_test_webhook",
-      type: "payment_intent.succeeded",
-      data: {
-        object: {
-          id: "pi_test_12345",
-          amount: 2000,
-          currency: "usd",
-        },
-      },
-    }),
-    headers: {
-      "stripe-signature": "",
+const handleEvent = Match.type<Webhook.HandledEvent>().pipe(
+  Match.discriminatorsExhaustive("type")({
+    "checkout.session.completed": (event) => {
+      const session = event.data.object;
+      return Console.log(
+        `Checkout session ${session.id} completed (customer ${session.customer ?? "none"}, subscription ${session.subscription ?? "none"})`,
+      );
     },
-  };
+    "customer.subscription.created": subscriptionChanged,
+    "customer.subscription.updated": subscriptionChanged,
+    "customer.subscription.deleted": subscriptionChanged,
+    "invoice.payment_failed": (event) => {
+      const invoice = event.data.object;
+      const subscription = Option.getOrElse(Webhook.invoiceSubscription(invoice), () => "none");
+      return Console.log(
+        `Invoice ${invoice.id ?? "?"} payment failed (customer ${invoice.customer ?? "?"}, subscription ${subscription})`,
+      );
+    },
+  }),
+);
 
-  const webhookSecret = "whsec_test_secret";
-  const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
+/** A response with no body: Stripe reads only the status. */
+const status = (code: number) => Effect.succeed(new Response(null, { status: code }));
 
-  // Generate a test signature
-  const setupProgram = Effect.gen(function* () {
-    const signature = yield* Webhook.generateTestHeaderString(simulatedRequest.body, webhookSecret);
-    simulatedRequest.headers["stripe-signature"] = signature;
+/**
+ * Build the webhook endpoint: a web-standard `Request` → `Response` handler,
+ * as a Worker's `fetch`, a Node adapter or any framework route would call it.
+ *
+ * The secret is read once, when the handler is built: a missing
+ * `STRIPE_WEBHOOK_SECRET` fails here with a `ConfigError`, never per request.
+ */
+const makeWebhookHandler = Effect.fn("makeWebhookHandler")(function* () {
+  const secret = yield* Config.Redacted(SECRET_VAR);
+
+  return Effect.fn("handleStripeWebhook")(
+    function* (request: Request) {
+      // The signature is over the raw bytes exactly as received: never
+      // `request.json()` re-serialised, and not `request.text()`, which is lossy.
+      const payload = new Uint8Array(yield* Effect.tryPromise(() => request.arrayBuffer()));
+      const event = yield* Webhook.verify({
+        payload,
+        header: request.headers.get(Webhook.SIGNATURE_HEADER),
+        secret,
+      });
+
+      const handled = yield* Webhook.decodeHandledEvent(event);
+      if (Option.isSome(handled)) {
+        yield* handleEvent(handled.value);
+      } else {
+        // Acknowledge an event type the system does not act on: refusing it
+        // makes Stripe retry it.
+        yield* Console.log(`Acknowledged unhandled event type ${event.type}`);
+      }
+      return new Response(null, { status: 200 });
+    },
+    Effect.catchTags({
+      // A bare 400 for every refusal: telling the caller which check failed
+      // helps forge the next attempt. The error never carries the secret.
+      SignatureVerificationError: () => status(400),
+      // A signed body that is not an event envelope, or a handled event
+      // missing a field the handler reads.
+      SchemaError: () => status(400),
+      // The body could not be read (the client went away mid-request).
+      UnknownError: () => status(400),
+    }),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Demo: exercise the handler with signed test deliveries
+// ---------------------------------------------------------------------------
+
+/** A delivery as Stripe would POST it. */
+const delivery = (body: string, header: string | undefined) =>
+  new Request("https://example.com/webhooks/stripe", {
+    method: "POST",
+    body,
+    headers: header === undefined ? {} : { [Webhook.SIGNATURE_HEADER]: header },
   });
 
-  // Process the webhook
-  const webhookProgram = processWebhook(
-    simulatedRequest.body,
-    simulatedRequest.headers["stripe-signature"],
-    webhookSecret,
+const checkoutCompleted = JSON.stringify({
+  id: "evt_test_checkout",
+  type: "checkout.session.completed",
+  data: {
+    object: {
+      id: "cs_test_123",
+      mode: "subscription",
+      customer: "cus_test_123",
+      subscription: "sub_test_123",
+    },
+  },
+});
+
+const chargeSucceeded = JSON.stringify({
+  id: "evt_test_charge",
+  type: "charge.succeeded",
+  data: { object: { id: "ch_test_123" } },
+});
+
+const demo = Effect.fn("demo")(function* () {
+  const handle = yield* makeWebhookHandler();
+  const secret = yield* Config.Redacted(SECRET_VAR);
+
+  // `signatureHeader` signs exactly as Stripe does. It is for tests and
+  // tooling only: a server that signs can forge its own deliveries.
+  const sign = (payload: string, timestamp?: number) =>
+    Webhook.signatureHeader({ payload, secret, timestamp });
+
+  const run = Effect.fn("run")(function* (label: string, request: Request) {
+    const response = yield* handle(request);
+    yield* Console.log(`${label}: ${response.status}`);
+  });
+
+  yield* run(
+    "Signed checkout.session.completed",
+    delivery(checkoutCompleted, yield* sign(checkoutCompleted)),
+  );
+  yield* run(
+    "Signed charge.succeeded (unhandled type)",
+    delivery(chargeSucceeded, yield* sign(chargeSucceeded)),
+  );
+  yield* run(
+    "Tampered body",
+    delivery(
+      checkoutCompleted.replace("cus_test_123", "cus_attacker"),
+      yield* sign(checkoutCompleted),
+    ),
+  );
+  yield* run("Missing header", delivery(checkoutCompleted, undefined));
+  yield* run(
+    "Signed with another secret",
+    delivery(
+      checkoutCompleted,
+      yield* Webhook.signatureHeader({
+        payload: checkoutCompleted,
+        secret: Redacted.make("whsec_some_other_secret"),
+      }),
+    ),
   );
 
-  // Run the program with error handling
-  const program = Effect.gen(function* () {
-    yield* setupProgram;
-    return yield* webhookProgram;
-  }).pipe(
-    Effect.catchTag("SignatureVerificationError", (error) => {
-      console.error("Webhook signature verification failed:", error.message);
-      return Effect.succeed({ error: "Invalid signature" });
-    }),
-    Effect.catch((error) => {
-      console.error("Webhook processing failed:", error);
-      return Effect.succeed({ error: "Processing failed" });
-    }),
+  // Outside the ±300 s default tolerance: a replayed delivery is refused.
+  const tenMinutesAgo = Math.floor((yield* Clock.currentTimeMillis) / 1000) - 600;
+  yield* run(
+    "Signed ten minutes ago",
+    delivery(checkoutCompleted, yield* sign(checkoutCompleted, tenMinutesAgo)),
   );
+});
 
-  Effect.runPromise(program.pipe(Effect.provide(layer)))
-    .then((result) => {
-      console.log("Webhook processed successfully:", result);
-    })
-    .catch((error) => {
-      console.error("Fatal error:", error);
-    });
-};
+// In production the secret comes from the environment (the default
+// `ConfigProvider`); the demo supplies a test secret instead.
+const testSecret = ConfigProvider.layer(
+  ConfigProvider.fromUnknown({ [SECRET_VAR]: "whsec_test_secret" }),
+);
 
-/**
- * Example: Testing webhook signatures
- */
-const testingExample = () => {
-  console.log("\n=== Testing Webhook Signatures Example ===\n");
-
-  const webhookSecret = "whsec_test_secret";
-  const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
-
-  const testPayload = JSON.stringify({
-    id: "evt_test",
-    type: "customer.created",
-    data: {
-      object: {
-        id: "cus_test_12345",
-        email: "test@example.com",
-      },
-    },
-  });
-
-  const program = Effect.gen(function* () {
-    // Generate a test signature
-    const signature = yield* Webhook.generateTestHeaderString(testPayload, webhookSecret);
-    console.log("Generated signature:", signature);
-
-    // Verify the signature
-    const event = yield* Webhook.constructEvent(testPayload, signature, webhookSecret);
-    console.log("Event verified:", event.type);
-
-    // Try with wrong secret (should fail)
-    const wrongSecret = "whsec_wrong_secret";
-    const failedAttempt = yield* Effect.flip(
-      Webhook.constructEvent(testPayload, signature, wrongSecret),
-    );
-
-    if (failedAttempt instanceof SignatureVerificationError) {
-      console.log("Signature verification failed as expected");
-    }
-
-    return event;
-  });
-
-  Effect.runPromise(program.pipe(Effect.provide(layer)))
-    .then(() => {
-      console.log("Test completed successfully");
-    })
-    .catch((error) => {
-      console.error("Test failed:", error);
-    });
-};
-
-/**
- * Example: Async webhook verification
- */
-const asyncExample = () => {
-  console.log("\n=== Async Webhook Verification Example ===\n");
-
-  const webhookSecret = "whsec_test_secret";
-  const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
-
-  const testPayload = JSON.stringify({
-    id: "evt_test_async",
-    type: "invoice.payment_succeeded",
-    data: {
-      object: {
-        id: "in_test_12345",
-        amount_paid: 5000,
-        currency: "usd",
-      },
-    },
-  });
-
-  const program = Effect.gen(function* () {
-    // Generate signature using async method
-    const signature = yield* Webhook.generateTestHeaderStringAsync(testPayload, webhookSecret);
-
-    // Verify using async method
-    const event = yield* Webhook.constructEventAsync(testPayload, signature, webhookSecret);
-
-    yield* handleEvent(event);
-
-    return event;
-  });
-
-  Effect.runPromise(program.pipe(Effect.provide(layer)))
-    .then(() => {
-      console.log("Async webhook verification completed");
-    })
-    .catch((error) => {
-      console.error("Async verification failed:", error);
-    });
-};
-
-/**
- * Example: Webhook with custom tolerance
- */
-const toleranceExample = () => {
-  console.log("\n=== Webhook Tolerance Example ===\n");
-
-  const webhookSecret = "whsec_test_secret";
-  const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
-
-  const testPayload = JSON.stringify({
-    id: "evt_test_tolerance",
-    type: "payment_intent.succeeded",
-    data: {
-      object: {
-        id: "pi_test_12345",
-        amount: 1000,
-        currency: "usd",
-      },
-    },
-  });
-
-  const program = Effect.gen(function* () {
-    // Generate signature with old timestamp
-    const oldTimestamp = Math.floor(Date.now() / 1000) - 600; // 10 minutes ago
-    const signature = yield* Webhook.generateTestHeaderString(
-      testPayload,
-      webhookSecret,
-      oldTimestamp,
-    );
-
-    // This should fail with default tolerance (300 seconds)
-    const failedAttempt = yield* Effect.flip(
-      Webhook.constructEvent(testPayload, signature, webhookSecret),
-    );
-
-    if (failedAttempt instanceof SignatureVerificationError) {
-      console.log("Old signature rejected with default tolerance (as expected)");
-    }
-
-    // This should succeed with extended tolerance
-    const event = yield* Webhook.constructEvent(
-      testPayload,
-      signature,
-      webhookSecret,
-      1200, // 20 minutes
-    );
-
-    console.log("Old signature accepted with extended tolerance:", event.type);
-
-    return event;
-  });
-
-  Effect.runPromise(program.pipe(Effect.provide(layer)))
-    .then(() => {
-      console.log("Tolerance test completed");
-    })
-    .catch((error) => {
-      console.error("Tolerance test failed:", error);
-    });
-};
-
-// Run all examples
-console.log("=== Stripe Webhook Examples ===");
-expressExample();
-setTimeout(() => testingExample(), 100);
-setTimeout(() => asyncExample(), 200);
-setTimeout(() => toleranceExample(), 300);
+Effect.runPromise(demo().pipe(Effect.provide(testSecret))).catch((error) => {
+  console.error("Webhook demo failed:", error);
+  process.exit(1);
+});
