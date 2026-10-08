@@ -13,4 +13,6 @@ The `Subscription`, `SubscriptionSchedule` and `Invoice` resource modules are ty
 
   The response types no longer name the legacy `plan` on a subscription item or a schedule phase item, nor `recurring.trial_period_days` on a subscription item's price. A value Stripe still sends for one is kept, untyped.
 
+- **Parameter values the SDK 18.5 types accepted and the generated ones do not.** "Unset" is spelled `""` only: the SDK's `Emptyable` also took `null` (`Subscription.update(id, { description: null })`, `{ metadata: null }`). `metadata` values must be strings: the SDK also took `number` and `null` (`{ metadata: { seats: 3 } }`, `Invoice.update(id, { metadata: { k: null } })`). On the wire nothing changes (`null` was already sent as `""`). `payment_settings.payment_method_options.konbini` and `.sepa_debit` on `Invoice` and `Subscription` are open records, so an object literal still type-checks but a value typed with the SDK's interface does not.
+
 - The neutral capability layer (`StripePayments.subscriptionsLayer`) is unchanged.

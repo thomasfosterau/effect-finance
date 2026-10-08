@@ -180,33 +180,86 @@ const withoutErrorResponse = (operation: Json): Json => {
 const ERROR_SCHEMA = "api_errors";
 
 /**
- * Stripe's error object with every resource it carries (`payment_intent`,
- * `setup_intent`, `payment_method`, `source`: a snapshot of what the failed
- * request involved) widened to an open JSON object, as an expansion is. Left
- * as `$ref`s, the error object and the intents form a cycle
+ * The resources Stripe's error object carries (a snapshot of what the failed
+ * request involved), by property name. These, and only these, are widened;
+ * {@link findUnexpectedErrorResource} refuses a spec whose error object
+ * references any other schema, so a spec bump cannot silently widen a new
+ * field.
+ */
+const ERROR_RESOURCES: ReadonlySet<string> = new Set([
+  "payment_intent",
+  "payment_method",
+  "setup_intent",
+  "source",
+]);
+
+/** Whether `node` is a reference, or a union of references only (`source`'s card / bank account / source). */
+const isResource = (node: JsonObject): boolean =>
+  "$ref" in node ||
+  (Array.isArray(node["anyOf"]) &&
+    node["anyOf"].every((member) => isObject(member) && "$ref" in member));
+
+/** Whether `node` references another schema anywhere inside it. */
+const hasRef = (node: Json): boolean =>
+  Array.isArray(node)
+    ? node.some(hasRef)
+    : isObject(node) && ("$ref" in node || Object.values(node).some(hasRef));
+
+/** Where Stripe's error object sits in `components`, when the spec has one with properties. */
+interface ErrorObject {
+  readonly components: JsonObject;
+  readonly schemas: JsonObject;
+  readonly error: JsonObject;
+  readonly properties: JsonObject;
+}
+
+const findErrorObject = (components: Json | undefined): ErrorObject | undefined => {
+  if (!isObject(components)) return undefined;
+  const { schemas } = components;
+  if (!isObject(schemas)) return undefined;
+  const error = schemas[ERROR_SCHEMA];
+  if (!isObject(error)) return undefined;
+  const { properties } = error;
+  return isObject(properties) ? { components, schemas, error, properties } : undefined;
+};
+
+/**
+ * The first property of Stripe's error object that references another schema
+ * and is not one of {@link ERROR_RESOURCES} in the shape it is widened from
+ * (a reference, or a union of references), if any. Left alone, it would pull
+ * its resource's graph in; widened by shape, a new field would change type
+ * unreviewed. Either way the run fails instead.
+ */
+const findUnexpectedErrorResource = (components: Json | undefined): string | undefined =>
+  Object.entries(findErrorObject(components)?.properties ?? {}).find(
+    ([name, node]) =>
+      hasRef(node) && !(ERROR_RESOURCES.has(name) && isObject(node) && isResource(node)),
+  )?.[0];
+
+/**
+ * Stripe's error object with every resource it carries ({@link ERROR_RESOURCES})
+ * widened to an open JSON object, as an expansion is (one that is no longer a
+ * reference keeps the spec's type). Left as `$ref`s, the
+ * error object and the intents form a cycle
  * (`payment_intent.last_payment_error` is an error object again), which the
  * generator can only emit as a recursive schema that a lenient enumeration
  * cannot type, and they would drag both intents' graphs into a slice whose
  * resource only reports its last error. The error's own fields stay typed.
  */
 const openErrorResources = (components: Json | undefined): Json | undefined => {
-  if (!isObject(components) || !isObject(components["schemas"])) return components;
-  const schemas = components["schemas"];
-  const error = schemas[ERROR_SCHEMA];
-  if (!isObject(error) || !isObject(error["properties"])) return components;
-  const isResource = (node: Json): boolean =>
-    isObject(node) &&
-    ("$ref" in node ||
-      (Array.isArray(node["anyOf"]) &&
-        node["anyOf"].every((member) => isObject(member) && "$ref" in member)));
-  const properties = Object.fromEntries(
-    Object.entries(error["properties"]).map(([name, node]): [string, Json] => {
-      if (!isObject(node) || !isResource(node)) return [name, node];
+  const found = findErrorObject(components);
+  if (found === undefined) return components;
+  const opened = Object.fromEntries(
+    Object.entries(found.properties).map(([name, node]): [string, Json] => {
+      if (!ERROR_RESOURCES.has(name) || !isObject(node) || !isResource(node)) return [name, node];
       const { $ref: _ref, anyOf: _anyOf, ...rest } = node;
       return [name, { ...rest, ...EXPANDED_OBJECT }];
     }),
   );
-  return { ...components, schemas: { ...schemas, [ERROR_SCHEMA]: { ...error, properties } } };
+  return {
+    ...found.components,
+    schemas: { ...found.schemas, [ERROR_SCHEMA]: { ...found.error, properties: opened } },
+  };
 };
 
 /** Raised when a pinned path is not in the spec (the pin and spec disagree). */
@@ -221,16 +274,31 @@ export class UnsupportedPatternError extends Schema.TaggedError<UnsupportedPatte
 ) {}
 
 /**
+ * Raised when Stripe's error object references a schema other than the
+ * resources it is known to carry (`payment_intent`, `payment_method`,
+ * `setup_intent`, `source`), or one of those in an unexpected shape.
+ */
+export class UnexpectedErrorResourceError extends Schema.TaggedError<UnexpectedErrorResourceError>()(
+  "UnexpectedErrorResourceError",
+  { property: Schema.String },
+) {}
+
+/**
  * Keep only `paths` of `spec` (every method on them), strip list-URL
  * `pattern`s, collapse expansions (and the resources the error object
  * carries) and apply the response-side rewrites
  * (nullability, relaxed checks) to `components` only. Unreferenced `components` are left for
- * the generator to drop: it only emits what a kept operation reaches.
+ * the generator to drop: it only emits what a kept operation reaches. Fails
+ * on a pinned path the spec lacks, on a `pattern` that is not a list-URL
+ * template, and on an error-object reference it does not know to widen.
  */
 export const prepareSpec = (
   spec: JsonObject,
   paths: ReadonlyArray<string>,
-): Effect.Effect<JsonObject, MissingPathError | UnsupportedPatternError> =>
+): Effect.Effect<
+  JsonObject,
+  MissingPathError | UnsupportedPatternError | UnexpectedErrorResourceError
+> =>
   Effect.gen(function* () {
     const all = spec["paths"];
     if (!isObject(all)) return yield* new MissingPathError({ path: "(paths)" });
@@ -257,6 +325,9 @@ export const prepareSpec = (
     });
     if (unsupported !== undefined)
       return yield* new UnsupportedPatternError({ pattern: unsupported });
+    const unexpected = findUnexpectedErrorResource(spec["components"]);
+    if (unexpected !== undefined)
+      return yield* new UnexpectedErrorResourceError({ property: unexpected });
     // Request schemas live inline under `paths`; response schemas are the
     // `components` they reference.
     const components = openErrorResources(spec["components"]);
