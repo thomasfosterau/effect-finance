@@ -9,7 +9,7 @@
 | `@thomasfosterau/effect-payments-paypal` | `packages/payments-paypal` | PayPal REST: `Products`, `Prices` (billing plans), `PaymentIntents` (orders), `Subscriptions`, `Refunds`. No `Customers`: PayPal has no customer resource. |
 | `@thomasfosterau/effect-payments-airwallex` | `packages/payments-airwallex` | Airwallex payment acceptance: `Customers`, `PaymentIntents`, `Refunds`. |
 
-A new package adds a row here, a `CLAUDE.md` of its own, its `#check` edge in the root `vite.config.ts`, its `#build` edge and `paths` in `tests/dist-consumer/` (`vite.config.ts`, `tsconfig.json`), its zone in `.fallowrc.json`, and a `workspace:*` devDependency in the root `package.json`.
+A new package adds a row here, a `CLAUDE.md` of its own, a `docgen.json`, its `#check` and `#docgen` edges in the root `vite.config.ts`, its `#build` edge and `paths` in `tests/dist-consumer/` (`vite.config.ts`, `tsconfig.json`), its zone in `.fallowrc.json`, and a `workspace:*` devDependency in the root `package.json`.
 
 ## Common pitfalls
 
@@ -18,6 +18,7 @@ A new package adds a row here, a `CLAUDE.md` of its own, its `#check` edge in th
 - **HTTP goes through `effect/http`.** The PayPal and Airwallex clients and the Stripe `StripeHttp` transport require `HttpClient.HttpClient` and never touch `globalThis.fetch`; tests stub `FetchHttpClient.Fetch`. Which Stripe module may load the SDK is in `packages/payments-stripe/CLAUDE.md`.
 - **`dist/` is the product.** Each package is a `vp pack` (tsdown) library with one ESM bundle + `.d.ts` per subpath; `exports` points at `dist/` and is also the list `vite.package.ts` derives the pack entries from. A provider consumes the core through its `dist/`, so every provider task carries a `{ task: "build", from: "dependencies" }` edge, and `tests/dist-consumer` type-checks a consumer fixture against the emitted declarations.
 - **One flat module per subpath.** `src/<Name>.ts` is published as `./<Name>` (`src/Treasury.FinancialAccount.ts` → `./Treasury.FinancialAccount`). A new public module is a new `exports` entry; `src/internal/**` is never exported.
+- **`vp run docgen` executes your examples.** `@effect/docgen` type-checks every fenced `ts` / `typescript` block in a JSDoc comment (an `@example` or a description) under the native `tsc`, then runs them all with `tsx` (`"runExamples": true` in each `packages/*/docgen.json`; docgen alone only type-checks). An example imports packages by name, so it resolves through `exports` to `dist/` (the task's build edge). It must be complete (import everything it uses; no `declare const`, which has no runtime value) and must not throw. It must also be hermetic: one that would call a provider builds the program and stops short of running it (`const run = () => Effect.runPromise(…)`, never invoked), or runs it over a stubbed `FetchHttpClient.Fetch`. docgen also reads a file's module doc as the doc of its first statement: an `index.ts` that opens with `export * as X from …` runs its module example twice (harmless), and one that opens with `export * from "./X.js"` fails on an example file name containing `/`, so the core's `index.ts` opens with a named export.
 - **`"sideEffects": false` is a claim about `dist/`.** Every emitted `.js` must be pure declarations: no top-level statements with effects.
 - **`effect` is a peer, never a dependency.** Two copies break `Context` / `Layer` / `Schema` identity; the consuming app owns the singleton.
 - **No vendor vocabulary in the core, no application vocabulary anywhere.** Provider-specific shapes stay in the provider that maps the neutral model onto them; nothing here names gardeneria's plans, entitlements or database tables.
@@ -32,7 +33,7 @@ Package-local terms, invariants and import boundaries live in each package's `CL
 - **Optional members are declared `?: T | undefined`, never bare `?: T`.** The workspace compiles with `exactOptionalPropertyTypes`, and a consumer forwarding an optional of its own must still compile. (SDK-bound option objects: see `packages/payments-stripe/CLAUDE.md`.)
 - **Relative imports in `src/` carry `.js`** (`./Money.js`); tests import the module under test as `../src/<Module>.ts`.
 - **Tests import from `vite-plus/test`**, never `vitest`, and live in `packages/<name>/tests/`. Every vendor seam is stubbed (a fake SDK client, a stubbed `fetch`); no test reaches a live account.
-- **Every export is documented** with a doc comment whose first sentence says what it is for. Nothing executes `@example` blocks yet (#94), so type-check an example you add or change by hand.
+- **Every export is documented** with a doc comment whose first sentence says what it is for. `vp run docgen` type-checks and runs every `@example` (see [Common pitfalls](#common-pitfalls)).
 
 ## Commands
 
@@ -40,6 +41,7 @@ Package-local terms, invariants and import boundaries live in each package's `CL
 - `vp check` — format + lint (Oxfmt + Oxlint). `vp run check` — the type gate: every package's `src` + `tests` (plus `payments-stripe`'s `examples` and `scripts`) under the Effect-patched native `tsc`, plus the dist-consumer check (which builds `dist/` and asserts the emitted types). They are different commands.
 - `vp run -r test:unit` — unit tests (every vendor seam stubbed; nothing needs a credential).
 - `vp run -r build` — `vp pack` → every package's `dist/`.
+- `vp run docgen` — every package's `@effect/docgen`: type-checks and runs each JSDoc example against `dist/` (it builds first), and writes the git-ignored API reference to `packages/*/docs/`.
 - `vp run test:coverage` — every package's unit suite under one Istanbul map at `coverage/coverage-final.json`, which `fallow audit` reads for exact per-function CRAP scores. Run it before the audit.
 - `vp run --filter ./packages/payments-stripe generate:schemas` (network) — regenerate `packages/payments-stripe/src/internal/generated/schemas.ts` from the pinned Stripe OpenAPI spec (`scripts/stripe-spec.json`); offline, set `STRIPE_SPEC_FILE` to the pinned `spec3.json`. Never hand-edit the generated file.
 - `pnpm changeset` — add a changeset (see [Branches and pull requests](#branches-and-pull-requests)).
@@ -54,10 +56,11 @@ Before you report work as done, run the gates below in order and quote each comm
 2. `vp run check`
 3. `vp run -r test:unit`
 4. `vp run -r build`
-5. If you touched `packages/payments-stripe/scripts/` or the spec pin: `vp run --filter ./packages/payments-stripe generate:schemas && git diff --exit-code -- packages/payments-stripe/src/internal/generated`. CI runs it; it fetches the spec from GitHub, so where the network is blocked set `STRIPE_SPEC_FILE` to the pinned `spec3.json`.
-6. `vp run test:coverage`, then `fallow audit --base origin/trunk` (the fallow gate; see [Agent sessions](#agent-sessions)).
+5. `vp run docgen`
+6. If you touched `packages/payments-stripe/scripts/` or the spec pin: `vp run --filter ./packages/payments-stripe generate:schemas && git diff --exit-code -- packages/payments-stripe/src/internal/generated`. CI runs it; it fetches the spec from GitHub, so where the network is blocked set `STRIPE_SPEC_FILE` to the pinned `spec3.json`.
+7. `vp run test:coverage`, then `fallow audit --base origin/trunk` (the fallow gate; see [Agent sessions](#agent-sessions)).
 
-CI runs 1–5 plus `pnpm audit --audit-level high`. For CI parity, start from a clean tree: `rm -rf node_modules packages/*/node_modules packages/*/dist && pnpm install --frozen-lockfile`. A warm local tree hides a missing peer: a required peer of a dependency must be a declared dependency, or CI fails on a fresh runner while the local tree passes.
+CI runs 1–6 plus `pnpm audit --audit-level high`. For CI parity, start from a clean tree: `rm -rf node_modules packages/*/node_modules packages/*/dist && pnpm install --frozen-lockfile`. A warm local tree hides a missing peer: a required peer of a dependency must be a declared dependency, or CI fails on a fresh runner while the local tree passes.
 
 ## Branches and pull requests
 
@@ -86,7 +89,7 @@ Consult effect-solutions before writing Effect code (`vp exec effect-solutions l
 
 ## Documentation surfaces
 
-The root `README.md` is the landing page; each package `README.md` is the API reference consumers read on npm; each package `CLAUDE.md` carries its boundary, invariants and terms; `CONTRIBUTING.md` carries human setup and procedures; `PUBLISHING.md` and `SECURITY.md` the release pipeline and its one-time setup. No `docs/` tree; decisions go in issue comments.
+The root `README.md` is the landing page; each package `README.md` is the API reference consumers read on npm; each package `CLAUDE.md` carries its boundary, invariants and terms; `CONTRIBUTING.md` carries human setup and procedures; `PUBLISHING.md` and `SECURITY.md` the release pipeline and its one-time setup. No `docs/` tree is committed (`packages/*/docs/` is git-ignored docgen output); decisions go in issue comments.
 
 ---
 

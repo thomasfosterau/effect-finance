@@ -25,6 +25,12 @@ catalogMode: strict
 catalog:
   "@changesets/changelog-github": ^1.0.1
   "@changesets/cli": ^3.0.3
+  # Compiles AND RUNS every JSDoc `@example` (the `docgen` task). Exact, like
+  # the Effect pin: 4.0.1 and 4.0.2 depend on `effect ^4.0.1` / `^4.0.2`,
+  # which the `effect` singleton override below would contradict. Needs `tsx`
+  # and a TypeScript JS API (peer `typescript <7`) — the TS6 alias below
+  # satisfies it; the examples themselves type-check under the native `tsc`.
+  "@effect/docgen": 4.0.0
   "@effect/language-service": ^0.87.3
   "@effect/openapi-generator": 4.0.0
   "@effect/platform-node": 4.0.0
@@ -47,6 +53,8 @@ catalog:
   effect: 4.0.0
   effect-solutions: ^0.5.3
   fallow: 3.31.0
+  # Runs docgen's compiled examples (a peer of @effect/docgen).
+  tsx: ^4.23.15
   # The official Stripe SDK: a dev dependency of
   # @thomasfosterau/effect-payments-stripe (its types describe the results of
   # the resource modules not yet migrated to generated Schema types, #81; its
@@ -57,11 +65,11 @@ catalog:
   stripe: ^18.5.0
   # TypeScript 6/7 side-by-side: TS7 (the native Go compiler) ships no JS API
   # until 7.1, so JS-API consumers (@effect/language-service, tsdown's
-  # declaration bundler) stay on TS6 while native `tsc` type-checks. The alias
-  # keeps the package importable as `typescript` name-stable at the TS6 JS
-  # compiler (bin `tsc6`); `@typescript/native` is TS7 (bin `tsc`). Pinned
-  # exact: @typescript/native's gitHead must match @effect/tsgo's bundled
-  # binary.
+  # declaration bundler, @effect/docgen's peer) stay on TS6 while native `tsc`
+  # type-checks. The alias keeps the package importable as `typescript`
+  # name-stable at the TS6 JS compiler (bin `tsc6`); `@typescript/native` is
+  # TS7 (bin `tsc`). Pinned exact: @typescript/native's gitHead must match
+  # @effect/tsgo's bundled binary.
   typescript: "npm:@typescript/typescript6@6.0.2"
   "@typescript/native": "npm:typescript@7.0.2"
   # vite-plus pins `oxlint`, `oxfmt` and `vitest` to exact versions, so this

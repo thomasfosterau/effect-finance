@@ -27,7 +27,8 @@
  *   clientId: "...",
  *   clientSecret: Redacted.make("..."),
  * }).pipe(Layer.provide(FetchHttpClient.layer));
- * const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+ * // Calls PayPal when invoked, so it needs real credentials.
+ * const run = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  *
  * @module

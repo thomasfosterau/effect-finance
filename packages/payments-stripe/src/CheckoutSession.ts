@@ -36,7 +36,8 @@
  * const layer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
  *   Layer.provide(FetchHttpClient.layer),
  * );
- * const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+ * // Calls Stripe when invoked, so it needs a real key.
+ * const run = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
 

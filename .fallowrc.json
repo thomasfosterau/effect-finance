@@ -8,7 +8,7 @@
     "**/vite.config.ts",
     "vite.package.ts"
   ],
-  "ignorePatterns": ["**/dist/**", "**/coverage/**"],
+  "ignorePatterns": ["**/dist/**", "**/docs/**", "**/coverage/**"],
   "ignoreDependencies": [
     "@thomasfosterau/effect-payments",
     "@thomasfosterau/effect-payments-airwallex",
@@ -16,10 +16,12 @@
     "@thomasfosterau/effect-payments-stripe",
     "@types/node",
     "effect-solutions",
+    "@effect/docgen",
     "@effect/tsgo",
     "@effect/language-service",
     "@typescript/native",
     "typescript",
+    "tsx",
     "vite",
     "vitest",
     "vite-plus",

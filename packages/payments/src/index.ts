@@ -41,9 +41,12 @@
  * @module
  */
 
+// A named export first: docgen also reads the module doc above as the first
+// statement's doc, and an `export * from` there yields an unusable example
+// file name (see AGENTS.md, `vp run docgen`).
+export { Money, Metadata, make as money } from "./Money.js";
 export * from "./PaymentsError.js";
 export * from "./Page.js";
-export { Money, Metadata, make as money } from "./Money.js";
 
 export * as Enumeration from "./Enumeration.js";
 export * as IdempotencyKey from "./IdempotencyKey.js";

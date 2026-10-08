@@ -1,12 +1,12 @@
 name: CI
 
 # ONE job, ONE required check: the pipeline's task graph lives in
-# vite.config.ts (the root `check` task and every package's `test:unit` /
-# `build`), not in GitHub Actions `needs:`. Copied in shape from the effect-web
-# library (through it the effect-drizzle-ext library and the gardeneria
-# application): nothing here needs a database, a stage or a credential — every
-# vendor seam is stubbed in the unit suites — so every PR class runs the whole
-# gate.
+# vite.config.ts (the root `check` and `docgen` tasks and every package's
+# `test:unit` / `build`), not in GitHub Actions `needs:`. Copied in shape from
+# the effect-web library (through it the effect-drizzle-ext library and the
+# gardeneria application): nothing here needs a database, a stage or a
+# credential — every vendor seam is stubbed in the unit suites — so every PR
+# class runs the whole gate.
 
 on:
   pull_request:
@@ -53,6 +53,9 @@ jobs:
         run: vp run -r test:unit
       - name: Build
         run: vp run -r build
+      # Type-checks AND runs every JSDoc @example against the built dist/.
+      - name: Verify documentation examples (docgen)
+        run: vp run docgen
       - name: Generated Stripe schemas are up to date
         # Regenerates src/internal/generated/schemas.ts from the spec pinned in
         # packages/payments-stripe/scripts/stripe-spec.json (the script fetches
