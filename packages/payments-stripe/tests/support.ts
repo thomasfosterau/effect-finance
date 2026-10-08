@@ -1,15 +1,19 @@
 /**
  * Test doubles shared by the Stripe suites: a fake {@link StripeHttp} that
- * records what the resource modules and capability layers ask for, and a
- * stubbed `fetch` served as `effect/http`'s `HttpClient` for the
- * transport itself. No test reaches `api.stripe.com`.
+ * records what the resource modules ask for, a stubbed `fetch` served as
+ * `effect/http`'s `HttpClient` for the transport, and {@link stubStripe}, the
+ * same stub decoded into Stripe calls for the capability layers (which run on
+ * Distilled's operations). No test reaches `api.stripe.com`.
  */
 
-import { Effect, Fiber, Layer } from "effect";
+import { Effect, Fiber, Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
+import { Credentials } from "@distilled.cloud/stripe/Credentials";
 import type { PaymentsError } from "@thomasfosterau/effect-payments";
 import { StripeHttp, type StripeRequest } from "../src/StripeHttp.ts";
+import { encodeForm } from "../src/internal/form.ts";
+import type { StripeParams } from "../src/internal/params.ts";
 
 /**
  * A fake transport answering each request with `respond(request)` — a body,
@@ -109,3 +113,72 @@ export const withTestClock = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<
     }
     return yield* Fiber.join(fiber);
   }).pipe(Effect.provide(TestClock.layer()));
+
+/** The secret key {@link stubStripe} authenticates with. */
+export const TEST_KEY = "sk_test_not_a_real_key_4242";
+
+/** One request to the stubbed Stripe API, as Stripe would read it. */
+export interface StripeCall {
+  readonly method: string;
+  /** The path, e.g. `/v1/customers/cus_1`. */
+  readonly path: string;
+  /**
+   * The parameters, flat as they travel (`{ "metadata[tier]": "pro" }`): the
+   * form body of a `POST`, the query string otherwise. Compare with
+   * {@link formOf}.
+   */
+  readonly params: Readonly<Record<string, string>>;
+  readonly headers: Headers;
+}
+
+/**
+ * `params` flattened the way the `stripe` SDK form-encodes them, for
+ * comparison with a {@link StripeCall}'s `params`: undefined members vanish,
+ * `metadata: { tier: "pro" }` becomes `"metadata[tier]": "pro"`.
+ */
+export const formOf = (params: StripeParams): Record<string, string> =>
+  Object.fromEntries(new URLSearchParams(encodeForm(params)));
+
+/**
+ * A stubbed Stripe API for the capability layers: `answer` maps each call to a
+ * body (served as a 200) or a whole `Response`, and may throw to simulate a
+ * connection failure. `layer` is what the capability layers require:
+ * Distilled's `Credentials` (holding {@link TEST_KEY}) and the stubbed
+ * `HttpClient`.
+ */
+export const stubStripe = (answer: (call: StripeCall, attempt: number) => unknown) => {
+  const calls: Array<StripeCall> = [];
+  const stub = stubFetch((request, attempt) => {
+    const call: StripeCall = {
+      method: request.method,
+      path: request.url.pathname,
+      params: Object.fromEntries(
+        request.method === "POST"
+          ? new URLSearchParams(request.body ?? "")
+          : request.url.searchParams,
+      ),
+      headers: request.headers,
+    };
+    calls.push(call);
+    const body = answer(call, attempt);
+    return body instanceof Response ? body : jsonResponse(200, body);
+  });
+  const credentials = Layer.succeed(
+    Credentials,
+    Effect.succeed({ apiKey: Redacted.make(TEST_KEY), apiBaseUrl: "https://api.stripe.com" }),
+  );
+  return { calls, requests: stub.calls, layer: Layer.merge(stub.http, credentials) };
+};
+
+/** `stubStripe` answering from a table keyed by `METHOD /path`; a miss is a 404. */
+export const stubStripeTable = (answers: Readonly<Record<string, unknown>>) =>
+  stubStripe(
+    (call) =>
+      answers[`${call.method} ${call.path}`] ??
+      jsonResponse(404, {
+        error: {
+          type: "invalid_request_error",
+          message: `No stub for ${call.method} ${call.path}`,
+        },
+      }),
+  );

@@ -12,10 +12,8 @@
  * Adding a migrated module to the list below is part of migrating it.
  */
 
-// oxlint-disable-next-line effect/use-filesystem-service -- a build-output check run by bare Node, outside any Effect runtime
-import { readFileSync } from "node:fs";
+import { reachableFrom, specifiersIn } from "./declarationGraph.ts";
 
-const DIST = new URL("../../../packages/payments-stripe/dist/", import.meta.url);
 const SDK = "stripe";
 
 /** The published entry points whose declarations are free of the SDK. */
@@ -30,33 +28,7 @@ const MIGRATED = [
   "Invoice.d.ts",
 ];
 
-const specifiersIn = (file: string): ReadonlyArray<string> => {
-  // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
-  const source = readFileSync(new URL(file, DIST), "utf8");
-  return [
-    ...source.matchAll(/\b(?:from|import)\s*["']([^"']+)["']/g),
-    ...source.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g),
-    ...source.matchAll(/\/\/\/\s*<reference\s+(?:types|path)="([^"]+)"/g),
-  ].map((match) => match[1] ?? "");
-};
-
 const isSdk = (specifier: string): boolean => specifier === SDK || specifier.startsWith(`${SDK}/`);
-
-/** `./x.js` in a declaration chunk is the `./x.d.ts` beside it. */
-const declarationOf = (specifier: string): string => specifier.slice(2).replace(/\.js$/, ".d.ts");
-
-/** Every declaration file reachable from `entry` through local chunks, `entry` included. */
-const reachableFrom = (entry: string): ReadonlyArray<string> => {
-  const reached = [entry];
-  // `reached` grows while it is walked: a worklist.
-  for (const file of reached) {
-    for (const specifier of specifiersIn(file).filter((item) => item.startsWith("./"))) {
-      const next = declarationOf(specifier);
-      if (!reached.includes(next)) reached.push(next);
-    }
-  }
-  return reached;
-};
 
 const leaks = MIGRATED.flatMap((entry) =>
   reachableFrom(entry)

@@ -24,6 +24,20 @@ catalogMode: strict
 
 catalog:
   "@changesets/changelog-github": ^1.0.1
+  # Distilled's Stripe client (alchemy-run/distilled, Apache-2.0): the
+  # operations, wire encoding and typed errors `StripePayments` runs on (#146).
+  # A runtime dependency of @thomasfosterau/effect-payments-stripe, pinned
+  # EXACTLY: it is pre-1.0 and ships a new rc every week or two, so a release
+  # moves only through the ordinary dependency-update flow. Its schemas are
+  # generated from Stripe's 2026-07-29.dahlia spec; the wrapper pins
+  # `Stripe-Version` to its own DEFAULT_API_VERSION (2025-08-27.basil) on every
+  # request and decodes only the fields it maps.
+  "@distilled.cloud/stripe": 1.0.0-rc.13
+  # Distilled's shared runtime, a direct dependency too: the wrapper pins its
+  # `ResponseValidation` reference to lenient. MUST equal the version
+  # @distilled.cloud/stripe depends on (it pins core exactly), or two copies
+  # of core install.
+  "@distilled.cloud/core": 1.0.0-rc.13
   "@changesets/cli": ^3.0.3
   # Compiles AND RUNS every JSDoc `@example` (the `docgen` task). Exact, like
   # the Effect pin: 4.0.1 and 4.0.2 depend on `effect ^4.0.1` / `^4.0.2`,

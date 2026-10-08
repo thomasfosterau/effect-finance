@@ -5,7 +5,7 @@ A vendor-neutral payments core for Effect, with Stripe, PayPal and Airwallex pro
 | Package | Purpose |
 | --- | --- |
 | [`@thomasfosterau/effect-payments`](packages/payments) | The core: capability services, neutral entities, `Money`, `Page`, `IdempotencyKey`, `Stub` and the `PaymentsError` channel. Peer: `effect`. |
-| [`@thomasfosterau/effect-payments-stripe`](packages/payments-stripe) | Every capability over a fetch-only, Workers-safe Stripe transport, plus the raw Stripe resource modules and the WebCrypto webhook verifier. Optional peer: `stripe`. |
+| [`@thomasfosterau/effect-payments-stripe`](packages/payments-stripe) | Every capability over Distilled's Stripe operations (`@distilled.cloud/stripe`), plus the raw Stripe resource modules over a fetch-only transport and the WebCrypto webhook verifier. Optional peer: `stripe`. |
 | [`@thomasfosterau/effect-payments-paypal`](packages/payments-paypal) | `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds` over PayPal REST. |
 | [`@thomasfosterau/effect-payments-airwallex`](packages/payments-airwallex) | `Customers`, `PaymentIntents`, `Refunds` over Airwallex. |
 

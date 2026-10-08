@@ -3,7 +3,10 @@
  * entities.
  *
  * Each Stripe object a capability layer reads is **decoded** with a `Schema`
- * narrowed to the fields the mapping uses — the response is not trusted, and a
+ * narrowed to the fields the mapping uses. The response comes back from
+ * Distilled's operations unchecked (lenient validation, `internal/distilled.ts`),
+ * typed by schemas generated from a newer API version than the pinned one, so
+ * it is not trusted: a
  * 2xx whose body does not decode fails with {@link PaymentProviderError}
  * rather than producing an entity built from `undefined`. Unknown fields are
  * ignored, so a newer API version adding fields does not break decoding.
@@ -20,7 +23,7 @@
  * @module
  */
 
-import { Effect, Predicate, Schema } from "effect";
+import { Effect, Predicate, Redacted, Schema } from "effect";
 import {
   Enumeration,
   Customer as CustomerNS,
@@ -50,6 +53,24 @@ const Ref = Schema.Union([Schema.String, Schema.Struct({ id: Schema.String })]);
 const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema));
 
 const Metadata = Maybe(Schema.Record(Schema.String, Schema.String));
+
+/**
+ * A secret Distilled hands back wrapped in `Redacted` (it marks a payment
+ * intent's `client_secret` sensitive), or the plain string the wire carried.
+ */
+const Secret = Schema.Union([
+  Schema.String,
+  Schema.declare(
+    (value): value is Redacted.Redacted<string> =>
+      Redacted.isRedacted(value) && Predicate.isString(Redacted.value(value)),
+  ),
+]);
+
+/** The string a {@link Secret} holds. */
+const revealed = (secret: typeof Secret.Type | null | undefined): string | null => {
+  if (secret == null) return null;
+  return Redacted.isRedacted(secret) ? Redacted.value(secret) : secret;
+};
 
 /** `{ id, deleted: true }` — Stripe's answer to a delete, and to reading a deleted object. */
 const StripeDeleted = Schema.Struct({ id: Schema.String, deleted: Schema.Literal(true) });
@@ -101,7 +122,7 @@ const StripePaymentIntent = Schema.Struct({
   status: Enumeration.fromWire(PaymentIntentNS.KnownPaymentStatus),
   customer: Maybe(Ref),
   payment_method: Maybe(Ref),
-  client_secret: Maybe(Schema.String),
+  client_secret: Maybe(Secret),
   description: Maybe(Schema.String),
   metadata: Metadata,
   created: Schema.Number,
@@ -251,7 +272,7 @@ const toPaymentIntent = (intent: typeof StripePaymentIntent.Type): PaymentIntent
       status: intent.status,
       customerId: idOf(intent.customer),
       paymentMethodId: idOf(intent.payment_method),
-      clientSecret: intent.client_secret ?? null,
+      clientSecret: revealed(intent.client_secret),
       description: intent.description ?? null,
       metadata: metadataOf(intent.metadata),
       created: intent.created,

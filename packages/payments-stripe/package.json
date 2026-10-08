@@ -242,6 +242,8 @@
     "generate:schemas": "node scripts/generate-stripe-schemas.ts"
   },
   "dependencies": {
+    "@distilled.cloud/core": "catalog:",
+    "@distilled.cloud/stripe": "catalog:",
     "@thomasfosterau/effect-payments": "workspace:^"
   },
   "devDependencies": {

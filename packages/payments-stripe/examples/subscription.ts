@@ -51,7 +51,7 @@ const program = Effect.gen(function* () {
 });
 
 // The key comes from STRIPE_API_KEY, read through `Config` as a `Redacted`;
-// the fetch transport needs an `HttpClient`.
+// the capabilities need an `HttpClient`.
 const layer = StripePayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 
 Effect.runPromise(program.pipe(Effect.provide(layer)))

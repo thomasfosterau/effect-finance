@@ -1,0 +1,11 @@
+---
+"@thomasfosterau/effect-payments-stripe": minor
+---
+
+`StripePayments` runs on Distilled's Stripe operations (`@distilled.cloud/stripe`) instead of this package's own `StripeHttp` transport (#146).
+
+- **New dependencies.** `@distilled.cloud/stripe` and `@distilled.cloud/core`, both pinned to `1.0.0-rc.13` (about 28 MB installed). A bundler keeps only the operations the capabilities you use call: a bundle of `customersLayer` alone grows from about 18 KB to 63 KB minified (5 KB to 20 KB gzipped), and one of every capability from about 23 KB to 178 KB (7 KB to 43 KB gzipped), with `effect` external.
+- **Breaking: what the capability layers require.** `customersLayer` … `billingPortalSessionsLayer` and `capabilities` now require Distilled's `Credentials` (from `@distilled.cloud/stripe/Credentials`) and an `HttpClient`, where they required `StripeHttp`. Provide `Credentials.credentials({ apiKey })` and `FetchHttpClient.layer`, or use `layer` / `layerFromEnv` / `layerConfig`, whose signatures are unchanged. The capabilities no longer run over a `StripeHttp` you provide, so the `stripe` SDK transport (`Stripe.layer`) no longer backs them; it still backs the raw resource modules.
+- **Unchanged behaviour.** `Stripe-Version` is still pinned to `DEFAULT_API_VERSION` (`2025-08-27.basil`) on every request unless configured; the SDK's retry policy, the per-attempt timeout, refused redirects, the generated `Idempotency-Key` shared by a retryable `POST`'s attempts, the neutral error mapping (401 / 403 / 429 from the status, the whole vendor error object as the cause) and the decoding of the fields each capability maps all carry over. `uploadsBaseUrl` is ignored, since no capability uploads. Distilled's own response validation stays lenient for these calls even under its `ResponseValidation.strict`, because its schemas are generated from a newer API version (`2026-07-29.dahlia`).
+- **Id check.** A path id that is not a non-empty string now fails with `PaymentInvalidRequestError` (`The customer id must be a non-empty string`, `param: "id"`) before anything is sent, where it named the path segment.
+- `StripeHttp`, the `Stripe` SDK transport, the raw resource modules and the generated schemas are unchanged.

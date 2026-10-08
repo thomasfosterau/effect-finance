@@ -5,7 +5,7 @@ import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
 import * as StripePayments from "../src/StripePayments.ts";
-import { fakeStripeHttp } from "./support.ts";
+import { stubStripe } from "./support.ts";
 
 /**
  * A value Stripe adds to an enumeration later must decode to `Other` carrying
@@ -15,9 +15,9 @@ const run = <A, E>(
   effect: Effect.Effect<A, E, Layer.Success<typeof StripePayments.capabilities>>,
   body: unknown,
 ): Promise<A> => {
-  const fake = fakeStripeHttp(() => body);
+  const stub = stubStripe(() => body);
   return Effect.runPromise(
-    effect.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(fake.layer)),
+    effect.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(stub.layer)),
   );
 };
 
