@@ -97,6 +97,19 @@ describe("PayPalPayments capabilities", () => {
     expect(error).toBeInstanceOf(PaymentInvalidRequestError);
   });
 
+  it("treats a forwarded `recurring: undefined` as a one-time price and sends nothing", async () => {
+    const { client, calls } = makeFakeClient(() => ({}));
+    const recurring: Price.CreateParams["recurring"] = undefined;
+    const error = await Effect.runPromise(
+      Price.create({ product: "PROD-1", currency: "usd", unitAmount: 1000, recurring }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(calls).toHaveLength(0);
+  });
+
   it("maps an order to a payment intent and converts the amount", async () => {
     const { client, calls } = makeFakeClient((req) => ({
       id: "ORD-1",

@@ -65,10 +65,16 @@ export interface CreateParams {
   readonly currency: string;
   /** Unit amount in the smallest currency unit (e.g. `2000` = $20.00). */
   readonly unitAmount: number;
-  readonly recurring?: {
-    readonly interval: KnownRecurringInterval;
-    readonly intervalCount?: number | undefined;
-  };
+  /**
+   * The billing schedule. Omit it, or pass `undefined`, for a one-time price,
+   * which a recurring-only provider refuses.
+   */
+  readonly recurring?:
+    | {
+        readonly interval: KnownRecurringInterval;
+        readonly intervalCount?: number | undefined;
+      }
+    | undefined;
   readonly active?: boolean | undefined;
   readonly metadata?: Record<string, string> | undefined;
   /**
