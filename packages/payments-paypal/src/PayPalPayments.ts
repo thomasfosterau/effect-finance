@@ -496,8 +496,10 @@ export const layer = (config: PayPalConfig) => Layer.provide(capabilities, clien
 
 /**
  * The PayPal client and its capabilities in one layer, with the client
- * built from environment variables. Requires an `HttpClient`
- * (`FetchHttpClient.layer`).
+ * built from environment variables (`PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`,
+ * the required `PAYPAL_ENV` of `live` or `sandbox`, and the optional
+ * `PAYPAL_BASE_URL` override; see `PayPal.layerFromEnv`). Requires an
+ * `HttpClient` (`FetchHttpClient.layer`).
  */
 export const layerFromEnv = (clientIdVar?: string, clientSecretVar?: string) =>
   Layer.provide(capabilities, clientLayerFromEnv(clientIdVar, clientSecretVar));

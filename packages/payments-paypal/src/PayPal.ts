@@ -42,7 +42,17 @@ import {
 import { shareLogin } from "@thomasfosterau/effect-payments/internal";
 import { handlePayPalError, PayPalErrorBody, PROVIDER } from "./internal/error.js";
 
-const DEFAULT_BASE_URL = "https://api-m.paypal.com";
+/**
+ * Which PayPal environment a client talks to: `live` (real money) or
+ * `sandbox` (PayPal's test environment).
+ */
+export type PayPalEnvironment = "live" | "sandbox";
+
+/** The REST API base URL of each {@link PayPalEnvironment}; request paths carry `/v1` or `/v2`. */
+const BASE_URLS: Readonly<Record<PayPalEnvironment, string>> = {
+  live: "https://api-m.paypal.com",
+  sandbox: "https://api-m.sandbox.paypal.com",
+};
 /** A login that has not answered after 30 s is abandoned. */
 const DEFAULT_LOGIN_TIMEOUT_MS = 30_000;
 /** A resource request is abandoned after 80 s, the Stripe transport default. */
@@ -54,10 +64,18 @@ export interface PayPalConfig {
   /** The client secret, kept `Redacted` so it never reaches a log line or an error. */
   readonly clientSecret: Redacted.Redacted<string>;
   /**
-   * Override the API base URL. Defaults to the production endpoint; use
-   * `https://api-m.sandbox.paypal.com` for sandbox. Must be an absolute
-   * http(s) URL: an empty or relative value fails `make` with
-   * {@link PaymentConfigError} rather than falling back to production.
+   * The environment to talk to, which selects the API base URL: `live`
+   * (`https://api-m.paypal.com`) or `sandbox`
+   * (`https://api-m.sandbox.paypal.com`). Defaults to `live`; `baseUrl`, when
+   * set, wins over it. `layerFromEnv` always passes it (`PAYPAL_ENV` is
+   * required there).
+   */
+  readonly environment?: PayPalEnvironment | undefined;
+  /**
+   * Override the API base URL (by default the {@link PayPalConfig.environment}'s
+   * endpoint). Must be an absolute http(s) URL: an empty or relative value
+   * fails `make` with {@link PaymentConfigError} rather than falling back to
+   * an environment's endpoint.
    */
   readonly baseUrl?: string | undefined;
   /**
@@ -226,12 +244,13 @@ export const make = (
 
     if (config.baseUrl !== undefined && !isAbsoluteHttpUrl(config.baseUrl)) {
       return yield* new PaymentConfigError({
-        message: "PayPal baseUrl must be an absolute http(s) URL (omit it for the live endpoint)",
+        message:
+          "PayPal baseUrl must be an absolute http(s) URL (omit it for the environment's endpoint)",
       });
     }
 
     const http = yield* HttpClient.HttpClient;
-    const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+    const baseUrl = config.baseUrl ?? BASE_URLS[config.environment ?? "live"];
     const basicAuth = Redacted.make(
       Base64.encode(`${config.clientId}:${Redacted.value(config.clientSecret)}`),
     );
@@ -378,10 +397,15 @@ export const layer = (
 /**
  * Create a PayPal client layer from configuration variables (read through the
  * current `ConfigProvider`, which defaults to the process environment).
- * `PAYPAL_BASE_URL` optionally overrides the endpoint.
+ * `PAYPAL_ENV` is required and must be `live` or `sandbox`: it selects the
+ * endpoint, so a missing or misspelt value fails with
+ * {@link PaymentConfigError} instead of silently selecting live.
+ * `PAYPAL_BASE_URL`, when set, overrides the endpoint `PAYPAL_ENV` selects
+ * (`PAYPAL_ENV` is still required).
  * An empty variable counts as unset (Effect rc.118 reads an empty string as
- * missing): an empty id or secret fails with {@link PaymentConfigError}, an
- * empty `PAYPAL_BASE_URL` selects the default endpoint.
+ * missing): an empty id, secret or `PAYPAL_ENV` fails with
+ * {@link PaymentConfigError}, an empty `PAYPAL_BASE_URL` selects the
+ * `PAYPAL_ENV` endpoint.
  */
 export const layerFromEnv = (
   clientIdVar = "PAYPAL_CLIENT_ID",
@@ -394,8 +418,14 @@ export const layerFromEnv = (
       const clientSecret = yield* Config.Redacted(clientSecretVar).pipe(
         Config.withDefault(Redacted.make("")),
       );
+      const environment = yield* Config.Literals(["live", "sandbox"], "PAYPAL_ENV");
       const baseUrl = yield* Config.option(Config.String("PAYPAL_BASE_URL"));
-      return yield* make({ clientId, clientSecret, baseUrl: Option.getOrUndefined(baseUrl) });
+      return yield* make({
+        clientId,
+        clientSecret,
+        environment,
+        baseUrl: Option.getOrUndefined(baseUrl),
+      });
     }).pipe(
       Effect.catchTag("ConfigError", (error) =>
         Effect.fail(new PaymentConfigError({ message: error.message })),

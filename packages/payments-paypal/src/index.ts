@@ -38,4 +38,4 @@ export * as Payments from "@thomasfosterau/effect-payments";
 export * as PayPal from "./PayPal.js";
 export * as PayPalPayments from "./PayPalPayments.js";
 
-export type { PayPalConfig, PayPalRequest } from "./PayPal.js";
+export type { PayPalConfig, PayPalEnvironment, PayPalRequest } from "./PayPal.js";
