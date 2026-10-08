@@ -7,7 +7,9 @@
  * - Pass the raw body bytes, never a re-serialised parsed object
  * - Read the signing secret as a `Redacted` through `Config`
  * - Answer every `SignatureVerificationError` with a bare 400
- * - Narrow a verified event to the handled types with `decodeHandledEvent`
+ * - Narrow a verified event to the handled types with `decodeHandledEvent`,
+ *   and answer a handled event that fails to decode with a 500 so Stripe
+ *   keeps redelivering it until a fix ships
  * - Sign a test delivery with `Webhook.signatureHeader` to exercise the handler
  *
  * It needs no Stripe account, API key or network: the demo at the bottom signs
@@ -18,7 +20,17 @@
  * `Stripe.layer`.
  */
 
-import { Clock, Config, ConfigProvider, Console, Effect, Match, Option, Redacted } from "effect";
+import {
+  Clock,
+  Config,
+  ConfigProvider,
+  Console,
+  Effect,
+  Match,
+  Option,
+  Redacted,
+  Schema,
+} from "effect";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
 
 /** The variable the endpoint's signing secret (`whsec_…`) is read from. */
@@ -64,6 +76,23 @@ const handleEvent = Match.type<Webhook.HandledEvent>().pipe(
 /** A response with no body: Stripe reads only the status. */
 const status = (code: number) => Effect.succeed(new Response(null, { status: code }));
 
+/** The request body could not be read (the client went away mid-request). */
+class UnreadableBodyError extends Schema.TaggedError<UnreadableBodyError>()(
+  "UnreadableBodyError",
+  {},
+) {}
+
+/**
+ * A validly signed event of a handled type whose `data.object` does not match
+ * the schema the handler reads: breakage on this side (say, a field moved in a
+ * new API version), not a bad delivery. It carries only the event's id and
+ * type, never the decode failure, whose text can echo payload fields.
+ */
+class UndecodableEventError extends Schema.TaggedError<UndecodableEventError>()(
+  "UndecodableEventError",
+  { id: Schema.String, type: Schema.String },
+) {}
+
 /**
  * Build the webhook endpoint: a web-standard `Request` → `Response` handler,
  * as a Worker's `fetch`, a Node adapter or any framework route would call it.
@@ -78,14 +107,21 @@ const makeWebhookHandler = Effect.fn("makeWebhookHandler")(function* () {
     function* (request: Request) {
       // The signature is over the raw bytes exactly as received: never
       // `request.json()` re-serialised, and not `request.text()`, which is lossy.
-      const payload = new Uint8Array(yield* Effect.tryPromise(() => request.arrayBuffer()));
+      const payload = new Uint8Array(
+        yield* Effect.tryPromise({
+          try: () => request.arrayBuffer(),
+          catch: () => new UnreadableBodyError(),
+        }),
+      );
       const event = yield* Webhook.verify({
         payload,
         header: request.headers.get(Webhook.SIGNATURE_HEADER),
         secret,
       });
 
-      const handled = yield* Webhook.decodeHandledEvent(event);
+      const handled = yield* Webhook.decodeHandledEvent(event).pipe(
+        Effect.mapError(() => new UndecodableEventError({ id: event.id, type: event.type })),
+      );
       if (Option.isSome(handled)) {
         yield* handleEvent(handled.value);
       } else {
@@ -93,17 +129,25 @@ const makeWebhookHandler = Effect.fn("makeWebhookHandler")(function* () {
         // makes Stripe retry it.
         yield* Console.log(`Acknowledged unhandled event type ${event.type}`);
       }
-      return new Response(null, { status: 200 });
+      return yield* status(200);
     },
+    // Stripe treats every non-2xx as a failed delivery and retries it, so the
+    // status chiefly tells the operator which side is at fault.
     Effect.catchTags({
       // A bare 400 for every refusal: telling the caller which check failed
       // helps forge the next attempt. The error never carries the secret.
       SignatureVerificationError: () => status(400),
-      // A signed body that is not an event envelope, or a handled event
-      // missing a field the handler reads.
+      // A signed body that is not an event envelope. Stripe only signs
+      // envelopes, so genuine traffic never lands here.
       SchemaError: () => status(400),
-      // The body could not be read (the client went away mid-request).
-      UnknownError: () => status(400),
+      // The request body is broken, not the endpoint.
+      UnreadableBodyError: () => status(400),
+      // Our breakage: log the event, without its payload, and answer 500 so
+      // Stripe keeps redelivering until a fix ships.
+      UndecodableEventError: ({ id, type }) =>
+        Effect.logError("Handled Stripe event failed to decode", { id, type }).pipe(
+          Effect.andThen(status(500)),
+        ),
     }),
   );
 });
@@ -139,6 +183,21 @@ const chargeSucceeded = JSON.stringify({
   data: { object: { id: "ch_test_123" } },
 });
 
+// Signed and of a handled type, but without the `items` the subscription
+// schema requires: the shape a field move in a new API version would produce.
+const subscriptionWithoutItems = JSON.stringify({
+  id: "evt_test_subscription",
+  type: "customer.subscription.updated",
+  data: {
+    object: {
+      id: "sub_test_123",
+      customer: "cus_test_123",
+      status: "active",
+      cancel_at_period_end: false,
+    },
+  },
+});
+
 const demo = Effect.fn("demo")(function* () {
   const handle = yield* makeWebhookHandler();
   const secret = yield* Config.Redacted(SECRET_VAR);
@@ -160,6 +219,10 @@ const demo = Effect.fn("demo")(function* () {
   yield* run(
     "Signed charge.succeeded (unhandled type)",
     delivery(chargeSucceeded, yield* sign(chargeSucceeded)),
+  );
+  yield* run(
+    "Signed customer.subscription.updated that fails to decode",
+    delivery(subscriptionWithoutItems, yield* sign(subscriptionWithoutItems)),
   );
   yield* run(
     "Tampered body",
