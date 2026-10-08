@@ -7,6 +7,21 @@
  * does not implement `Customers` at all — a program that only uses the
  * capabilities above is fully satisfied.
  *
+ * Each capability is a `Layer` over Distilled's PayPal operations
+ * (`@distilled.cloud/paypal`): neutral parameters are mapped onto the
+ * operation's input, the call runs under this package's request policy (the
+ * access token from the OAuth login and its cache, `Content-Type:
+ * application/json` on every request, no retries, a per-request timeout,
+ * failures mapped onto the neutral {@link PaymentsError} channel), and every
+ * response is decoded with `Schema` before it is mapped onto a neutral entity.
+ *
+ * The per-capability layers and {@link capabilities} need Distilled's
+ * `Credentials` (an access token and base URL) and an `HttpClient`. The
+ * {@link layer} / {@link layerFromEnv} helpers log in with the client
+ * credentials instead, so a program written against the neutral core is
+ * satisfied by one `Effect.provide` plus an `HttpClient` (e.g.
+ * `FetchHttpClient.layer`).
+ *
  * Several individual operations have no PayPal equivalent (listing orders or
  * subscriptions, canceling an order, updating a subscription). Those fail with a
  * neutral {@link PaymentInvalidRequestError} rather than pretending to succeed.
@@ -14,27 +29,54 @@
  * @module
  */
 
-import { Effect, Layer } from "effect";
+import { type Context, Effect, Layer, Predicate } from "effect";
+import type { HttpClient } from "effect/http";
+import type { Credentials } from "@distilled.cloud/paypal/Credentials";
 import {
-  Product as ProductNS,
-  Price as PriceNS,
-  PaymentIntent as PaymentIntentNS,
-  Subscription as SubscriptionNS,
-  Refund as RefundNS,
-  CheckoutSession as CheckoutSessionNS,
-  BillingPortal as BillingPortalNS,
-  IdempotencyKey as IdempotencyKeyNS,
-  Stub,
+  activatePlan,
+  cancelSubscription,
+  createPlan,
+  createSubscription,
+  deactivatePlan,
+  getPlan,
+  getSubscription,
+  listPlans,
+} from "@distilled.cloud/paypal/billing_subscriptions_v1";
+import {
+  createProduct,
+  getProduct,
+  listProducts,
+  patchProduct,
+} from "@distilled.cloud/paypal/catalogs_products_v1";
+import { captureOrder, createOrder, getOrder } from "@distilled.cloud/paypal/checkout_orders_v2";
+import { getCapture, getRefund, refundCapture } from "@distilled.cloud/paypal/payments_payment_v2";
+// The capability modules are imported by subpath, as namespaces: a bundler can
+// then tell that the tags passed to the pure layer constructions below are
+// side-effect free, and drop every capability (and the Distilled operations
+// it calls) a program does not use.
+import * as BillingPortalNS from "@thomasfosterau/effect-payments/BillingPortal";
+import * as CheckoutSessionNS from "@thomasfosterau/effect-payments/CheckoutSession";
+import * as IdempotencyKeyNS from "@thomasfosterau/effect-payments/IdempotencyKey";
+import * as PaymentIntentNS from "@thomasfosterau/effect-payments/PaymentIntent";
+import * as PriceNS from "@thomasfosterau/effect-payments/Price";
+import * as ProductNS from "@thomasfosterau/effect-payments/Product";
+import * as RefundNS from "@thomasfosterau/effect-payments/Refund";
+import * as StubNS from "@thomasfosterau/effect-payments/Stub";
+import * as SubscriptionNS from "@thomasfosterau/effect-payments/Subscription";
+import {
+  type PaymentConfigError,
   PaymentInvalidRequestError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
+import { checkMinorUnits } from "@thomasfosterau/effect-payments/internal";
+import type { PayPalConfig } from "./PayPal.js";
 import {
-  PayPalClient,
+  DistilledClient,
   layer as clientLayer,
+  layerFromContext as clientLayerFromContext,
   layerFromEnv as clientLayerFromEnv,
-  type PayPalConfig,
-  type PayPalRequest,
-} from "./PayPal.js";
+  type Operation,
+} from "./internal/distilled.js";
 import {
   decodeCaptureCurrency,
   decodeOrderCaptureId,
@@ -46,8 +88,15 @@ import {
   decodeRefund,
   decodeSubscription,
 } from "./internal/mapping.js";
-import { checkMinorUnits } from "@thomasfosterau/effect-payments/internal";
 import { toMajorString } from "./internal/money.js";
+import { omitUndefined } from "./internal/omitUndefined.js";
+
+/**
+ * The requirements of a capability layer: Distilled's `Credentials` (an
+ * access token and API origin, e.g. `fromApiKey({ apiKey, apiBaseUrl })` from
+ * `@distilled.cloud/paypal/Credentials`) and an `HttpClient`.
+ */
+type Requirements = Credentials | HttpClient.HttpClient;
 
 /** Fail with a neutral error for an operation PayPal does not support. */
 const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
@@ -58,96 +107,176 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
   );
 
 /**
- * `client.request` for a neutral write: the caller's idempotency key, checked,
- * becomes the request's `requestId` (the `PayPal-Request-Id` header). With no
- * key nothing is sent: a random id would deduplicate nothing, because a
- * caller's retry re-runs this and would draw another.
+ * Refuse an id that is not a non-empty string before anything is sent:
+ * Distilled would splice `""` into the path (`/v1/catalogs/products/` is the
+ * list), and an `undefined` from untyped code would leave the label in it.
  */
-const write = (
-  client: PayPalClient["Service"],
-  request: Omit<PayPalRequest, "requestId">,
+const checkId = (resource: string, id: string): Effect.Effect<void, PaymentInvalidRequestError> =>
+  Predicate.isString(id) && id !== ""
+    ? Effect.void
+    : Effect.fail(
+        new PaymentInvalidRequestError({
+          message: `The ${resource} id must be a non-empty string`,
+          param: "id",
+        }),
+      );
+
+/**
+ * One call through the client, its response decoded by `decode`. `id`, when
+ * given, names the resource and the path id the input carries, checked first.
+ */
+const call =
+  (client: DistilledClient["Service"]) =>
+  <I, O, E, A>(
+    operation: Operation<I, O, E>,
+    input: I,
+    decode: (body: unknown) => Effect.Effect<A, PaymentsError>,
+    id?: readonly [resource: string, id: string] | undefined,
+  ): Effect.Effect<A, PaymentsError> =>
+    (id === undefined ? Effect.void : checkId(...id)).pipe(
+      Effect.andThen(client.call(operation, input)),
+      Effect.flatMap(decode),
+    );
+
+/** The request function a capability's implementation is written against. */
+type Request = ReturnType<typeof call>;
+
+/**
+ * The neutral key of a create or confirm, checked, as the
+ * `PayPal-Request-Id` of the write `send` makes with it. With no key none is
+ * sent: a random id would deduplicate nothing, because a caller's retry
+ * re-runs this and would draw another.
+ */
+const withRequestId = <A>(
   idempotencyKey: string | undefined,
-): Effect.Effect<unknown, PaymentsError> =>
-  Effect.flatMap(IdempotencyKeyNS.validate(idempotencyKey), (requestId) =>
-    client.request({ ...request, requestId }),
+  send: (payPalRequestId: string | undefined) => Effect.Effect<A, PaymentsError>,
+): Effect.Effect<A, PaymentsError> =>
+  Effect.flatMap(IdempotencyKeyNS.validate(idempotencyKey), send);
+
+/** A capability layer over the client, given the service it builds from it. */
+const over = <I, S>(
+  tag: Context.Key<I, S>,
+  build: (request: Request) => NoInfer<S>,
+): Layer.Layer<I, never, DistilledClient> =>
+  Layer.effect(
+    tag,
+    Effect.map(DistilledClient, (client) => build(call(client))),
   );
 
 // ---------------------------------------------------------------------------
 // Products (catalog products)
 // ---------------------------------------------------------------------------
 
+const products = /* @__PURE__ */ over(ProductNS.Products, (request) => {
+  const retrieve = (id: string) =>
+    request(getProduct, { product_id: id }, decodeProduct, ["product", id]);
+  return {
+    create: (params) =>
+      withRequestId(params.idempotencyKey, (payPalRequestId) =>
+        request(
+          createProduct,
+          omitUndefined({
+            payPalRequestId,
+            name: params.name,
+            description: params.description,
+            type: "SERVICE",
+            category: "SOFTWARE",
+          }),
+          decodeProduct,
+        ),
+      ),
+    retrieve,
+    update: (id, params) =>
+      // PayPal patches a product, then returns 204; re-read to map the result.
+      params.description === undefined
+        ? notSupported("updating a product without a description")
+        : request(
+            patchProduct,
+            {
+              product_id: id,
+              body: [{ op: "replace", path: "/description", value: params.description }],
+            },
+            Effect.succeed,
+            ["product", id],
+          ).pipe(Effect.andThen(retrieve(id))),
+    del: () => notSupported("deleting products"),
+    list: (params) =>
+      request(listProducts, omitUndefined({ page_size: params?.limit }), decodeProductPage),
+  };
+});
+
 /**
  * PayPal Catalog Products as the {@link ProductNS.Products} capability. `del`
  * fails with {@link PaymentInvalidRequestError} (PayPal cannot delete a
  * product), and so does an `update` without a `description`.
  */
-export const productsLayer: Layer.Layer<ProductNS.Products, never, PayPalClient> = Layer.effect(
-  ProductNS.Products,
-  Effect.map(PayPalClient, (client) =>
-    ProductNS.Products.of({
-      create: (params) =>
-        write(
-          client,
-          {
-            method: "POST",
-            path: "/v1/catalogs/products",
-            body: {
-              name: params.name,
-              description: params.description,
-              type: "SERVICE",
-              category: "SOFTWARE",
-            },
-          },
-          params.idempotencyKey,
-        ).pipe(Effect.flatMap(decodeProduct)),
-      retrieve: (id) =>
-        client
-          .request({
-            method: "GET",
-            path: `/v1/catalogs/products/${id}`,
-          })
-          .pipe(Effect.flatMap(decodeProduct)),
-      update: (id, params) =>
-        // PayPal patches a product, then returns 204; re-read to map the result.
-        params.description === undefined
-          ? notSupported("updating a product without a description")
-          : client
-              .request({
-                method: "PATCH",
-                path: `/v1/catalogs/products/${id}`,
-                body: [
-                  {
-                    op: "replace",
-                    path: "/description",
-                    value: params.description,
-                  },
-                ],
-              })
-              .pipe(
-                Effect.flatMap(() =>
-                  client.request({
-                    method: "GET",
-                    path: `/v1/catalogs/products/${id}`,
-                  }),
-                ),
-                Effect.flatMap(decodeProduct),
-              ),
-      del: () => notSupported("deleting products"),
-      list: (params) =>
-        client
-          .request({
-            method: "GET",
-            path: "/v1/catalogs/products",
-            query: { page_size: params?.limit },
-          })
-          .pipe(Effect.flatMap(decodeProductPage)),
-    }),
-  ),
-);
+export const productsLayer: Layer.Layer<ProductNS.Products, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(products, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // Prices (billing plans)
 // ---------------------------------------------------------------------------
+
+const prices = /* @__PURE__ */ over(PriceNS.Prices, (request) => {
+  const retrieve = (id: string) => request(getPlan, { id }, decodePrice, ["plan", id]);
+  return {
+    create: (params) => {
+      // PayPal plans are inherently recurring.
+      if (!params.recurring) {
+        return notSupported("one-time prices (plans must be recurring)");
+      }
+      const recurring = params.recurring;
+      return toMajorString(params.unitAmount, params.currency, "unitAmount").pipe(
+        Effect.flatMap((value) =>
+          withRequestId(params.idempotencyKey, (payPalRequestId) =>
+            request(
+              createPlan,
+              omitUndefined({
+                payPalRequestId,
+                product_id: params.product,
+                name: "Plan",
+                billing_cycles: [
+                  {
+                    tenure_type: "REGULAR",
+                    sequence: 1,
+                    total_cycles: 0,
+                    frequency: {
+                      interval_unit: recurring.interval.toUpperCase(),
+                      interval_count: recurring.intervalCount ?? 1,
+                    },
+                    pricing_scheme: {
+                      fixed_price: { currency_code: params.currency.toUpperCase(), value },
+                    },
+                  },
+                ],
+                payment_preferences: { auto_bill_outstanding: true },
+              }),
+              decodePrice,
+            ),
+          ),
+        ),
+      );
+    },
+    retrieve,
+    update: (id, params) => {
+      // The only neutral field PayPal can act on is `active`, via
+      // activate/deactivate; then re-read the plan to map the result.
+      if (params.active === undefined) {
+        return notSupported("updating a plan other than activating it");
+      }
+      return request(params.active ? activatePlan : deactivatePlan, { id }, Effect.succeed, [
+        "plan",
+        id,
+      ]).pipe(Effect.andThen(retrieve(id)));
+    },
+    list: (params) =>
+      request(
+        listPlans,
+        omitUndefined({ page_size: params?.limit, product_id: params?.product }),
+        decodePricePage,
+      ),
+  };
+});
 
 /**
  * PayPal Billing Plans as the {@link PriceNS.Prices} capability. A one-time
@@ -155,220 +284,158 @@ export const productsLayer: Layer.Layer<ProductNS.Products, never, PayPalClient>
  * recurring only), and `update` can only toggle `active` (activate /
  * deactivate); any other update fails the same way.
  */
-export const pricesLayer: Layer.Layer<PriceNS.Prices, never, PayPalClient> = Layer.effect(
-  PriceNS.Prices,
-  Effect.map(PayPalClient, (client) =>
-    PriceNS.Prices.of({
-      create: (params) => {
-        // PayPal plans are inherently recurring.
-        if (!params.recurring) {
-          return notSupported("one-time prices (plans must be recurring)");
-        }
-        const recurring = params.recurring;
-        return toMajorString(params.unitAmount, params.currency, "unitAmount").pipe(
-          Effect.flatMap((value) =>
-            write(
-              client,
-              {
-                method: "POST",
-                path: "/v1/billing/plans",
-                body: {
-                  product_id: params.product,
-                  name: "Plan",
-                  billing_cycles: [
-                    {
-                      tenure_type: "REGULAR",
-                      sequence: 1,
-                      total_cycles: 0,
-                      frequency: {
-                        interval_unit: recurring.interval.toUpperCase(),
-                        interval_count: recurring.intervalCount ?? 1,
-                      },
-                      pricing_scheme: {
-                        fixed_price: {
-                          currency_code: params.currency.toUpperCase(),
-                          value,
-                        },
-                      },
-                    },
-                  ],
-                  payment_preferences: { auto_bill_outstanding: true },
-                },
-              },
-              params.idempotencyKey,
-            ),
-          ),
-          Effect.flatMap(decodePrice),
-        );
-      },
-      retrieve: (id) =>
-        client
-          .request({
-            method: "GET",
-            path: `/v1/billing/plans/${id}`,
-          })
-          .pipe(Effect.flatMap(decodePrice)),
-      update: (id, params) => {
-        // The only neutral field PayPal can act on is `active`, via
-        // activate/deactivate; then re-read the plan to map the result.
-        if (params.active === undefined) {
-          return notSupported("updating a plan other than activating it");
-        }
-        const action = params.active ? "activate" : "deactivate";
-        return client
-          .request({
-            method: "POST",
-            path: `/v1/billing/plans/${id}/${action}`,
-          })
-          .pipe(
-            Effect.flatMap(() =>
-              client.request({
-                method: "GET",
-                path: `/v1/billing/plans/${id}`,
-              }),
-            ),
-            Effect.flatMap(decodePrice),
-          );
-      },
-      list: (params) =>
-        client
-          .request({
-            method: "GET",
-            path: "/v1/billing/plans",
-            query: { page_size: params?.limit, product_id: params?.product },
-          })
-          .pipe(Effect.flatMap(decodePricePage)),
-    }),
-  ),
-);
+export const pricesLayer: Layer.Layer<PriceNS.Prices, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(prices, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // PaymentIntents (orders)
 // ---------------------------------------------------------------------------
+
+const paymentIntents = /* @__PURE__ */ over(PaymentIntentNS.PaymentIntents, (request) => ({
+  create: (params) =>
+    toMajorString(params.amount, params.currency, "amount").pipe(
+      Effect.flatMap((value) =>
+        withRequestId(params.idempotencyKey, (payPalRequestId) =>
+          request(
+            createOrder,
+            omitUndefined({
+              payPalRequestId,
+              intent: "CAPTURE",
+              purchase_units: [
+                omitUndefined({
+                  amount: { currency_code: params.currency.toUpperCase(), value },
+                  description: params.description,
+                  custom_id: params.customer,
+                }),
+              ],
+            }),
+            decodePaymentIntent,
+          ),
+        ),
+      ),
+    ),
+  retrieve: (id) => request(getOrder, { id }, decodePaymentIntent, ["order", id]),
+  update: () => notSupported("updating orders"),
+  // Confirming a neutral payment intent maps onto capturing a PayPal order.
+  confirm: (id, params) =>
+    withRequestId(params?.idempotencyKey, (payPalRequestId) =>
+      request(captureOrder, omitUndefined({ id, payPalRequestId }), decodePaymentIntent, [
+        "order",
+        id,
+      ]),
+    ),
+  cancel: () => notSupported("canceling orders"),
+  list: () => notSupported("listing orders"),
+}));
 
 /**
  * PayPal Orders as the {@link PaymentIntentNS.PaymentIntents} capability;
  * `confirm` captures the order. `update`, `cancel` and `list` fail with
  * {@link PaymentInvalidRequestError}.
  */
-export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, never, PayPalClient> =
-  Layer.effect(
-    PaymentIntentNS.PaymentIntents,
-    Effect.map(PayPalClient, (client) =>
-      PaymentIntentNS.PaymentIntents.of({
-        create: (params) =>
-          toMajorString(params.amount, params.currency, "amount").pipe(
-            Effect.flatMap((value) =>
-              write(
-                client,
-                {
-                  method: "POST",
-                  path: "/v2/checkout/orders",
-                  body: {
-                    intent: "CAPTURE",
-                    purchase_units: [
-                      {
-                        amount: {
-                          currency_code: params.currency.toUpperCase(),
-                          value,
-                        },
-                        description: params.description,
-                        custom_id: params.customer,
-                      },
-                    ],
-                  },
-                },
-                params.idempotencyKey,
-              ),
-            ),
-            Effect.flatMap(decodePaymentIntent),
-          ),
-        retrieve: (id) =>
-          client
-            .request({
-              method: "GET",
-              path: `/v2/checkout/orders/${id}`,
-            })
-            .pipe(Effect.flatMap(decodePaymentIntent)),
-        update: () => notSupported("updating orders"),
-        // Confirming a neutral payment intent maps onto capturing a PayPal order.
-        confirm: (id, params) =>
-          write(
-            client,
-            {
-              method: "POST",
-              path: `/v2/checkout/orders/${id}/capture`,
-              body: {},
-            },
-            params?.idempotencyKey,
-          ).pipe(Effect.flatMap(decodePaymentIntent)),
-        cancel: () => notSupported("canceling orders"),
-        list: () => notSupported("listing orders"),
-      }),
-    ),
-  );
+export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(paymentIntents, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
 
+const subscriptions = /* @__PURE__ */ over(SubscriptionNS.Subscriptions, (request) => {
+  const retrieve = (id: string) =>
+    request(getSubscription, { id }, decodeSubscription, ["subscription", id]);
+  return {
+    // PayPal subscriptions bill against a single plan; the first neutral item's
+    // price is used as the plan id, and the customer id is stored in custom_id.
+    create: (params) => {
+      const item = params.items[0];
+      if (item === undefined) {
+        return Effect.fail(
+          new PaymentInvalidRequestError({
+            message: "A PayPal subscription needs an item, whose price is its plan",
+            param: "items",
+          }),
+        );
+      }
+      return withRequestId(params.idempotencyKey, (payPalRequestId) =>
+        request(
+          createSubscription,
+          omitUndefined({
+            payPalRequestId,
+            plan_id: item.price,
+            quantity: item.quantity ? String(item.quantity) : undefined,
+            custom_id: params.customer,
+          }),
+          decodeSubscription,
+        ),
+      );
+    },
+    retrieve,
+    update: () => notSupported("updating subscriptions"),
+    cancel: (id) =>
+      request(cancelSubscription, { id, reason: "Canceled via effect-payments" }, Effect.succeed, [
+        "subscription",
+        id,
+      ]).pipe(Effect.andThen(retrieve(id))),
+    list: () => notSupported("listing subscriptions"),
+  };
+});
+
 /**
  * PayPal Subscriptions as the {@link SubscriptionNS.Subscriptions} capability.
- * `update` and `list` fail with {@link PaymentInvalidRequestError}.
+ * `create` uses the first item's price as the plan (and fails with
+ * {@link PaymentInvalidRequestError} without one); `update` and `list` fail
+ * with {@link PaymentInvalidRequestError}.
  */
-export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never, PayPalClient> =
-  Layer.effect(
-    SubscriptionNS.Subscriptions,
-    Effect.map(PayPalClient, (client) =>
-      SubscriptionNS.Subscriptions.of({
-        // PayPal subscriptions bill against a single plan; the first neutral item's
-        // price is used as the plan id, and the customer id is stored in custom_id.
-        create: (params) =>
-          write(
-            client,
-            {
-              method: "POST",
-              path: "/v1/billing/subscriptions",
-              body: {
-                plan_id: params.items[0]?.price,
-                quantity: params.items[0]?.quantity ? String(params.items[0].quantity) : undefined,
-                custom_id: params.customer,
-              },
-            },
-            params.idempotencyKey,
-          ).pipe(Effect.flatMap(decodeSubscription)),
-        retrieve: (id) =>
-          client
-            .request({
-              method: "GET",
-              path: `/v1/billing/subscriptions/${id}`,
-            })
-            .pipe(Effect.flatMap(decodeSubscription)),
-        update: () => notSupported("updating subscriptions"),
-        cancel: (id) =>
-          client
-            .request({
-              method: "POST",
-              path: `/v1/billing/subscriptions/${id}/cancel`,
-              body: { reason: "Canceled via effect-payments" },
-            })
-            .pipe(
-              Effect.flatMap(() =>
-                client.request({
-                  method: "GET",
-                  path: `/v1/billing/subscriptions/${id}`,
-                }),
-              ),
-              Effect.flatMap(decodeSubscription),
-            ),
-        list: () => notSupported("listing subscriptions"),
-      }),
-    ),
-  );
+export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(subscriptions, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // Refunds (capture refunds)
 // ---------------------------------------------------------------------------
+
+const refunds = /* @__PURE__ */ over(RefundNS.Refunds, (request) => ({
+  create: (params) =>
+    Effect.gen(function* () {
+      // Refuse a bad key or partial amount before any lookup or refund is sent.
+      const payPalRequestId = yield* IdempotencyKeyNS.validate(params.idempotencyKey);
+      if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
+      // PayPal refunds a capture. Accept a capture id directly (`charge`)
+      // or resolve the first capture of an order (`paymentIntent`).
+      let captureId = params.charge ?? null;
+      if (!captureId && params.paymentIntent) {
+        captureId = yield* request(getOrder, { id: params.paymentIntent }, decodeOrderCaptureId);
+      }
+      if (!captureId) {
+        return yield* notSupported(
+          "refunds without a capture id (provide `charge` or a captured `paymentIntent`)",
+        );
+      }
+
+      // A partial-amount refund needs the capture's currency to format the
+      // major-unit value, so look the capture up when an amount is given.
+      let amount: { currency_code: string; value: string } | undefined;
+      if (params.amount != null) {
+        const currency = yield* request(
+          getCapture,
+          { capture_id: captureId },
+          decodeCaptureCurrency,
+        );
+        amount = {
+          currency_code: currency,
+          value: yield* toMajorString(params.amount, currency, "amount"),
+        };
+      }
+
+      return yield* request(
+        refundCapture,
+        omitUndefined({ capture_id: captureId, payPalRequestId, amount }),
+        decodeRefund,
+      );
+    }),
+  retrieve: (id) => request(getRefund, { refund_id: id }, decodeRefund, ["refund", id]),
+  update: () => notSupported("updating refunds"),
+  list: () => notSupported("listing refunds"),
+}));
 
 /**
  * PayPal capture refunds as the {@link RefundNS.Refunds} capability: refund a
@@ -376,69 +443,8 @@ export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never
  * capture to refund, `update` and `list` fail with
  * {@link PaymentInvalidRequestError}.
  */
-export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = Layer.effect(
-  RefundNS.Refunds,
-  Effect.map(PayPalClient, (client) =>
-    RefundNS.Refunds.of({
-      create: (params) =>
-        Effect.gen(function* () {
-          // Refuse a bad key or partial amount before any lookup or refund is sent.
-          const requestId = yield* IdempotencyKeyNS.validate(params.idempotencyKey);
-          if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
-          // PayPal refunds a capture. Accept a capture id directly (`charge`)
-          // or resolve the first capture of an order (`paymentIntent`).
-          let captureId = params.charge ?? null;
-          if (!captureId && params.paymentIntent) {
-            captureId = yield* client
-              .request({
-                method: "GET",
-                path: `/v2/checkout/orders/${params.paymentIntent}`,
-              })
-              .pipe(Effect.flatMap(decodeOrderCaptureId));
-          }
-          if (!captureId) {
-            return yield* notSupported(
-              "refunds without a capture id (provide `charge` or a captured `paymentIntent`)",
-            );
-          }
-
-          // A partial-amount refund needs the capture's currency to format the
-          // major-unit value, so look the capture up when an amount is given.
-          let amount: { currency_code: string; value: string } | undefined;
-          if (params.amount != null) {
-            const currency = yield* client
-              .request({
-                method: "GET",
-                path: `/v2/payments/captures/${captureId}`,
-              })
-              .pipe(Effect.flatMap(decodeCaptureCurrency));
-            amount = {
-              currency_code: currency,
-              value: yield* toMajorString(params.amount, currency, "amount"),
-            };
-          }
-
-          return yield* client
-            .request({
-              method: "POST",
-              path: `/v2/payments/captures/${captureId}/refund`,
-              body: amount ? { amount } : {},
-              requestId,
-            })
-            .pipe(Effect.flatMap(decodeRefund));
-        }),
-      retrieve: (id) =>
-        client
-          .request({
-            method: "GET",
-            path: `/v2/payments/refunds/${id}`,
-          })
-          .pipe(Effect.flatMap(decodeRefund)),
-      update: () => notSupported("updating refunds"),
-      list: () => notSupported("listing refunds"),
-    }),
-  ),
-);
+export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(refunds, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // Hosted checkout and billing portal (unsupported)
@@ -453,7 +459,7 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, PayPalClient> = 
  * run on several providers and handles the failure itself.
  */
 export const checkoutSessionsLayer: Layer.Layer<CheckoutSessionNS.CheckoutSessions> =
-  Stub.checkoutSessions(notSupported("hosted checkout sessions"));
+  /* @__PURE__ */ StubNS.checkoutSessions(/* @__PURE__ */ notSupported("hosted checkout sessions"));
 
 /**
  * The {@link BillingPortalNS.BillingPortalSessions} capability for PayPal:
@@ -462,15 +468,29 @@ export const checkoutSessionsLayer: Layer.Layer<CheckoutSessionNS.CheckoutSessio
  * is not part of {@link capabilities}.
  */
 export const billingPortalSessionsLayer: Layer.Layer<BillingPortalNS.BillingPortalSessions> =
-  Stub.billingPortalSessions(notSupported("billing portal sessions"));
+  /* @__PURE__ */ StubNS.billingPortalSessions(
+    /* @__PURE__ */ notSupported("billing portal sessions"),
+  );
 
 // ---------------------------------------------------------------------------
 // Bundles
 // ---------------------------------------------------------------------------
 
+/** Every capability PayPal implements, over one client. */
+const every = /* @__PURE__ */ Layer.mergeAll(
+  products,
+  prices,
+  paymentIntents,
+  subscriptions,
+  refunds,
+);
+
 /**
  * The capabilities PayPal implements (`Products`, `Prices`, `PaymentIntents`,
- * `Subscriptions`, `Refunds`), built on top of an existing {@link PayPalClient}.
+ * `Subscriptions`, `Refunds`), over Distilled's `Credentials` and an
+ * `HttpClient` in context: the credentials' access token is sent as it is,
+ * with no login and no refresh, and each request times out after 80 s. Use
+ * {@link layer} or {@link layerFromEnv} to log in with client credentials.
  */
 export const capabilities: Layer.Layer<
   | ProductNS.Products
@@ -479,27 +499,31 @@ export const capabilities: Layer.Layer<
   | SubscriptionNS.Subscriptions
   | RefundNS.Refunds,
   never,
-  PayPalClient
-> = Layer.mergeAll(
-  productsLayer,
-  pricesLayer,
-  paymentIntentsLayer,
-  subscriptionsLayer,
-  refundsLayer,
-);
+  Requirements
+> = /* @__PURE__ */ Layer.provide(every, clientLayerFromContext);
 
 /**
- * The PayPal client and its capabilities in one layer, built from
- * configuration. Requires an `HttpClient` (`FetchHttpClient.layer`).
+ * The PayPal capabilities in one layer, built from configuration: every call
+ * authenticates with the access token of the OAuth client-credentials login
+ * (cached, refreshed before expiry, and forgotten after a 401), at the
+ * configured environment's endpoint or `baseUrl`. Fails with
+ * `PaymentConfigError` for a missing id or secret, a bad `baseUrl` or a bad
+ * timeout. Requires an `HttpClient` (`FetchHttpClient.layer`).
  */
-export const layer = (config: PayPalConfig) => Layer.provide(capabilities, clientLayer(config));
+export const layer = (
+  config: PayPalConfig,
+): Layer.Layer<Layer.Success<typeof capabilities>, PaymentConfigError, HttpClient.HttpClient> =>
+  Layer.provide(every, clientLayer(config));
 
 /**
- * The PayPal client and its capabilities in one layer, with the client
- * built from environment variables (`PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`,
- * the required `PAYPAL_ENV` of `live` or `sandbox`, and the optional
+ * The PayPal capabilities in one layer, with the configuration read from
+ * environment variables (`PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, the
+ * required `PAYPAL_ENV` of `live` or `sandbox`, and the optional
  * `PAYPAL_BASE_URL` override; see `PayPal.layerFromEnv`). Requires an
  * `HttpClient` (`FetchHttpClient.layer`).
  */
-export const layerFromEnv = (clientIdVar?: string, clientSecretVar?: string) =>
-  Layer.provide(capabilities, clientLayerFromEnv(clientIdVar, clientSecretVar));
+export const layerFromEnv = (
+  clientIdVar = "PAYPAL_CLIENT_ID",
+  clientSecretVar = "PAYPAL_CLIENT_SECRET",
+): Layer.Layer<Layer.Success<typeof capabilities>, PaymentConfigError, HttpClient.HttpClient> =>
+  Layer.provide(every, clientLayerFromEnv(clientIdVar, clientSecretVar));

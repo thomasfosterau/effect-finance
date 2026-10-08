@@ -9,6 +9,7 @@
 
 import { type Effect, type Layer, Redacted } from "effect";
 import type { HttpClient } from "effect/http";
+import type { Credentials as PayPalCredentials } from "@distilled.cloud/paypal/Credentials";
 import type { Credentials } from "@distilled.cloud/stripe/Credentials";
 import type Stripe from "stripe";
 import {
@@ -74,6 +75,7 @@ export const paypalLayer = PayPalPayments.layer({
   clientId: "id",
   clientSecret: Redacted.make("secret"),
 });
+export const paypalEnvLayer = PayPalPayments.layerFromEnv();
 export const airwallexLayer = AirwallexPayments.layer({
   clientId: "id",
   apiKey: Redacted.make("key"),
@@ -201,6 +203,19 @@ export type Checks = [
     Equals<Layer.Services<typeof airwallexLayer>, HttpClient.HttpClient>
   >,
   /** _paypalFailsWithConfig */ Assert<Equals<Layer.Error<typeof paypalLayer>, PaymentConfigError>>,
+  /** _paypalCapabilitiesRequireDistilled */ Assert<
+    Equals<
+      Layer.Services<typeof PayPalPayments.capabilities>,
+      PayPalCredentials | HttpClient.HttpClient
+    >
+  >,
+  /** _paypalProductsRequireDistilled */ Assert<
+    Equals<
+      Layer.Services<typeof PayPalPayments.productsLayer>,
+      PayPalCredentials | HttpClient.HttpClient
+    >
+  >,
+  /** _paypalEnvMatchesLayer */ Assert<Equals<typeof paypalEnvLayer, typeof paypalLayer>>,
   /** _unavailableIsPaymentsError */ Assert<
     PaymentsUnavailable extends PaymentsError ? true : false
   >,

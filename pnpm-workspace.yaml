@@ -35,10 +35,17 @@ catalog:
   # `Stripe-Version` to its own DEFAULT_API_VERSION (2025-08-27.basil) on every
   # request and decodes only the fields it maps.
   "@distilled.cloud/stripe": 1.0.0-rc.13
-  # Distilled's shared runtime, a direct dependency too: the wrapper pins its
+  # Distilled's PayPal client (same repository and licence): the operations
+  # and wire encoding `PayPalPayments` runs on (#146). A runtime dependency
+  # of @thomasfosterau/effect-payments-paypal, pinned EXACTLY for the same
+  # reason, and moved together with the Stripe client and core. Its access
+  # token comes from the wrapper's own OAuth login, never from Distilled's
+  # `CredentialsFromEnv` (which reads `process.env`).
+  "@distilled.cloud/paypal": 1.0.0-rc.13
+  # Distilled's shared runtime, a direct dependency too: each wrapper pins its
   # `ResponseValidation` reference to lenient. MUST equal the version
-  # @distilled.cloud/stripe depends on (it pins core exactly), or two copies
-  # of core install.
+  # @distilled.cloud/stripe and @distilled.cloud/paypal depend on (each pins
+  # core exactly), or two copies of core install.
   "@distilled.cloud/core": 1.0.0-rc.13
   # Compiles AND RUNS every JSDoc `@example` (the `docgen` task). Exact, like
   # the Effect pin: 4.0.1 and 4.0.2 depend on `effect ^4.0.1` / `^4.0.2`,
@@ -120,8 +127,9 @@ catalogs:
     # moves all of them together.
     stripe: ^18.5.0
   # The `effect` peer range of a package that depends on Distilled
-  # (@thomasfosterau/effect-payments-stripe, #146). @distilled.cloud/stripe
-  # and @distilled.cloud/core (both rc.13) declare the peer `effect: ^4.0.0`,
+  # (@thomasfosterau/effect-payments-stripe and -paypal, #146).
+  # @distilled.cloud/stripe, @distilled.cloud/paypal and @distilled.cloud/core
+  # (all rc.13) declare the peer `effect: ^4.0.0`,
   # which no `4.0.0-rc.*` prerelease satisfies, and they are hard
   # dependencies, so `>=4.0.0-rc.118` would promise consumers a floor the
   # installed tree does not honour. Raise it with Distilled's own peer range;

@@ -4,8 +4,8 @@ import * as Price from "@thomasfosterau/effect-payments/Price";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
-import { PayPalClient } from "../src/PayPal.ts";
-import * as PayPalPayments from "../src/PayPalPayments.ts";
+import type * as PayPalPayments from "../src/PayPalPayments.ts";
+import { capabilitiesOver, stubPayPal } from "./support.ts";
 
 /**
  * A value PayPal sends that the neutral model does not cover must decode to
@@ -15,16 +15,7 @@ const run = <A, E>(
   effect: Effect.Effect<A, E, Layer.Success<typeof PayPalPayments.capabilities>>,
   body: unknown,
 ): Promise<A> =>
-  Effect.runPromise(
-    effect.pipe(
-      Effect.provide(
-        Layer.provide(
-          PayPalPayments.capabilities,
-          Layer.succeed(PayPalClient, PayPalClient.of({ request: () => Effect.succeed(body) })),
-        ),
-      ),
-    ),
-  );
+  Effect.runPromise(effect.pipe(Effect.provide(capabilitiesOver(stubPayPal(() => body).layer))));
 
 const other = (raw: string) => ({ _tag: "Other", raw });
 
