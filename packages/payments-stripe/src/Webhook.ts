@@ -38,33 +38,68 @@
  * Those need the SDK client ({@link StripeService} from `Stripe.layer`) and
  * the optional `stripe` peer installed; nothing on the default path loads it.
  *
+ * Stripe treats every non-2xx answer as a failed delivery and retries it for
+ * a limited period (see https://docs.stripe.com/webhooks), so the status
+ * mostly tells the operator which side is at fault: a 400 for a bad delivery,
+ * a 500 for a handled event that fails to decode (breakage on this side, say a
+ * field moved in a new API version). A fix that ships after the retries stop
+ * needs the event resent from the Dashboard. The handler below is a sketch;
+ * `packages/payments-stripe/examples/webhooks.ts` in the repository
+ * (https://github.com/thomasfosterau/effect-payments) is the full version.
+ *
  * @example
  * ```typescript
- * import { Effect, Option, Redacted } from "effect";
+ * import { Effect, Option, Redacted, Schema } from "effect";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
  *
- * const handle = (request: Request, secret: Redacted.Redacted<string>) =>
- *   Effect.gen(function* () {
+ * class UnreadableBodyError extends Schema.TaggedError<UnreadableBodyError>()(
+ *   "UnreadableBodyError",
+ *   {},
+ * ) {}
+ *
+ * const status = (code: number) => Effect.succeed(new Response(null, { status: code }));
+ *
+ * const handle = Effect.fn("handleStripeWebhook")(
+ *   function* (request: Request, secret: Redacted.Redacted<string>) {
+ *     const payload = new Uint8Array(
+ *       yield* Effect.tryPromise({
+ *         try: () => request.arrayBuffer(),
+ *         catch: () => new UnreadableBodyError(),
+ *       }),
+ *     );
  *     const event = yield* Webhook.verify({
- *       payload: new Uint8Array(yield* Effect.promise(() => request.arrayBuffer())),
+ *       payload,
  *       header: request.headers.get(Webhook.SIGNATURE_HEADER),
  *       secret,
  *     });
- *     const handled = yield* Webhook.decodeHandledEvent(event);
- *     if (Option.isSome(handled)) {
- *       switch (handled.value.type) {
- *         case "checkout.session.completed":
- *           // handled.value.data.object is a CheckoutSessionObject
- *           break;
- *         // …
- *       }
- *     }
- *     return new Response(null, { status: 200 });
- *   }).pipe(
- *     Effect.catchTag("SignatureVerificationError", () =>
- *       Effect.succeed(new Response(null, { status: 400 })),
- *     ),
- *   );
+ *     return yield* Webhook.decodeHandledEvent(event).pipe(
+ *       Effect.flatMap((handled) => {
+ *         if (Option.isSome(handled)) {
+ *           switch (handled.value.type) {
+ *             case "checkout.session.completed":
+ *               // handled.value.data.object is a CheckoutSessionObject
+ *               break;
+ *             // …
+ *           }
+ *         }
+ *         // Acknowledge every other type: refusing it makes Stripe retry it.
+ *         return status(200);
+ *       }),
+ *       // Breakage on this side: log the id and type, never the payload.
+ *       Effect.catchTag("SchemaError", () =>
+ *         Effect.logError("Handled Stripe event failed to decode").pipe(
+ *           Effect.annotateLogs({ id: event.id, type: event.type }),
+ *           Effect.andThen(status(500)),
+ *         ),
+ *       ),
+ *     );
+ *   },
+ *   Effect.catchTags({
+ *     SignatureVerificationError: () => status(400), // bare: never say which check failed
+ *     SchemaError: () => status(400), // signed, but not an event envelope
+ *     UnreadableBodyError: () => status(400),
+ *   }),
+ * );
  * ```
  *
  * @module

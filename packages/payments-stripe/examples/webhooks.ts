@@ -8,8 +8,10 @@
  * - Read the signing secret as a `Redacted` through `Config`
  * - Answer every `SignatureVerificationError` with a bare 400
  * - Narrow a verified event to the handled types with `decodeHandledEvent`,
- *   and answer a handled event that fails to decode with a 500 so Stripe
- *   keeps redelivering it until a fix ships
+ *   and answer a handled event that fails to decode with a 500, logging only
+ *   its id and type. Stripe retries a failed delivery for a limited period
+ *   (see https://docs.stripe.com/webhooks); a fix that ships after that needs
+ *   the event resent from the Dashboard
  * - Sign a test delivery with `Webhook.signatureHeader` to exercise the handler
  *
  * It needs no Stripe account, API key or network: the demo at the bottom signs
@@ -142,10 +144,13 @@ const makeWebhookHandler = Effect.fn("makeWebhookHandler")(function* () {
       SchemaError: () => status(400),
       // The request body is broken, not the endpoint.
       UnreadableBodyError: () => status(400),
-      // Our breakage: log the event, without its payload, and answer 500 so
-      // Stripe keeps redelivering until a fix ships.
+      // Our breakage: log the event's id and type as annotations, without its
+      // payload, and answer 500. Stripe retries the delivery for a limited
+      // period; a fix that ships after that needs the event resent from the
+      // Dashboard.
       UndecodableEventError: ({ id, type }) =>
-        Effect.logError("Handled Stripe event failed to decode", { id, type }).pipe(
+        Effect.logError("Handled Stripe event failed to decode").pipe(
+          Effect.annotateLogs({ id, type }),
           Effect.andThen(status(500)),
         ),
     }),
