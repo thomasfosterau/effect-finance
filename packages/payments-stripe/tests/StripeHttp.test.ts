@@ -24,6 +24,7 @@ import {
 } from "../src/StripeHttp.ts";
 import { type CapturedRequest, jsonResponse, stubFetch, withTestClock } from "./support.ts";
 import customer from "./fixtures/basil/customer.json" with { type: "json" };
+import basilSubscription from "./fixtures/basil/subscription.json" with { type: "json" };
 
 const KEY = "sk_test_not_a_real_key_4242";
 
@@ -617,7 +618,7 @@ describe("StripeHttp configuration", () => {
 describe("resource modules over the fetch transport", () => {
   it("runs a resource module end to end", async () => {
     const { http, calls } = stubFetch(() =>
-      jsonResponse(200, { id: "sub_1", object: "subscription", cancel_at_period_end: true }),
+      jsonResponse(200, { ...basilSubscription, cancel_at_period_end: true }),
     );
     const subscription = await Effect.runPromise(
       Subscription.update("sub_1", { cancel_at_period_end: true }).pipe(
