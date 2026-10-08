@@ -17,7 +17,7 @@ import {
   PaymentRateLimitError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
-import { DEFAULT_API_VERSION, type StripeHttpConfig } from "../src/StripeHttp.ts";
+import type { StripeHttpConfig } from "../src/StripeHttp.ts";
 import * as StripePayments from "../src/StripePayments.ts";
 import {
   type CapturedRequest,
@@ -38,6 +38,12 @@ import basilSubscription from "./fixtures/basil/subscription.json" with { type: 
  */
 
 type Capabilities = Layer.Success<typeof StripePayments.capabilities>;
+
+/**
+ * The version the capabilities pin; `tests/distilledApiVersion.test.ts`
+ * checks it against the installed Distilled release.
+ */
+const { DISTILLED_API_VERSION } = StripePayments;
 
 const config = (over: Partial<StripeHttpConfig> = {}): StripeHttpConfig => ({
   apiKey: Redacted.make(TEST_KEY),
@@ -92,7 +98,7 @@ const everyCall: ReadonlyArray<
 ];
 
 describe("StripePayments pins the API version", () => {
-  it.each(everyCall)("%s sends Stripe-Version: DEFAULT_API_VERSION", async (_, call, route) => {
+  it.each(everyCall)("%s sends Stripe-Version: DISTILLED_API_VERSION", async (_, call, route) => {
     const stub = stubStripe(() => ({}));
     await Effect.runPromise(
       Effect.exit(
@@ -101,8 +107,7 @@ describe("StripePayments pins the API version", () => {
     );
     expect(stub.calls).toHaveLength(1);
     expect(`${stub.calls[0]?.method} ${stub.calls[0]?.path}`).toBe(route);
-    expect(stub.calls[0]?.headers.get("stripe-version")).toBe(DEFAULT_API_VERSION);
-    expect(DEFAULT_API_VERSION).toBe("2025-08-27.basil");
+    expect(stub.calls[0]?.headers.get("stripe-version")).toBe(DISTILLED_API_VERSION);
   });
 
   it("pins it on every attempt of a retried request", async () => {
@@ -111,9 +116,9 @@ describe("StripePayments pins the API version", () => {
     );
     await result;
     expect(calls.map((call) => call.headers.get("stripe-version"))).toEqual([
-      DEFAULT_API_VERSION,
-      DEFAULT_API_VERSION,
-      DEFAULT_API_VERSION,
+      DISTILLED_API_VERSION,
+      DISTILLED_API_VERSION,
+      DISTILLED_API_VERSION,
     ]);
   });
 

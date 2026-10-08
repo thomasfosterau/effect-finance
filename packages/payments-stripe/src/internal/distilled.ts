@@ -8,13 +8,14 @@
  * `Stripe-Account` / `Stripe-Version` headers from `withRequestOptions`) and
  * reads the response. Around every operation this module:
  *
- * - **pins `Stripe-Version`** to {@link DEFAULT_API_VERSION} unless configured.
- *   Distilled sends the header only when asked, and otherwise the account's
- *   dashboard default would decide the wire shape;
- * - **pins lenient response validation**. Distilled's schemas are generated
- *   from a newer Stripe API version than the pinned one, so its strict mode
- *   would refuse pinned-version responses over fields this package never
- *   reads; the capability layers decode the fields they map instead;
+ * - **pins `Stripe-Version`** to {@link DISTILLED_API_VERSION}, the version
+ *   Distilled's schemas are generated from, unless configured. Distilled
+ *   sends the header only when asked, and otherwise the account's dashboard
+ *   default would decide the wire shape;
+ * - **pins lenient response validation**, so a response is never refused
+ *   over a field this package does not read: Distilled's schemas mark fields
+ *   required that a response at a configured older `apiVersion` lacks. The
+ *   capability layers decode the fields they map instead;
  * - **owns retries**: Distilled's are switched off, and an attempt that failed
  *   to connect, or answered `409` / `5xx` (as `Stripe-Should-Retry` allows),
  *   is retried with the SDK's backoff, reusing one `Idempotency-Key` across
@@ -67,11 +68,8 @@ import {
   type PaymentsError,
   PaymentsUnavailable,
 } from "@thomasfosterau/effect-payments";
-import {
-  DEFAULT_API_VERSION,
-  type LayerConfigOptions,
-  type StripeHttpConfig,
-} from "../StripeHttp.js";
+import type { LayerConfigOptions, StripeHttpConfig } from "../StripeHttp.js";
+import { DISTILLED_API_VERSION } from "./apiVersion.js";
 import { classifyResponse, PROVIDER, retryAfterOf, toPaymentsError } from "./error.js";
 import { checkOptions } from "./options.js";
 
@@ -270,7 +268,7 @@ const make = (
   options: MakeOptions,
 ): Effect.Effect<StripeClient["Service"], never, HttpClient.HttpClient> =>
   Effect.map(HttpClient.HttpClient, (http) => {
-    const apiVersion = options.apiVersion || DEFAULT_API_VERSION;
+    const apiVersion = options.apiVersion || DISTILLED_API_VERSION;
     const maxRetries = Math.max(0, options.maxNetworkRetries ?? DEFAULT_MAX_NETWORK_RETRIES);
     const timeout = Duration.millis(options.timeout ?? DEFAULT_TIMEOUT_MS);
     const timedOut = Outcome.Transport({
@@ -357,7 +355,8 @@ const make = (
 
 /**
  * The client over Distilled's `Credentials` in context, at the default
- * request policy (the pinned API version, two retries, 80 s per attempt).
+ * request policy ({@link DISTILLED_API_VERSION}, two retries, 80 s per
+ * attempt).
  */
 export const layerFromContext: Layer.Layer<
   StripeClient,

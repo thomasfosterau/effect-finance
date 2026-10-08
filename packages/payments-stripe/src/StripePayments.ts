@@ -5,7 +5,7 @@
  * here as a `Layer` over Distilled's Stripe operations
  * (`@distilled.cloud/stripe`): neutral parameters are mapped onto the
  * operation's input, the call runs under this package's request policy
- * (`Stripe-Version` pinned to `DEFAULT_API_VERSION`, the SDK's retries and
+ * (`Stripe-Version` pinned to {@link DISTILLED_API_VERSION}, the SDK's retries and
  * per-attempt timeout, redirects refused, failures mapped onto the neutral
  * {@link PaymentsError} channel), and every response is decoded with `Schema`
  * before it is mapped onto a neutral entity.
@@ -101,6 +101,17 @@ import {
 } from "./internal/mapping.js";
 import { omitUndefined } from "./internal/omitUndefined.js";
 import type { LayerConfigOptions, StripeHttpConfig } from "./StripeHttp.js";
+
+/**
+ * The Stripe API version every capability layer pins in `Stripe-Version`
+ * unless configured: the one the pinned `@distilled.cloud/stripe` release's
+ * schemas are generated from (`2026-07-29.dahlia` for `1.0.0-rc.13`). It moves
+ * whenever this package moves its Distilled pin, so create the webhook
+ * endpoints whose events a program reads beside the capabilities at this
+ * version. The raw resource modules and `StripeHttp` pin `DEFAULT_API_VERSION`
+ * instead.
+ */
+export { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
 
 /**
  * The requirements of a capability layer: Distilled's `Credentials` (the key
@@ -567,7 +578,7 @@ const every = /* @__PURE__ */ Layer.mergeAll(
 /**
  * Every neutral capability over Distilled's `Credentials` and an `HttpClient`
  * in context, at the default request policy (`Stripe-Version` pinned to
- * `DEFAULT_API_VERSION`, two retries, 80 s per attempt). Use {@link layer} to
+ * {@link DISTILLED_API_VERSION}, two retries, 80 s per attempt). Use {@link layer} to
  * configure the policy.
  */
 export const capabilities: Layer.Layer<

@@ -70,7 +70,9 @@ import type { StripeParams } from "./internal/params.js";
  * the `stripe` SDK release the optional peer range allows (18.5.x), the
  * OpenAPI spec the resource schemas are generated from
  * (`scripts/stripe-spec.json`, checked by `tests/generatedSchemas.test.ts`),
- * and this constant. It governs what this transport sends; webhook events are
+ * and this constant. It governs what this transport (and so every raw
+ * resource module) sends; the `StripePayments` capability layers pin
+ * `StripePayments.DISTILLED_API_VERSION` instead. Webhook events are
  * delivered at the API version of the receiving endpoint (or the account
  * default), not this one.
  */
@@ -90,7 +92,11 @@ const MAX_RETRY_AFTER_S = 60;
 export interface StripeHttpConfig {
   /** The secret (or restricted) API key, `sk_…` / `rk_…`. */
   readonly apiKey: Redacted.Redacted<string>;
-  /** The `Stripe-Version` to pin. Defaults to {@link DEFAULT_API_VERSION}. */
+  /**
+   * The `Stripe-Version` to pin. Defaults to {@link DEFAULT_API_VERSION} for
+   * this transport, and to `StripePayments.DISTILLED_API_VERSION` for the
+   * `StripePayments` layers.
+   */
   readonly apiVersion?: string | undefined;
   /** Retries after a retryable failure. Defaults to 2, as in the SDK. */
   readonly maxNetworkRetries?: number | undefined;
