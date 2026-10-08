@@ -17,6 +17,34 @@ const failuresOf = (exit: Exit.Exit<unknown, unknown>): ReadonlyArray<unknown> =
     ? exit.cause.reasons.map((reason) => ("error" in reason ? reason.error : reason))
     : [];
 
+/** A list page of `data`, as Stripe answers `GET /v1/products`. */
+const page = (data: ReadonlyArray<unknown>) => ({
+  object: "list",
+  url: "/v1/products",
+  has_more: false,
+  data,
+});
+
+/**
+ * Every operation the module exports, each with a 2xx body it must refuse and
+ * the response it names: removing any one decode fails its row.
+ */
+const malformedByOperation: ReadonlyArray<
+  readonly [string, Effect.Effect<unknown, unknown, StripeHttp>, unknown, string]
+> = [
+  ["create", Product.create({ name: "Premium" }), { ...product, active: "yes" }, "product"],
+  ["retrieve", Product.retrieve("prod_SxAbCdEfGhIjKl"), { ...product, active: "yes" }, "product"],
+  [
+    "update",
+    Product.update("prod_SxAbCdEfGhIjKl", { active: false }),
+    { ...product, active: "yes" },
+    "product",
+  ],
+  // A delete answered with the live product is not a deletion.
+  ["del", Product.del("prod_SxAbCdEfGhIjKl"), product, "deleted product"],
+  ["list", Product.list(), page([{}]), "product list"],
+];
+
 describe("Product (generated basil types)", () => {
   it("decodes a real-shaped 2025-08-27.basil product", async () => {
     const { http, exit } = run(
@@ -35,7 +63,21 @@ describe("Product (generated basil types)", () => {
     expect(http.calls[0]).toMatchObject({ method: "POST", path: "/v1/products" });
   });
 
-  it("fails with PaymentProviderError on a malformed 2xx body", async () => {
+  it.each(malformedByOperation)(
+    "%s fails with PaymentProviderError on a malformed 2xx body",
+    async (_operation, effect, body, what) => {
+      const result = await run(effect, () => body).exit;
+      expect(Exit.isFailure(result)).toBe(true);
+      const [failure] = failuresOf(result);
+      expect(failure).toBeInstanceOf(PaymentProviderError);
+      expect(failure).toMatchObject({
+        provider: "stripe",
+        message: `Stripe returned a malformed ${what} response`,
+      });
+    },
+  );
+
+  it("fails with PaymentProviderError on each kind of malformed 2xx body", async () => {
     const cases = {
       "a missing required field": Object.fromEntries(
         Object.entries(product).filter(([key]) => key !== "name"),
@@ -74,20 +116,10 @@ describe("Product (generated basil types)", () => {
     expect(Exit.isSuccess(delResult) && delResult.value.deleted).toBe(true);
     expect(del.http.calls[0]).toMatchObject({ method: "DELETE", path: "/v1/products/prod_a%2Fb" });
 
-    const list = run(Product.list({ active: true, limit: 1 }), () => ({
-      object: "list",
-      url: "/v1/products",
-      has_more: false,
-      data: [product],
-    }));
-    const page = await list.exit;
-    expect(Exit.isSuccess(page) && page.value.data[0]?.id).toBe(product.id);
+    const list = run(Product.list({ active: true, limit: 1 }), () => page([product]));
+    const listed = await list.exit;
+    expect(Exit.isSuccess(listed) && listed.value.data[0]?.id).toBe(product.id);
     expect(list.http.calls[0]).toMatchObject({ method: "GET", path: "/v1/products" });
-
-    const [failure] = failuresOf(await run(Product.del("prod_1"), () => product).exit);
-    expect(failure).toMatchObject({
-      message: "Stripe returned a malformed deleted product response",
-    });
   });
 
   it("exposes the generated schema", () => {

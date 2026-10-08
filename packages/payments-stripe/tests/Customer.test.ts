@@ -19,6 +19,44 @@ const failuresOf = (exit: Exit.Exit<unknown, unknown>): ReadonlyArray<unknown> =
 
 const deleted = { id: customer.id, object: "customer", deleted: true };
 
+/** A list page of `data`, as Stripe answers `GET /v1/customers`. */
+const page = (data: ReadonlyArray<unknown>) => ({
+  object: "list",
+  url: "/v1/customers",
+  has_more: false,
+  data,
+});
+
+/**
+ * Every operation the module exports, each with a 2xx body it must refuse and
+ * the response it names: removing any one decode fails its row.
+ */
+const malformedByOperation: ReadonlyArray<
+  readonly [string, Effect.Effect<unknown, unknown, StripeHttp>, unknown, string]
+> = [
+  [
+    "create",
+    Customer.create({ email: "jane@example.com" }),
+    { ...customer, created: "yesterday" },
+    "customer",
+  ],
+  [
+    "retrieve",
+    Customer.retrieve("cus_QxAbCdEfGhIjKl"),
+    { ...customer, created: "yesterday" },
+    "customer",
+  ],
+  [
+    "update",
+    Customer.update("cus_QxAbCdEfGhIjKl", { name: "J" }),
+    { ...customer, created: "yesterday" },
+    "customer",
+  ],
+  // A delete answered with the live customer is not a deletion.
+  ["del", Customer.del("cus_QxAbCdEfGhIjKl"), customer, "deleted customer"],
+  ["list", Customer.list(), page([{}]), "customer list"],
+];
+
 describe("Customer (generated basil types)", () => {
   it("decodes a real-shaped 2025-08-27.basil customer", async () => {
     const { http, exit } = run(
@@ -42,7 +80,21 @@ describe("Customer (generated basil types)", () => {
     });
   });
 
-  it("fails with PaymentProviderError on a malformed 2xx body", async () => {
+  it.each(malformedByOperation)(
+    "%s fails with PaymentProviderError on a malformed 2xx body",
+    async (_operation, effect, body, what) => {
+      const result = await run(effect, () => body).exit;
+      expect(Exit.isFailure(result)).toBe(true);
+      const [failure] = failuresOf(result);
+      expect(failure).toBeInstanceOf(PaymentProviderError);
+      expect(failure).toMatchObject({
+        provider: "stripe",
+        message: `Stripe returned a malformed ${what} response`,
+      });
+    },
+  );
+
+  it("fails with PaymentProviderError on each kind of malformed 2xx body", async () => {
     const cases = {
       "a missing required field": Object.fromEntries(
         Object.entries(customer).filter(([key]) => key !== "livemode"),
@@ -78,12 +130,6 @@ describe("Customer (generated basil types)", () => {
     const del = run(Customer.del("cus_a/b"), () => deleted);
     expect(Exit.isSuccess(await del.exit)).toBe(true);
     expect(del.http.calls[0]).toMatchObject({ method: "DELETE", path: "/v1/customers/cus_a%2Fb" });
-
-    // A delete answered with the live customer is not a deletion.
-    const [failure] = failuresOf(await run(Customer.del("cus_1"), () => customer).exit);
-    expect(failure).toMatchObject({
-      message: "Stripe returned a malformed deleted customer response",
-    });
   });
 
   it("decodes an expanded field as an open object and a later enumeration value as Other", async () => {
@@ -102,25 +148,13 @@ describe("Customer (generated basil types)", () => {
     expect(result.value.tax_exempt).toEqual({ _tag: "Other", raw: "partial" });
   });
 
-  it("decodes a list page and fails a page with a malformed item", async () => {
-    const page = (data: ReadonlyArray<unknown>) => ({
-      object: "list",
-      url: "/v1/customers",
-      has_more: false,
-      data,
-    });
+  it("decodes a list page", async () => {
     const list = run(Customer.list({ limit: 1, created: { gte: 1759190000 } }), () =>
       page([customer]),
     );
     const result = await list.exit;
     expect(Exit.isSuccess(result) && result.value.data[0]?.id).toBe(customer.id);
     expect(list.http.calls[0]).toMatchObject({ method: "GET", path: "/v1/customers" });
-
-    const [failure] = failuresOf(await run(Customer.list(), () => page([{}])).exit);
-    expect(failure).toBeInstanceOf(PaymentProviderError);
-    expect(failure).toMatchObject({
-      message: "Stripe returned a malformed customer list response",
-    });
   });
 
   it("accepts an optional parameter an exactOptionalPropertyTypes caller forwards as undefined", async () => {
