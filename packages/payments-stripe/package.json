@@ -256,7 +256,7 @@
     "stripe": "catalog:"
   },
   "peerDependencies": {
-    "effect": "catalog:peers",
+    "effect": "catalog:peers-distilled",
     "stripe": "catalog:peers"
   },
   "peerDependenciesMeta": {

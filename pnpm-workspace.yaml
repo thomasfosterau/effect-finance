@@ -6,7 +6,8 @@
 # Schema identity at runtime, so every package references `catalog:`.
 #
 # EVERY external dependency version lives here — package.json files reference
-# only `catalog:` / `catalog:peers` (or `workspace:` for internal packages).
+# only `catalog:` / `catalog:peers` / `catalog:peers-distilled` (or
+# `workspace:` for internal packages).
 # `catalogMode: strict` makes `pnpm add` enforce this at add time and
 # `pnpm install` reject non-catalog specifiers. After editing this catalog,
 # ALWAYS run `pnpm install` and commit the regenerated pnpm-lock.yaml — a stale
@@ -24,6 +25,7 @@ catalogMode: strict
 
 catalog:
   "@changesets/changelog-github": ^1.0.1
+  "@changesets/cli": ^3.0.3
   # Distilled's Stripe client (alchemy-run/distilled, Apache-2.0): the
   # operations, wire encoding and typed errors `StripePayments` runs on (#146).
   # A runtime dependency of @thomasfosterau/effect-payments-stripe, pinned
@@ -38,7 +40,6 @@ catalog:
   # @distilled.cloud/stripe depends on (it pins core exactly), or two copies
   # of core install.
   "@distilled.cloud/core": 1.0.0-rc.13
-  "@changesets/cli": ^3.0.3
   # Compiles AND RUNS every JSDoc `@example` (the `docgen` task). Exact, like
   # the Effect pin: 4.0.1 and 4.0.2 depend on `effect ^4.0.1` / `^4.0.2`,
   # which the `effect` singleton override below would contradict. Needs `tsx`
@@ -118,6 +119,15 @@ catalogs:
     # packages/payments-stripe/scripts/stripe-spec.json), so a new release
     # moves all of them together.
     stripe: ^18.5.0
+  # The `effect` peer range of a package that depends on Distilled
+  # (@thomasfosterau/effect-payments-stripe, #146). @distilled.cloud/stripe
+  # and @distilled.cloud/core (both rc.13) declare the peer `effect: ^4.0.0`,
+  # which no `4.0.0-rc.*` prerelease satisfies, and they are hard
+  # dependencies, so `>=4.0.0-rc.118` would promise consumers a floor the
+  # installed tree does not honour. Raise it with Distilled's own peer range;
+  # the package's optional `stripe` peer stays in `peers`.
+  peers-distilled:
+    effect: ^4.0.0
 
 overrides:
   vite: "catalog:"
