@@ -12,7 +12,7 @@
     "version": "changeset version && vp fmt && pnpm install --lockfile-only",
     "release": "vp run -r build && pnpm -r --filter './packages/*' publish --access public --no-git-checks && changeset tag",
     "fallow": "fallow --summary",
-    "fallow:audit": "fallow audit",
+    "fallow:audit": "fallow audit --base origin/trunk",
     "prepare": "vp config && effect-tsgo patch --typescript --oxlint"
   },
   "devDependencies": {
