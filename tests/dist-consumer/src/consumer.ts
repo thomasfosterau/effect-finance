@@ -32,6 +32,7 @@ import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePa
 import * as StripeCustomer from "@thomasfosterau/effect-payments-stripe/Customer";
 import * as StripeCheckoutSession from "@thomasfosterau/effect-payments-stripe/CheckoutSession";
 import * as StripeBillingPortalSession from "@thomasfosterau/effect-payments-stripe/BillingPortal.Session";
+import * as StripeVerificationSession from "@thomasfosterau/effect-payments-stripe/Identity.VerificationSession";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
 import * as StripeSdk from "@thomasfosterau/effect-payments-stripe/Stripe";
 import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
@@ -86,6 +87,14 @@ export const stripePortalSession = StripeBillingPortalSession.create({
   customer: "cus_123",
   return_url: "https://example.com/account",
 });
+/**
+ * A resource module still typed by the `stripe` package, checked so an
+ * unmigrated module's emitted `.d.ts` resolves `Stripe.*` rather than a silent
+ * `any`. Identity is in #81's last resource slice (11); the closeout slice
+ * removes this check, or slice 11 does if it is merged first, since this
+ * assertion fails once Identity is migrated.
+ */
+export const stripeVerificationSession = StripeVerificationSession.retrieve("vs_123");
 export const event = Webhook.constructEvent("{}", "t=1,v1=sig", "whsec_123");
 
 /**
@@ -154,6 +163,9 @@ export type Checks = [
       Effect.Success<typeof stripeCustomer>,
       StripeCustomer.Customer | StripeCustomer.DeletedCustomer
     >
+  >,
+  /** _stripeUnmigratedIsSdkTyped */ Assert<
+    Equals<Effect.Success<typeof stripeVerificationSession>, Stripe.Identity.VerificationSession>
   >,
   /** _stripeCheckoutIsGenerated */ Assert<
     Equals<Effect.Success<typeof stripeCheckoutSession>, StripeCheckoutSession.Session>

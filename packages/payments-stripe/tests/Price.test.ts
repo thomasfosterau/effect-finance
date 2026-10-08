@@ -17,6 +17,37 @@ const failuresOf = (exit: Exit.Exit<unknown, unknown>): ReadonlyArray<unknown> =
     ? exit.cause.reasons.map((reason) => ("error" in reason ? reason.error : reason))
     : [];
 
+/** A list page of `data`, as Stripe answers `GET /v1/prices`. */
+const page = (data: ReadonlyArray<unknown>) => ({
+  object: "list",
+  url: "/v1/prices",
+  has_more: false,
+  data,
+});
+
+/**
+ * Every operation the module exports, each with a 2xx body it must refuse and
+ * the response it names: removing any one decode fails its row.
+ */
+const malformedByOperation: ReadonlyArray<
+  readonly [string, Effect.Effect<unknown, unknown, StripeHttp>, unknown, string]
+> = [
+  [
+    "create",
+    Price.create({ currency: "aud", unit_amount: 1500, product: "prod_SxAbCdEfGhIjKl" }),
+    { ...price, unit_amount: "1500" },
+    "price",
+  ],
+  ["retrieve", Price.retrieve("price_1"), { ...price, unit_amount: "1500" }, "price"],
+  [
+    "update",
+    Price.update("price_1", { active: false }),
+    { ...price, unit_amount: "1500" },
+    "price",
+  ],
+  ["list", Price.list(), page([{}]), "price list"],
+];
+
 describe("Price (generated basil types)", () => {
   it("decodes a real-shaped 2025-08-27.basil price", async () => {
     const { http, exit } = run(
@@ -39,7 +70,21 @@ describe("Price (generated basil types)", () => {
     expect(http.calls[0]).toMatchObject({ method: "POST", path: "/v1/prices" });
   });
 
-  it("fails with PaymentProviderError on a malformed 2xx body", async () => {
+  it.each(malformedByOperation)(
+    "%s fails with PaymentProviderError on a malformed 2xx body",
+    async (_operation, effect, body, what) => {
+      const result = await run(effect, () => body).exit;
+      expect(Exit.isFailure(result)).toBe(true);
+      const [failure] = failuresOf(result);
+      expect(failure).toBeInstanceOf(PaymentProviderError);
+      expect(failure).toMatchObject({
+        provider: "stripe",
+        message: `Stripe returned a malformed ${what} response`,
+      });
+    },
+  );
+
+  it("fails with PaymentProviderError on each kind of malformed 2xx body", async () => {
     const cases = {
       "a missing required field": Object.fromEntries(
         Object.entries(price).filter(([key]) => key !== "currency"),
@@ -82,14 +127,11 @@ describe("Price (generated basil types)", () => {
   });
 
   it("decodes a list page and addresses a price by encoded id", async () => {
-    const list = run(Price.list({ "recurring[interval]": "month", type: "recurring" }), () => ({
-      object: "list",
-      url: "/v1/prices",
-      has_more: false,
-      data: [price],
-    }));
-    const page = await list.exit;
-    expect(Exit.isSuccess(page) && page.value.data[0]?.id).toBe(price.id);
+    const list = run(Price.list({ "recurring[interval]": "month", type: "recurring" }), () =>
+      page([price]),
+    );
+    const listed = await list.exit;
+    expect(Exit.isSuccess(listed) && listed.value.data[0]?.id).toBe(price.id);
     expect(list.http.calls[0]).toMatchObject({
       method: "GET",
       path: "/v1/prices",
@@ -99,12 +141,6 @@ describe("Price (generated basil types)", () => {
     const retrieve = run(Price.retrieve("price_a/b"), () => price);
     expect(Exit.isSuccess(await retrieve.exit)).toBe(true);
     expect(retrieve.http.calls[0]).toMatchObject({ method: "GET", path: "/v1/prices/price_a%2Fb" });
-
-    const [failure] = failuresOf(
-      await run(Price.list(), () => ({ object: "list", url: "/", has_more: false, data: [{}] }))
-        .exit,
-    );
-    expect(failure).toMatchObject({ message: "Stripe returned a malformed price list response" });
   });
 
   it("exposes the generated schema", () => {
