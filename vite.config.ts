@@ -244,7 +244,9 @@ export default defineConfig({
       // per-function CRAP scores (`health.coverage` in .fallowrc.json).
       // Without it fallow estimates every function as uncovered, and any
       // function with cyclomatic complexity ≥ 5 fails the gate on its own.
-      // Run this before `fallow audit` (the commit hook runs the audit).
+      // Run this before `fallow audit` (the Claude Code PreToolUse hook
+      // `.claude/hooks/fallow-gate.sh` runs the audit before `git commit` /
+      // `git push`; the git pre-commit hook runs only `vp staged`).
       "test:coverage": {
         command: "vp test run --coverage",
         // The provider suites resolve the core through its `exports` (its

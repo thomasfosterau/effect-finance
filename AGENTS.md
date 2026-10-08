@@ -92,7 +92,7 @@ The root `README.md` is the landing page; each package `README.md` is the API re
 
 ## Fallow local gate
 
-Before any `git commit` or `git push`, run `vp run test:coverage` and then `fallow audit --format json --quiet --explain --gate-marker agent` (the commit hook runs the audit; the coverage map is what makes its CRAP scores real). If the verdict is `fail`, fix the reported findings before retrying. Treat JSON runtime errors like `{ "error": true, ... }` as non-blocking. Audit defaults to `gate=new-only`: only findings introduced by the current changeset affect the verdict.
+Before any `git commit` or `git push`, run `vp run test:coverage` and then `fallow audit --format json --quiet --explain --gate-marker agent --base origin/trunk` (the Claude Code PreToolUse hook `.claude/hooks/fallow-gate.sh` runs this audit before `git commit` / `git push` and blocks on `fail`; the git pre-commit hook runs only `vp staged`; the coverage map is what makes its CRAP scores real). If the verdict is `fail`, fix the reported findings before retrying. Treat JSON runtime errors like `{ "error": true, ... }` as non-blocking. Audit defaults to `gate=new-only`: only findings introduced by the current changeset affect the verdict.
 
 ## Fallow task map
 
