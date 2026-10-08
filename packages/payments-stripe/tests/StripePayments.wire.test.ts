@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vite-plus/test";
-import { ConfigProvider, Effect, Layer, Redacted } from "effect";
-import { FetchHttpClient } from "effect/http";
+import { ConfigProvider, Effect, Layer, Predicate, Redacted } from "effect";
+import { FetchHttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { strict as strictValidation } from "@distilled.cloud/core/response-validation";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
+import * as Price from "@thomasfosterau/effect-payments/Price";
 import * as Product from "@thomasfosterau/effect-payments/Product";
+import * as Refund from "@thomasfosterau/effect-payments/Refund";
 import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
 import {
   PaymentAuthenticationError,
@@ -165,21 +167,49 @@ describe("StripePayments request policy", () => {
     expect(calls).toHaveLength(0);
   });
 
-  const badIds: ReadonlyArray<
-    readonly [string, Effect.Effect<unknown, PaymentsError, Capabilities>]
+  /** Every operation that takes a path id, as the resource it names and the call for an id. */
+  const pathIdCalls: ReadonlyArray<
+    readonly [string, string, (id: string) => Effect.Effect<unknown, PaymentsError, Capabilities>]
   > = [
-    ["Customer.retrieve", Customer.retrieve("")],
-    ["Customer.del", Customer.del("")],
-    ["Subscription.cancel", Subscription.cancel(undefined as unknown as string)],
+    ["Customer.retrieve", "customer", (id) => Customer.retrieve(id)],
+    ["Customer.update", "customer", (id) => Customer.update(id, { name: "A" })],
+    ["Customer.del", "customer", (id) => Customer.del(id)],
+    ["Product.retrieve", "product", (id) => Product.retrieve(id)],
+    ["Product.update", "product", (id) => Product.update(id, { active: false })],
+    ["Product.del", "product", (id) => Product.del(id)],
+    ["Price.retrieve", "price", (id) => Price.retrieve(id)],
+    ["Price.update", "price", (id) => Price.update(id, { active: false })],
+    ["PaymentIntent.retrieve", "payment intent", (id) => PaymentIntent.retrieve(id)],
+    ["PaymentIntent.update", "payment intent", (id) => PaymentIntent.update(id, { amount: 1 })],
+    ["PaymentIntent.confirm", "payment intent", (id) => PaymentIntent.confirm(id)],
+    ["PaymentIntent.cancel", "payment intent", (id) => PaymentIntent.cancel(id)],
+    ["Subscription.retrieve", "subscription", (id) => Subscription.retrieve(id)],
+    [
+      "Subscription.update",
+      "subscription",
+      (id) => Subscription.update(id, { cancelAtPeriodEnd: true }),
+    ],
+    ["Subscription.cancel", "subscription", (id) => Subscription.cancel(id)],
+    ["Refund.retrieve", "refund", (id) => Refund.retrieve(id)],
+    ["Refund.update", "refund", (id) => Refund.update(id, { metadata: { a: "b" } })],
   ];
+  const badIds = pathIdCalls.flatMap(([name, resource, call]) =>
+    // `undefined` stands for an id from untyped code.
+    (
+      [
+        ["an empty", ""],
+        ["an undefined", undefined as unknown as string],
+      ] as const
+    ).map(([label, id]) => [name, label, resource, call(id)] as const),
+  );
   it.each(badIds)(
-    "%s refuses a missing or empty id instead of addressing another endpoint",
-    async (_, call) => {
+    "%s refuses %s id instead of addressing another endpoint",
+    async (_, _id, resource, call) => {
       const { result, calls } = over(Effect.flip(call), () => jsonResponse(200, customer));
       const error = await result;
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error).toMatchObject({ param: "id" });
-      expect(error.message).toMatch(/^The (customer|subscription) id must be a non-empty string$/);
+      expect(error.message).toBe(`The ${resource} id must be a non-empty string`);
       expect(calls).toHaveLength(0);
     },
   );
@@ -432,9 +462,12 @@ describe("StripePayments maps every Distilled failure onto the neutral channel",
     expect(error.message).toBe("Invalid JSON received from the Stripe API");
   });
 
-  it("never carries the key in an error", async () => {
+  it("never carries the key in an error, at any depth", async () => {
     const auth = await failure(401, {
       error: { type: "authentication_error", message: "Invalid API Key" },
+    });
+    const card = await failure(402, {
+      error: { type: "card_error", code: "card_declined", message: "Your card was declined." },
     });
     const network = await over(
       Effect.flip(Customer.retrieve("cus_1")),
@@ -443,13 +476,69 @@ describe("StripePayments maps every Distilled failure onto the neutral channel",
       },
       { maxNetworkRetries: 0 },
     ).result;
-    for (const error of [auth, network]) {
+    const timeout = await over(
+      Effect.flip(Customer.retrieve("cus_1")),
+      (request) =>
+        new Promise<Response>((_resolve, reject) => {
+          request.init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+      { maxNetworkRetries: 0, timeout: 5_000 },
+    ).result;
+    expect(network).toBeInstanceOf(PaymentNetworkError);
+    expect(timeout).toBeInstanceOf(PaymentNetworkError);
+    for (const error of [auth, card, network, timeout]) {
+      // `JSON.stringify` and `String` go through Effect's `Headers`
+      // redaction, so they would miss a request kept anywhere in the error;
+      // walk every value it holds instead.
+      const reachable = reachableFrom(error);
+      expect(reachable.strings.filter((value) => value.includes(TEST_KEY))).toEqual([]);
+      expect(reachable.objects.filter(HttpClientError.isHttpClientError)).toEqual([]);
+      expect(reachable.objects.filter(HttpClientRequest.isHttpClientRequest)).toEqual([]);
       expect(JSON.stringify(error)).not.toContain(TEST_KEY);
       expect(String(error)).not.toContain(TEST_KEY);
-      expect(JSON.stringify((error as { cause?: unknown }).cause ?? null)).not.toContain(TEST_KEY);
     }
   });
 });
+
+/**
+ * The values an object holds directly: its `Map` / `Set` entries, its own
+ * keys and its own data properties' values. None for a primitive.
+ */
+const childrenOf = (value: unknown): Array<unknown> => {
+  if (!Predicate.isObjectKeyword(value)) return [];
+  const entries = Predicate.isMap(value)
+    ? [...value.keys(), ...value.values()]
+    : Predicate.isSet(value)
+      ? [...value.values()]
+      : [];
+  const own = Reflect.ownKeys(value).flatMap((key) => {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && "value" in descriptor ? [key, descriptor.value] : [key];
+  });
+  return [...entries, ...own];
+};
+
+/**
+ * Every string and object reachable from `root` through {@link childrenOf}
+ * (string- and symbol-keyed properties, enumerable or not, getters left
+ * unread), each object once.
+ */
+const reachableFrom = (root: unknown) => {
+  const strings: Array<string> = [];
+  const objects: Array<object> = [];
+  const seen = new Set<object>();
+  const pending: Array<unknown> = [root];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (Predicate.isString(value)) strings.push(value);
+    if (Predicate.isObjectKeyword(value) && !seen.has(value)) {
+      seen.add(value);
+      objects.push(value);
+      pending.push(...childrenOf(value));
+    }
+  }
+  return { strings, objects };
+};
 
 describe("StripePayments configuration", () => {
   it("fails an empty key with PaymentConfigError", async () => {
