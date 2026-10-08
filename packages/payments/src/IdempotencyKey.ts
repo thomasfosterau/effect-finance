@@ -43,9 +43,9 @@
  *   Airwallex's windows are unverified (#93). Treat a retry within a few hours
  *   as safe and a later one as a new write.
  * - **The shape is the lowest common denominator**: 1 to 64 characters from
- *   `A-Z a-z 0-9 _ -` (a UUID is 36). It fits every PayPal API this library
- *   calls (Orders allows 1 to 108 characters, Payments 1 to 10 000, Catalog
- *   Products and Subscriptions state no limit); Stripe's (255) and
+ *   `A-Z a-z 0-9 _ -` (a UUID is 36). It fits PayPal's Orders (1 to 108
+ *   characters) and Payments (refunds, 1 to 10 000) limits; PayPal states no
+ *   limit for Catalog Products and Subscriptions. Stripe's (255) and
  *   Airwallex's (about 64) limits are unverified (#93), so the shape is
  *   deliberately conservative.
  *
