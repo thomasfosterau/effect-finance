@@ -2,7 +2,7 @@
 
 A Stripe implementation of the vendor-neutral effect-payments core.
 
-It provides `Layer`s that satisfy the neutral capabilities of [`@thomasfosterau/effect-payments`](https://www.npmjs.com/package/@thomasfosterau/effect-payments) over [Distilled's Stripe operations](https://www.npmjs.com/package/@distilled.cloud/stripe) (`@distilled.cloud/stripe`, on `effect/http`: no Node API and no SDK), the full set of Stripe resource modules as a provider escape hatch over a fetch-only transport (`StripeHttp`), and a WebCrypto webhook verifier.
+It provides `Layer`s that satisfy the neutral capabilities of [`@thomasfosterau/effect-payments`](https://www.npmjs.com/package/@thomasfosterau/effect-payments) over [Distilled's Stripe operations](https://www.npmjs.com/package/@distilled.cloud/stripe) (`@distilled.cloud/stripe`, on `effect/http`: no SDK, and no Node API but a `process` global; see [Runtime: a `process` global](#runtime-a-process-global)), the full set of Stripe resource modules as a provider escape hatch over a fetch-only transport (`StripeHttp`), and a WebCrypto webhook verifier.
 
 ## Install
 
@@ -10,7 +10,7 @@ It provides `Layer`s that satisfy the neutral capabilities of [`@thomasfosterau/
 pnpm add @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe effect
 ```
 
-`effect` is a peer dependency. `@distilled.cloud/stripe` and `@distilled.cloud/core` are dependencies, pinned exactly (they are pre-1.0): about 28 MB installed, of which a bundler keeps only the operations the capabilities you use call. The official `stripe` package is an **optional** peer (`^18.5.0`, the release for the default API version `2025-08-27.basil`):
+`effect` is a peer dependency, at `^4.0.0`: that is the peer range `@distilled.cloud/stripe` and `@distilled.cloud/core` declare, and no `4.0.0-rc.*` prerelease satisfies it. Those two are dependencies, pinned exactly (they are pre-1.0): about 30 MB installed with core's `graphql` dependency, of which a bundler keeps only the operations the capabilities you use call. The official `stripe` package is an **optional** peer (`^18.5.0`, the release for the default API version `2025-08-27.basil`):
 
 - **At runtime** it is needed only for the SDK transport (`./Stripe`) or the SDK-based `Webhook.constructEvent*` verifier. The capability layers, `StripeHttp`, `Webhook.verify` and every resource module run without it.
 - **For types** it is needed by every entry whose declarations import it: the raw resource modules, `./Webhook` (its `constructEvent` signature names `Stripe.Event`, so `Webhook.verify` users need it too) and the package root, which re-exports them. Add it as a dev dependency when you import any of those; otherwise, with `skipLibCheck: false`, the declarations fail to resolve `stripe`, and with it on, their SDK types silently become `any`. Only `./StripePayments`, `./StripeHttp` and the generated modules (`./CheckoutSession`, `./BillingPortal.Session`, `./Customer`, `./Product`, `./Price`, `./Subscription`, `./SubscriptionSchedule`, `./Invoice`) declare no import of it.
@@ -71,11 +71,17 @@ const customers = StripePayments.customersLayer.pipe(
 );
 ```
 
-Distilled's `DISTILLED_DEBUG_HTTP` environment variable makes it log each request's URL and the first 400 characters of every request and response body to `console.error` (a payment intent's `client_secret` included), and Distilled reads it from `process.env` on every request, so leave it unset outside local debugging.
+Importing `@distilled.cloud/stripe/Credentials` yourself means adding `@distilled.cloud/stripe` as your own dependency, at **exactly** the version in this package's `dependencies`, and moving it in step whenever you upgrade this package. Only at that version is its `Credentials` guaranteed to be the service the layers require: Distilled is pre-1.0 and may change it in any release, and another version installs a second copy of Distilled beside this package's. `layer` / `layerFromEnv` / `layerConfig` need no Distilled import.
+
+### Runtime: a `process` global
+
+The capability layers need a `process` global with an `env` object. Distilled reads `process.env.DISTILLED_DEBUG_HTTP`, unguarded, each time it builds a request and each time it reads a response, so where there is no `process` global every call that reaches Distilled dies with a defect, not a `PaymentsError`. Node, Bun and Deno have one; on **Cloudflare Workers, enable the `nodejs_compat` compatibility flag**. Loading the package and building the layers do not touch `process`, and neither do `StripeHttp`, the raw resource modules or `Webhook.verify`.
+
+**Leave `DISTILLED_DEBUG_HTTP` unset outside local debugging.** While it is set, Distilled writes to `console.error`, for every request, the method and full URL (a `GET`'s query string included) and the first 400 characters of the request body (as JSON), and for every response the status and the first 400 characters of the body. Those characters can hold part or all of a payment intent's or checkout session's `client_secret`, and whatever customer data the call carries. The `Authorization` header, and so the API key, is not logged.
 
 ### "Not configured ≡ down"
 
-`StripePayments.layerConfig` reads the key (`STRIPE_API_KEY` by default, or `envVar`) on **every call**, never while the layer is built: from the calling fiber's `ConfigProvider` first, then from the one the layer was built under (so `layerConfig().pipe(Layer.provide(ConfigProvider.layer(…)))` works as it does for `layerFromEnv`). The layer therefore always builds — a Worker without billing configured still boots and serves everything else — and a call made while the key is absent or empty fails with `PaymentsUnavailable`, exactly as if Stripe were down (answer it with a 503).
+`StripePayments.layerConfig` reads the key (`STRIPE_API_KEY` by default, or `envVar`) on **every call**, never while the layer is built: from the calling fiber's `ConfigProvider` first, then from the one the layer was built under (so `layerConfig().pipe(Layer.provide(ConfigProvider.layer(…)))` works as it does for `layerFromEnv`). The layer therefore always builds, and a call made while the key is absent or empty fails with `PaymentsUnavailable` before Distilled runs, exactly as if Stripe were down (answer it with a 503). So a Worker without billing configured still boots and serves everything else, with or without `nodejs_compat`. Once the key is set, the calls need the `process` global (see [Runtime: a `process` global](#runtime-a-process-global)): without it, each one dies with a defect instead of reaching Stripe.
 
 ```typescript
 import { Effect, Layer } from "effect";
