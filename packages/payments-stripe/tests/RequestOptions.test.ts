@@ -10,8 +10,9 @@ import * as Subscription from "../src/Subscription.ts";
 import * as TerminalLocation from "../src/Terminal.Location.ts";
 import * as TreasuryFinancialAccount from "../src/Treasury.FinancialAccount.ts";
 import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
-import { make, StripeHttp } from "../src/StripeHttp.ts";
+import { make, StripeHttp, type StripeRequest } from "../src/StripeHttp.ts";
 import { fakeStripeHttp, jsonResponse, stubFetch, withTestClock } from "./support.ts";
+import customer from "./fixtures/basil/customer.json" with { type: "json" };
 
 /**
  * Per-call request options (#55): every resource-module operation takes a
@@ -20,11 +21,19 @@ import { fakeStripeHttp, jsonResponse, stubFetch, withTestClock } from "./suppor
 
 const run = <A, E>(effect: Effect.Effect<A, E, never>) => Effect.runPromise(effect);
 
+/** A well-formed answer to each `Customer` operation (the module decodes its responses). */
+const customerAnswer = (request: StripeRequest): unknown =>
+  request.method === "DELETE"
+    ? { id: customer.id, object: "customer", deleted: true }
+    : request.path === "/v1/customers" && request.method === "GET"
+      ? { object: "list", url: "/v1/customers", has_more: false, data: [customer] }
+      : customer;
+
 describe("resource modules forward their options to the transport", () => {
   const options = { idempotencyKey: "key-1", stripeAccount: "acct_1" };
 
   it("on a create", async () => {
-    const { layer, calls } = fakeStripeHttp();
+    const { layer, calls } = fakeStripeHttp(customerAnswer);
     await run(Customer.create({ email: "a@example.com" }, options).pipe(Effect.provide(layer)));
     expect(calls).toEqual([
       {
@@ -38,7 +47,7 @@ describe("resource modules forward their options to the transport", () => {
   });
 
   it("on every verb, params or not", async () => {
-    const { layer, calls } = fakeStripeHttp();
+    const { layer, calls } = fakeStripeHttp(customerAnswer);
     await run(
       Effect.gen(function* () {
         yield* Customer.retrieve("cus_1", undefined, options);
@@ -96,14 +105,14 @@ describe("resource modules forward their options to the transport", () => {
   });
 
   it("with no options, sends neither field", async () => {
-    const { layer, calls } = fakeStripeHttp();
+    const { layer, calls } = fakeStripeHttp(customerAnswer);
     await run(Customer.create({}).pipe(Effect.provide(layer)));
     expect(calls[0]?.idempotencyKey).toBeUndefined();
     expect(calls[0]?.stripeAccount).toBeUndefined();
   });
 
   it("passes on only the two documented fields", async () => {
-    const { layer, calls } = fakeStripeHttp();
+    const { layer, calls } = fakeStripeHttp(customerAnswer);
     await run(
       Customer.create({}, {
         idempotencyKey: "k",
@@ -117,7 +126,7 @@ describe("resource modules forward their options to the transport", () => {
 
 describe("the options reach the wire", () => {
   it("sends the Idempotency-Key and Stripe-Account headers", async () => {
-    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "cus_1" }));
+    const { http, calls } = stubFetch(() => jsonResponse(200, customer));
     await run(
       Effect.gen(function* () {
         const client = yield* make({ apiKey: Redacted.make("sk_test_not_a_real_key_4242") });
@@ -137,7 +146,7 @@ describe("the options reach the wire", () => {
   it("sends the same key on a caller's retry after a timeout-like failure", async () => {
     const { http, calls } = stubFetch((_request, attempt) => {
       if (attempt === 1) throw new TypeError("network down");
-      return jsonResponse(200, { id: "cus_1" });
+      return jsonResponse(200, customer);
     });
     const write = (client: StripeHttp["Service"]) =>
       Customer.create({ email: "a@example.com" }, { idempotencyKey: "signup-2" }).pipe(
@@ -168,7 +177,7 @@ describe("the options reach the wire", () => {
     const { http, calls } = stubFetch((_request, attempt) =>
       attempt === 1
         ? jsonResponse(500, { error: { type: "api_error", message: "boom" } })
-        : jsonResponse(200, { id: "cus_1" }),
+        : jsonResponse(200, customer),
     );
     await run(
       withTestClock(
@@ -191,7 +200,7 @@ describe("an empty option is refused, not silently dropped", () => {
   it.each(["idempotencyKey", "stripeAccount"] as const)(
     '%s: "" fails with PaymentInvalidRequestError before anything is sent',
     async (name) => {
-      const { http, calls } = stubFetch(() => jsonResponse(200, { id: "cus_1" }));
+      const { http, calls } = stubFetch(() => jsonResponse(200, customer));
       const error = await run(
         Effect.gen(function* () {
           const client = yield* make({ apiKey: Redacted.make("sk_test_not_a_real_key_4242") });

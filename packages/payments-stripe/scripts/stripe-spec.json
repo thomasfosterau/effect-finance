@@ -10,6 +10,12 @@
     "/v1/billing_portal/sessions",
     "/v1/checkout/sessions",
     "/v1/checkout/sessions/{session}",
-    "/v1/checkout/sessions/{session}/expire"
+    "/v1/checkout/sessions/{session}/expire",
+    "/v1/customers",
+    "/v1/customers/{customer}",
+    "/v1/prices",
+    "/v1/prices/{price}",
+    "/v1/products",
+    "/v1/products/{id}"
   ]
 }

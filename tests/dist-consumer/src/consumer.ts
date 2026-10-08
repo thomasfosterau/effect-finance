@@ -149,8 +149,11 @@ export type Checks = [
   /** _stripeResourceRequiresTransport */ Assert<
     Equals<Effect.Services<typeof stripeCustomer>, StripeHttp.StripeHttp>
   >,
-  /** _stripeResourceIsTyped */ Assert<
-    Equals<Effect.Success<typeof stripeCustomer>, Stripe.Customer | Stripe.DeletedCustomer>
+  /** _stripeCustomerIsGenerated */ Assert<
+    Equals<
+      Effect.Success<typeof stripeCustomer>,
+      StripeCustomer.Customer | StripeCustomer.DeletedCustomer
+    >
   >,
   /** _stripeCheckoutIsGenerated */ Assert<
     Equals<Effect.Success<typeof stripeCheckoutSession>, StripeCheckoutSession.Session>

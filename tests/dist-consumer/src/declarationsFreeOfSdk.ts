@@ -19,7 +19,13 @@ const DIST = new URL("../../../packages/payments-stripe/dist/", import.meta.url)
 const SDK = "stripe";
 
 /** The published entry points whose declarations are free of the SDK. */
-const MIGRATED = ["CheckoutSession.d.ts", "BillingPortal.Session.d.ts"];
+const MIGRATED = [
+  "CheckoutSession.d.ts",
+  "BillingPortal.Session.d.ts",
+  "Customer.d.ts",
+  "Product.d.ts",
+  "Price.d.ts",
+];
 
 const specifiersIn = (file: string): ReadonlyArray<string> => {
   // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
