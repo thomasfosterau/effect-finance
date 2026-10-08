@@ -17,8 +17,9 @@
  *   key for a different write: a provider answers the same key with different
  *   parameters with an error, not the original outcome. Stripe's
  *   `idempotency_error` surfaces as `PaymentProviderError` with code
- *   `StripeIdempotencyError` (not `PaymentInvalidRequestError`); PayPal's and
- *   Airwallex's behaviour here is unverified (#93).
+ *   `StripeIdempotencyError` (not `PaymentInvalidRequestError`). PayPal's
+ *   API specifications do not say what it answers, and Airwallex's behaviour
+ *   here is unverified (#93).
  * - **Only on create and confirm operations** (`Customer.create`,
  *   `Product.create`, `Price.create`, `PaymentIntent.create` / `confirm`,
  *   `Subscription.create`, `Refund.create`, `CheckoutSession.create`): the
@@ -34,12 +35,19 @@
  *   `PaymentAuthenticationError`, or a `PaymentProviderError` below 500
  *   (including `StripeIdempotencyError`): they fail the same way again.
  * - **A window, not forever.** Providers remember a key for a limited time
- *   that differs per provider and is not promised by the type. Treat a retry
- *   within hours as safe and one after days as a new write.
+ *   that differs per provider (on PayPal, per API) and is not promised by the
+ *   type. PayPal's Orders API keeps one for 6 hours by default, so a
+ *   `PaymentIntent.create` / `confirm` retry on PayPal is deduplicated only
+ *   within 6 hours; its Catalog Products and Subscriptions APIs keep one for
+ *   72 hours, and its Payments API (refunds) states no window. Stripe's and
+ *   Airwallex's windows are unverified (#93). Treat a retry within a few hours
+ *   as safe and a later one as a new write.
  * - **The shape is the lowest common denominator**: 1 to 64 characters from
- *   `A-Z a-z 0-9 _ -` (a UUID is 36). The vendors' own limits (Stripe 255,
- *   PayPal about 108, Airwallex about 64) and replay windows are unverified
- *   (#93); the shape is deliberately conservative.
+ *   `A-Z a-z 0-9 _ -` (a UUID is 36). It fits every PayPal API this library
+ *   calls (Orders allows 1 to 108 characters, Payments 1 to 10 000, Catalog
+ *   Products and Subscriptions state no limit); Stripe's (255) and
+ *   Airwallex's (about 64) limits are unverified (#93), so the shape is
+ *   deliberately conservative.
  *
  * @example
  * ```typescript
