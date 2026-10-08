@@ -192,6 +192,72 @@ describe("prepareSpec", () => {
     expect((parameter["schema"] as JsonObject)["required"]).toBeUndefined();
   });
 
+  it("widens the resources the error object carries to open objects, breaking its cycle", () => {
+    const withError: JsonObject = {
+      ...spec,
+      components: {
+        schemas: {
+          api_errors: {
+            type: "object",
+            properties: {
+              code: { type: "string", maxLength: 5000 },
+              payment_intent: { $ref: "#/components/schemas/payment_intent" },
+              source: {
+                anyOf: [
+                  { $ref: "#/components/schemas/card" },
+                  { $ref: "#/components/schemas/source" },
+                ],
+                description: "The source object.",
+              },
+              type: { type: "string", enum: ["api_error", "card_error"] },
+            },
+            required: ["type"],
+          },
+          payment_intent: {
+            type: "object",
+            properties: {
+              last_payment_error: {
+                anyOf: [{ $ref: "#/components/schemas/api_errors" }],
+                nullable: true,
+              },
+            },
+          },
+        },
+      },
+    };
+    const prepared = Effect.runSync(prepareSpec(withError, ["/kept"]));
+    const error = schema(prepared, "api_errors");
+    const properties = error["properties"] as JsonObject;
+    expect(properties["payment_intent"]).toEqual({ type: "object", additionalProperties: true });
+    expect(properties["source"]).toEqual({
+      description: "The source object.",
+      type: "object",
+      additionalProperties: true,
+    });
+    // The error's own fields, and a resource's reference to the error, are kept.
+    expect(properties["code"]).toEqual({ type: "string" });
+    expect(properties["type"]).toEqual({ type: "string", enum: ["api_error", "card_error"] });
+    expect(error["required"]).toEqual(["type"]);
+    expect(
+      (schema(prepared, "payment_intent")["properties"] as JsonObject)["last_payment_error"],
+    ).toEqual({
+      anyOf: [{ $ref: "#/components/schemas/api_errors" }, { nullable: true, enum: [null] }],
+      nullable: true,
+    });
+  });
+
+  it("leaves a spec without an error object as it is", () => {
+    const prepared = Effect.runSync(
+      prepareSpec({ ...spec, components: { schemas: { api_errors: { type: "object" } } } }, [
+        "/kept",
+      ]),
+    );
+    expect(schema(prepared, "api_errors")).toEqual({ type: "object" });
+    expect(
+      Effect.runSync(prepareSpec({ ...spec, components: {} }, ["/kept"]))["components"],
+    ).toEqual({});
+  });
+
   it("fails on a pinned path the spec does not have", () => {
     const exit = Effect.runSyncExit(prepareSpec(spec, ["/kept", "/missing"]));
     expect(Exit.isFailure(exit)).toBe(true);

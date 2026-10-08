@@ -13,6 +13,7 @@ import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 import { make, StripeHttp, type StripeRequest } from "../src/StripeHttp.ts";
 import { fakeStripeHttp, jsonResponse, stubFetch, withTestClock } from "./support.ts";
 import customer from "./fixtures/basil/customer.json" with { type: "json" };
+import subscription from "./fixtures/basil/subscription.json" with { type: "json" };
 
 /**
  * Per-call request options (#55): every resource-module operation takes a
@@ -68,7 +69,10 @@ describe("resource modules forward their options to the transport", () => {
   });
 
   it("on an upload, a nested module and an action", async () => {
-    const { layer, calls } = fakeStripeHttp();
+    // `Subscription` decodes its responses, so its action is answered in full.
+    const { layer, calls } = fakeStripeHttp((request) =>
+      request.path.startsWith("/v1/subscriptions/") ? subscription : {},
+    );
     await run(
       Effect.gen(function* () {
         yield* File.create({ purpose: "dispute_evidence", file: { data: "x" } } as never, options);

@@ -25,6 +25,9 @@ const MIGRATED = [
   "Customer.d.ts",
   "Product.d.ts",
   "Price.d.ts",
+  "Subscription.d.ts",
+  "SubscriptionSchedule.d.ts",
+  "Invoice.d.ts",
 ];
 
 const specifiersIn = (file: string): ReadonlyArray<string> => {

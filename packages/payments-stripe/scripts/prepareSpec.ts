@@ -176,6 +176,39 @@ const withoutErrorResponse = (operation: Json): Json => {
   return { ...operation, responses: rest };
 };
 
+/** Stripe's error object, which a resource carries as its last error (`invoice.last_finalization_error`, …). */
+const ERROR_SCHEMA = "api_errors";
+
+/**
+ * Stripe's error object with every resource it carries (`payment_intent`,
+ * `setup_intent`, `payment_method`, `source`: a snapshot of what the failed
+ * request involved) widened to an open JSON object, as an expansion is. Left
+ * as `$ref`s, the error object and the intents form a cycle
+ * (`payment_intent.last_payment_error` is an error object again), which the
+ * generator can only emit as a recursive schema that a lenient enumeration
+ * cannot type, and they would drag both intents' graphs into a slice whose
+ * resource only reports its last error. The error's own fields stay typed.
+ */
+const openErrorResources = (components: Json | undefined): Json | undefined => {
+  if (!isObject(components) || !isObject(components["schemas"])) return components;
+  const schemas = components["schemas"];
+  const error = schemas[ERROR_SCHEMA];
+  if (!isObject(error) || !isObject(error["properties"])) return components;
+  const isResource = (node: Json): boolean =>
+    isObject(node) &&
+    ("$ref" in node ||
+      (Array.isArray(node["anyOf"]) &&
+        node["anyOf"].every((member) => isObject(member) && "$ref" in member)));
+  const properties = Object.fromEntries(
+    Object.entries(error["properties"]).map(([name, node]): [string, Json] => {
+      if (!isObject(node) || !isResource(node)) return [name, node];
+      const { $ref: _ref, anyOf: _anyOf, ...rest } = node;
+      return [name, { ...rest, ...EXPANDED_OBJECT }];
+    }),
+  );
+  return { ...components, schemas: { ...schemas, [ERROR_SCHEMA]: { ...error, properties } } };
+};
+
 /** Raised when a pinned path is not in the spec (the pin and spec disagree). */
 export class MissingPathError extends Schema.TaggedError<MissingPathError>()("MissingPathError", {
   path: Schema.String,
@@ -189,7 +222,8 @@ export class UnsupportedPatternError extends Schema.TaggedError<UnsupportedPatte
 
 /**
  * Keep only `paths` of `spec` (every method on them), strip list-URL
- * `pattern`s, collapse expansions and apply the response-side rewrites
+ * `pattern`s, collapse expansions (and the resources the error object
+ * carries) and apply the response-side rewrites
  * (nullability, relaxed checks) to `components` only. Unreferenced `components` are left for
  * the generator to drop: it only emits what a kept operation reaches.
  */
@@ -225,12 +259,11 @@ export const prepareSpec = (
       return yield* new UnsupportedPatternError({ pattern: unsupported });
     // Request schemas live inline under `paths`; response schemas are the
     // `components` they reference.
+    const components = openErrorResources(spec["components"]);
     const prepared: JsonObject = {
       ...spec,
       paths: rewrite(keptPaths, "request"),
-      ...(spec["components"] === undefined
-        ? {}
-        : { components: rewrite(spec["components"], "response") }),
+      ...(components === undefined ? {} : { components: rewrite(components, "response") }),
     };
     return prepared;
   });
