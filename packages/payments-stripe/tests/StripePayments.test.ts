@@ -8,6 +8,7 @@ import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
 import { PaymentNetworkError, PaymentProviderError } from "@thomasfosterau/effect-payments";
 import type { StripeRequest } from "../src/StripeHttp.ts";
+import { encodeForm } from "../src/internal/form.ts";
 import * as StripePayments from "../src/StripePayments.ts";
 import { fakeStripeHttp } from "./support.ts";
 
@@ -200,6 +201,16 @@ describe("StripePayments capabilities", () => {
       unit_amount: 1999,
       recurring: { interval: "month", interval_count: 3 },
     });
+  });
+
+  it("sends no schedule for a forwarded `recurring: undefined`", async () => {
+    const recurring: Price.CreateParams["recurring"] = undefined;
+    const { result, calls } = run(
+      Price.create({ product: "prod_1", currency: "usd", unitAmount: 1999, recurring }),
+    );
+    await result;
+    expect(calls[0]?.params).toMatchObject({ product: "prod_1", unit_amount: 1999 });
+    expect(encodeForm(calls[0]?.params)).toBe("product=prod_1&currency=usd&unit_amount=1999");
   });
 
   it("maps a payment intent and resolves expanded references to ids", async () => {
