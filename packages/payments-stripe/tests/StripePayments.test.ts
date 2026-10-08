@@ -7,15 +7,13 @@ import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
 import { PaymentNetworkError, PaymentProviderError } from "@thomasfosterau/effect-payments";
-import type { StripeRequest } from "../src/StripeHttp.ts";
-import { encodeForm } from "../src/internal/form.ts";
 import * as StripePayments from "../src/StripePayments.ts";
-import { fakeStripeHttp } from "./support.ts";
+import { formOf, stubStripe, stubStripeTable, withTestClock } from "./support.ts";
 
 /**
  * Canned Stripe objects, keyed by `METHOD /path`, so the neutral mapping is
- * asserted without touching the network. The fake transport records the
- * request each capability made.
+ * asserted without touching the network. The stubbed API records the request
+ * each capability sent.
  */
 const responses = {
   "POST /v1/customers": {
@@ -113,18 +111,18 @@ const responses = {
   },
 } satisfies Record<string, unknown>;
 
-const keyOf = (request: StripeRequest) => `${request.method} ${request.path}`;
-
-/** Run `effect` against the capabilities over a fake transport answering from `answers`. */
+/** Run `effect` against the capabilities over a stubbed API answering from `answers`. */
 const run = <A, E>(
   effect: Effect.Effect<A, E, Layer.Success<typeof StripePayments.capabilities>>,
   answers: Record<string, unknown> = responses,
 ) => {
-  const fake = fakeStripeHttp((request) => answers[keyOf(request)]);
+  const stub = stubStripeTable(answers);
   return {
-    calls: fake.calls,
+    calls: stub.calls,
     result: Effect.runPromise(
-      effect.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(fake.layer)),
+      withTestClock(
+        effect.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(stub.layer)),
+      ),
     ),
   };
 };
@@ -143,7 +141,7 @@ describe("StripePayments capabilities", () => {
     expect(calls[0]).toMatchObject({
       method: "POST",
       path: "/v1/customers",
-      params: { email: "jane@example.com", metadata: { tier: "pro" } },
+      params: formOf({ email: "jane@example.com", metadata: { tier: "pro" } }),
     });
   });
 
@@ -172,7 +170,7 @@ describe("StripePayments capabilities", () => {
     expect(calls[0]).toMatchObject({
       method: "GET",
       path: "/v1/customers",
-      params: { limit: 1, starting_after: "cus_0" },
+      params: formOf({ limit: 1, starting_after: "cus_0" }),
     });
   });
 
@@ -196,11 +194,13 @@ describe("StripePayments capabilities", () => {
     expect(price.type).toBe("recurring");
     expect(price.recurring?.interval).toBe("month");
     expect(price.recurring?.intervalCount).toBe(3);
-    expect(calls[0]?.params).toMatchObject({
-      product: "prod_1",
-      unit_amount: 1999,
-      recurring: { interval: "month", interval_count: 3 },
-    });
+    expect(calls[0]?.params).toMatchObject(
+      formOf({
+        product: "prod_1",
+        unit_amount: 1999,
+        recurring: { interval: "month", interval_count: 3 },
+      }),
+    );
   });
 
   it("sends no schedule for a forwarded `recurring: undefined`", async () => {
@@ -209,8 +209,9 @@ describe("StripePayments capabilities", () => {
       Price.create({ product: "prod_1", currency: "usd", unitAmount: 1999, recurring }),
     );
     await result;
-    expect(calls[0]?.params).toMatchObject({ product: "prod_1", unit_amount: 1999 });
-    expect(encodeForm(calls[0]?.params)).toBe("product=prod_1&currency=usd&unit_amount=1999");
+    expect(calls[0]?.params).toEqual(
+      formOf({ product: "prod_1", currency: "usd", unit_amount: 1999 }),
+    );
   });
 
   it("maps a payment intent and resolves expanded references to ids", async () => {
@@ -228,10 +229,17 @@ describe("StripePayments capabilities", () => {
     };
     const confirmed = run(PaymentIntent.confirm("pi_1", { paymentMethod: "pm_2" }), answers);
     await confirmed.result;
-    expect(confirmed.calls[0]).toMatchObject({ params: { payment_method: "pm_2" } });
+    expect(confirmed.calls[0]).toMatchObject({
+      method: "POST",
+      path: "/v1/payment_intents/pi_1/confirm",
+      params: formOf({ payment_method: "pm_2" }),
+    });
     const canceled = run(PaymentIntent.cancel("pi_1"), answers);
     await canceled.result;
-    expect(canceled.calls[0]).toMatchObject({ method: "POST" });
+    expect(canceled.calls[0]).toMatchObject({
+      method: "POST",
+      path: "/v1/payment_intents/pi_1/cancel",
+    });
   });
 
   it("maps a subscription, flattening items and periods", async () => {
@@ -248,7 +256,7 @@ describe("StripePayments capabilities", () => {
     expect(subscription.items[0].quantity).toBe(2);
     expect(subscription.currentPeriodStart).toBe(100);
     expect(subscription.currentPeriodEnd).toBe(200);
-    expect(calls[0]?.params).toMatchObject({ items: [{ price: "price_1", quantity: 2 }] });
+    expect(calls[0]?.params).toMatchObject(formOf({ items: [{ price: "price_1", quantity: 2 }] }));
   });
 
   it("reads the billing period from the item on API versions that moved it there", async () => {
@@ -310,23 +318,27 @@ describe("StripePayments capabilities", () => {
       answers,
     );
     expect((await products.result).data[0].id).toBe("prod_1");
-    expect(products.calls[0]?.params).toEqual({
-      limit: 5,
-      active: true,
-      starting_after: "prod_0",
-    });
+    expect(products.calls[0]?.params).toEqual(
+      formOf({
+        limit: 5,
+        active: true,
+        starting_after: "prod_0",
+      }),
+    );
 
     const prices = run(
       Price.list({ limit: 2, product: "prod_1", active: false, startingAfter: "price_0" }),
       answers,
     );
     expect((await prices.result).data[0].recurring?.intervalCount).toBe(3);
-    expect(prices.calls[0]?.params).toEqual({
-      limit: 2,
-      product: "prod_1",
-      active: false,
-      starting_after: "price_0",
-    });
+    expect(prices.calls[0]?.params).toEqual(
+      formOf({
+        limit: 2,
+        product: "prod_1",
+        active: false,
+        starting_after: "price_0",
+      }),
+    );
     const allPrices = run(Price.list(), answers);
     await allPrices.result;
     expect(allPrices.calls[0]?.params).toEqual({});
@@ -336,11 +348,13 @@ describe("StripePayments capabilities", () => {
       answers,
     );
     expect((await intents.result).data[0].id).toBe("pi_1");
-    expect(intents.calls[0]?.params).toEqual({
-      limit: 1,
-      customer: "cus_1",
-      starting_after: "pi_0",
-    });
+    expect(intents.calls[0]?.params).toEqual(
+      formOf({
+        limit: 1,
+        customer: "cus_1",
+        starting_after: "pi_0",
+      }),
+    );
 
     const subscriptions = run(
       Subscription.list({ limit: 3, customer: "cus_1", status: "active", startingAfter: "sub_0" }),
@@ -349,12 +363,14 @@ describe("StripePayments capabilities", () => {
     const page = await subscriptions.result;
     expect(page.hasMore).toBe(true);
     expect(page.data[0].id).toBe("sub_1");
-    expect(subscriptions.calls[0]?.params).toEqual({
-      limit: 3,
-      customer: "cus_1",
-      status: "active",
-      starting_after: "sub_0",
-    });
+    expect(subscriptions.calls[0]?.params).toEqual(
+      formOf({
+        limit: 3,
+        customer: "cus_1",
+        status: "active",
+        starting_after: "sub_0",
+      }),
+    );
     const allSubscriptions = run(Subscription.list(), answers);
     await allSubscriptions.result;
     expect(allSubscriptions.calls[0]?.params).toEqual({});
@@ -364,12 +380,14 @@ describe("StripePayments capabilities", () => {
       answers,
     );
     expect((await refunds.result).data[0].id).toBe("re_1");
-    expect(refunds.calls[0]?.params).toEqual({
-      limit: 4,
-      payment_intent: "pi_1",
-      charge: "ch_1",
-      starting_after: "re_0",
-    });
+    expect(refunds.calls[0]?.params).toEqual(
+      formOf({
+        limit: 4,
+        payment_intent: "pi_1",
+        charge: "ch_1",
+        starting_after: "re_0",
+      }),
+    );
   });
 
   it("maps a refund", async () => {
@@ -380,11 +398,21 @@ describe("StripePayments capabilities", () => {
   });
 
   it("passes a transport failure through the neutral channel", async () => {
-    const error = await run(Effect.flip(Customer.create({ email: "x@example.com" })), {
-      "POST /v1/customers": Effect.fail(new PaymentNetworkError({ message: "network down" })),
-    }).result;
+    const stub = stubStripe(() => {
+      throw new TypeError("network down");
+    });
+    const error = await Effect.runPromise(
+      withTestClock(
+        Effect.flip(Customer.create({ email: "x@example.com" })).pipe(
+          Effect.provide(StripePayments.capabilities),
+          Effect.provide(stub.layer),
+        ),
+      ),
+    );
     expect(error).toBeInstanceOf(PaymentNetworkError);
-    expect(error.message).toBe("network down");
+    expect(error.message).toContain("network down");
+    // The default policy retries a connection failure twice.
+    expect(stub.calls).toHaveLength(3);
   });
 
   it("fails a 2xx that does not decode instead of building an entity from undefined", async () => {

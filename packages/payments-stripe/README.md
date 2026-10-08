@@ -2,7 +2,7 @@
 
 A Stripe implementation of the vendor-neutral effect-payments core.
 
-It provides `Layer`s that satisfy the neutral capabilities of [`@thomasfosterau/effect-payments`](https://www.npmjs.com/package/@thomasfosterau/effect-payments) over a fetch-only Stripe transport (`StripeHttp`, on `effect/http`: no Node API and no SDK, so it runs in a Cloudflare Worker), the full set of Stripe resource modules as a provider escape hatch, and a WebCrypto webhook verifier.
+It provides `Layer`s that satisfy the neutral capabilities of [`@thomasfosterau/effect-payments`](https://www.npmjs.com/package/@thomasfosterau/effect-payments) over [Distilled's Stripe operations](https://www.npmjs.com/package/@distilled.cloud/stripe) (`@distilled.cloud/stripe`, on `effect/http`: no SDK, and no Node API but a `process` global; see [Runtime: a `process` global](#runtime-a-process-global)), the full set of Stripe resource modules as a provider escape hatch over a fetch-only transport (`StripeHttp`), and a WebCrypto webhook verifier.
 
 ## Install
 
@@ -10,7 +10,7 @@ It provides `Layer`s that satisfy the neutral capabilities of [`@thomasfosterau/
 pnpm add @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe effect
 ```
 
-`effect` is a peer dependency. The official `stripe` package is an **optional** peer (`^18.5.0`, the release for the default API version `2025-08-27.basil`):
+`effect` is a peer dependency, at `^4.0.0`: that is the peer range `@distilled.cloud/stripe` and `@distilled.cloud/core` declare, and no `4.0.0-rc.*` prerelease satisfies it. Those two are dependencies, pinned exactly (they are pre-1.0): about 30 MB installed with core's `graphql` dependency, of which a bundler keeps only the operations the capabilities you use call. The official `stripe` package is an **optional** peer (`^18.5.0`, the release for the resource modules' API version `2025-08-27.basil`; see [API versions](#api-versions)):
 
 - **At runtime** it is needed only for the SDK transport (`./Stripe`) or the SDK-based `Webhook.constructEvent*` verifier. The capability layers, `StripeHttp`, `Webhook.verify` and every resource module run without it.
 - **For types** it is needed by every entry whose declarations import it: the raw resource modules, `./Webhook` (its `constructEvent` signature names `Stripe.Event`, so `Webhook.verify` users need it too) and the package root, which re-exports them. Add it as a dev dependency when you import any of those; otherwise, with `skipLibCheck: false`, the declarations fail to resolve `stripe`, and with it on, their SDK types silently become `any`. Only `./StripePayments`, `./StripeHttp` and the generated modules (`./CheckoutSession`, `./BillingPortal.Session`, `./Customer`, `./Product`, `./Price`, `./Subscription`, `./SubscriptionSchedule`, `./Invoice`) declare no import of it.
@@ -36,7 +36,7 @@ const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 
 ## Providing the capabilities
 
-`StripePayments.layer` bundles the fetch transport and every capability, so a neutral program is satisfied with a single `Effect.provide` (plus an `HttpClient`):
+`StripePayments.layer` builds every capability from configuration, so a neutral program is satisfied with a single `Effect.provide` (plus an `HttpClient`):
 
 ```typescript
 import { Layer, Redacted } from "effect";
@@ -45,7 +45,7 @@ import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePa
 
 const layer = StripePayments.layer({
   apiKey: Redacted.make("sk_test_..."),
-  apiVersion: "2025-08-27.basil", // pinned in Stripe-Version; this is also the default
+  apiVersion: StripePayments.DISTILLED_API_VERSION, // pinned in Stripe-Version; this is also the default
   maxNetworkRetries: 3,
   timeout: 10_000,
 }).pipe(Layer.provide(FetchHttpClient.layer));
@@ -55,13 +55,42 @@ const layer = StripePayments.layer({
 const fromEnv = StripePayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 ```
 
-The transport is `StripeHttp`: form-encoded bodies with Stripe's bracketed nesting, a pinned `Stripe-Version`, the key as a `Redacted` bearer token, redirects refused, the SDK's retry policy (connection failures, `409`, `5xx`, `Stripe-Should-Retry`) with one `Idempotency-Key` across the attempts of a `POST`, and Stripe's error envelope decoded onto the neutral errors. Responses the capability layers read are decoded with `Schema`; a malformed one fails with `PaymentProviderError`.
+Each capability call is one of Distilled's generated operations (`CreateCustomer`, `GetSubscription`, …), which form-encode the request with Stripe's bracketed nesting and send the key as a bearer token. Around every call the layers apply this package's request policy: `Stripe-Version` pinned to `DISTILLED_API_VERSION` (`2026-07-29.dahlia`) unless configured, since Distilled sends none of its own and the account's dashboard default would otherwise decide the wire shape; the SDK's retry policy (connection failures, `409`, `5xx`, `Stripe-Should-Retry`, `Retry-After`) with one `Idempotency-Key` across the attempts of a `POST`, in place of Distilled's own; a per-attempt timeout; redirects refused; and every failure (Distilled's `CardError`, `InvalidRequestError`, …, an HTTP status error or a connection failure) mapped onto the neutral errors, from the response's status and Stripe's error envelope. Responses are decoded with `Schema` over the fields the layers read; a malformed one fails with `PaymentProviderError`. The layers keep Distilled's response validation lenient even under its `ResponseValidation.strict`, so a response is never refused over a field they do not read (Distilled's schemas mark fields required that a response at an older configured `apiVersion` lacks).
 
-For finer control, `StripePayments.capabilities` provides every capability over an existing `StripeHttp`, and the individual layers (`customersLayer`, `productsLayer`, …, `checkoutSessionsLayer`, `billingPortalSessionsLayer`) are exported too. To run on the official SDK instead, provide the capabilities with `Stripe.layer` (from `@thomasfosterau/effect-payments-stripe/Stripe`), which builds an SDK client and provides `StripeHttp` over it.
+### API versions
+
+Until the raw resource modules become re-exports of Distilled (#146), the two halves of this package pin different Stripe API versions:
+
+- **The capability layers** (`StripePayments`) pin `StripePayments.DISTILLED_API_VERSION`, **`2026-07-29.dahlia`**: the version `@distilled.cloud/stripe` `1.0.0-rc.13`'s schemas are generated from. It follows Distilled, so a release of this package that moves the Distilled pin moves it too, and its changelog says so. An explicit `apiVersion` passed to `layer` or `layerConfig` still wins.
+- **The raw resource modules**, `StripeHttp` and the SDK transport pin `DEFAULT_API_VERSION`, **`2025-08-27.basil`**: the version their generated schemas and the `stripe` SDK's types describe.
+
+Stripe delivers a webhook event at the receiving endpoint's API version (or the account default), not at either of these. Create the endpoints whose events you read beside the capabilities at `DISTILLED_API_VERSION`, and keep any code of yours that reads Stripe's JSON directly (event payloads, your own calls) on the same version.
+
+For finer control, `StripePayments.capabilities` provides every capability over Distilled's `Credentials` and an `HttpClient` in context, at the default policy, and the individual layers (`customersLayer`, `productsLayer`, …, `checkoutSessionsLayer`, `billingPortalSessionsLayer`) are exported too:
+
+```typescript
+import { Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
+import * as Credentials from "@distilled.cloud/stripe/Credentials";
+import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
+
+const customers = StripePayments.customersLayer.pipe(
+  Layer.provide(Credentials.credentials({ apiKey: "sk_test_..." })),
+  Layer.provide(FetchHttpClient.layer),
+);
+```
+
+Importing `@distilled.cloud/stripe/Credentials` yourself means adding `@distilled.cloud/stripe` as your own dependency, at **exactly** the version in this package's `dependencies`, and moving it in step whenever you upgrade this package. Only at that version is its `Credentials` guaranteed to be the service the layers require: Distilled is pre-1.0 and may change it in any release, and another version installs a second copy of Distilled beside this package's. `layer` / `layerFromEnv` / `layerConfig` need no Distilled import.
+
+### Runtime: a `process` global
+
+The capability layers need a `process` global with an `env` object. Distilled reads `process.env.DISTILLED_DEBUG_HTTP`, unguarded, each time it builds a request and each time it reads a response, so where there is no `process` global every call that reaches Distilled dies with a defect, not a `PaymentsError`. Node, Bun and Deno have one; on **Cloudflare Workers, enable the `nodejs_compat` compatibility flag**. Loading the package and building the layers do not touch `process`, and neither do `StripeHttp`, the raw resource modules or `Webhook.verify`.
+
+**Leave `DISTILLED_DEBUG_HTTP` unset outside local debugging.** While it is set, Distilled writes to `console.error`, for every request, the method and full URL (a `GET`'s query string included) and the first 400 characters of the request body (as JSON), and for every response the status and the first 400 characters of the body. Those characters can hold part or all of a payment intent's or checkout session's `client_secret`, and whatever customer data the call carries. The `Authorization` header, and so the API key, is not logged.
 
 ### "Not configured ≡ down"
 
-`StripePayments.layerConfig` reads the key (`STRIPE_API_KEY` by default, or `envVar`) on **every call**, never while the layer is built: from the calling fiber's `ConfigProvider` first, then from the one the layer was built under (so `layerConfig().pipe(Layer.provide(ConfigProvider.layer(…)))` works as it does for `layerFromEnv`). The layer therefore always builds — a Worker without billing configured still boots and serves everything else — and a call made while the key is absent or empty fails with `PaymentsUnavailable`, exactly as if Stripe were down (answer it with a 503).
+`StripePayments.layerConfig` reads the key (`STRIPE_API_KEY` by default, or `envVar`) on **every call**, never while the layer is built: from the calling fiber's `ConfigProvider` first, then from the one the layer was built under (so `layerConfig().pipe(Layer.provide(ConfigProvider.layer(…)))` works as it does for `layerFromEnv`). The layer therefore always builds, and a call made while the key is absent or empty fails with `PaymentsUnavailable` before Distilled runs, exactly as if Stripe were down (answer it with a 503). So a Worker without billing configured still boots and serves everything else, with or without `nodejs_compat`. Once the key is set, the calls need the `process` global (see [Runtime: a `process` global](#runtime-a-process-global)): without it, each one dies with a defect instead of reaching Stripe.
 
 ```typescript
 import { Effect, Layer } from "effect";
@@ -83,7 +112,7 @@ const checkout = (params: CheckoutSession.CreateParams) =>
   );
 ```
 
-`StripeHttp.layerConfig` is the same posture for the transport alone (so for the raw resource modules too). For a provider-neutral stub with no transport at all, use `Stub.unavailable("stripe")` from `@thomasfosterau/effect-payments/Stub`.
+`StripeHttp.layerConfig` is the same posture for the raw resource modules' transport. For a provider-neutral stub with no transport at all, use `Stub.unavailable("stripe")` from `@thomasfosterau/effect-payments/Stub`.
 
 ## The Stripe escape hatch
 
@@ -167,8 +196,8 @@ The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an opti
 
 | Module | Purpose |
 | --- | --- |
-| `StripePayments` | `layer` / `layerFromEnv` / `layerConfig` (fetch transport + every capability), `capabilities` (every capability over an existing `StripeHttp`), and the individual capability layers. |
-| `StripeHttp` | The fetch-only transport: `layer` / `layerFromEnv` / `layerConfig` / `make`, and `RequestOptions`. |
+| `StripePayments` | `layer` / `layerFromEnv` / `layerConfig` (every capability, from configuration), `capabilities` (every capability over Distilled's `Credentials` and an `HttpClient`), the individual capability layers, and `DISTILLED_API_VERSION` (the `Stripe-Version` they pin). |
+| `StripeHttp` | The fetch-only transport of the raw resource modules: `layer` / `layerFromEnv` / `layerConfig` / `make`, `RequestOptions` and `DEFAULT_API_VERSION`. |
 | `Stripe` | The optional SDK transport: an SDK client (`StripeService`) and `StripeHttp` over it (`layer` / `layerFromEnv` / `make`). Needs the `stripe` peer at runtime. |
 | `Webhook` | `verify`, `decodeHandledEvent`, `SIGNATURE_HEADER`; the SDK-based `constructEvent` / `constructEventAsync`. |
 | `CheckoutSession`, `BillingPortal.Session` | Generated, decoded raw resource modules. |

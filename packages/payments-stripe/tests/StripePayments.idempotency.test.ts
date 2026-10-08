@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vite-plus/test";
 import { Effect, type Layer, Redacted } from "effect";
+import type { HttpClient } from "effect/http";
+import type { Credentials } from "@distilled.cloud/stripe/Credentials";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as Product from "@thomasfosterau/effect-payments/Product";
 import * as Price from "@thomasfosterau/effect-payments/Price";
@@ -14,7 +16,7 @@ import {
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
 import * as StripePayments from "../src/StripePayments.ts";
-import { fakeStripeHttp, jsonResponse, stubFetch } from "./support.ts";
+import { jsonResponse, stubFetch, stubStripe } from "./support.ts";
 
 /**
  * The neutral `idempotencyKey` (#55, closing #66) on the create and confirm
@@ -24,18 +26,29 @@ import { fakeStripeHttp, jsonResponse, stubFetch } from "./support.ts";
 
 const KEY = IdempotencyKey.IdempotencyKey.make("write-0001");
 
-/** Run one operation against a fake transport and return the request it made. */
+/**
+ * The capabilities with no retries, so a `POST` sent without a caller's key
+ * carries none (a retryable one carries a generated key; see below).
+ */
+const noRetries = StripePayments.layer({
+  apiKey: Redacted.make("sk_test_not_a_real_key"),
+  maxNetworkRetries: 0,
+});
+
+/** Run one operation against a stubbed API and return the `Idempotency-Key` it sent. */
 const requestOf = async (
   operation: Effect.Effect<unknown, unknown, Capabilities>,
+  capabilities: Layer.Layer<Capabilities, unknown, HttpClient.HttpClient | Credentials> = noRetries,
 ): Promise<{ readonly idempotencyKey: string | undefined; readonly count: number }> => {
-  const fake = fakeStripeHttp(() => ({}));
+  const stub = stubStripe(() => ({}));
   // The empty answer fails the decode; the request was recorded before that.
   await Effect.runPromise(
-    Effect.exit(
-      operation.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(fake.layer)),
-    ),
+    Effect.exit(operation.pipe(Effect.provide(capabilities), Effect.provide(stub.layer))),
   );
-  return { idempotencyKey: fake.calls[0]?.idempotencyKey, count: fake.calls.length };
+  return {
+    idempotencyKey: stub.calls[0]?.headers.get("idempotency-key") ?? undefined,
+    count: stub.calls.length,
+  };
 };
 type Capabilities = Layer.Success<typeof StripePayments.capabilities>;
 
@@ -82,33 +95,45 @@ describe("Stripe maps the neutral idempotencyKey to Idempotency-Key", () => {
   );
 
   it.each(operations(undefined).map(([name]) => name))(
+    "%s sends a generated retry key without a caller's key, when it may be retried",
+    async (name) => {
+      const op = operations(undefined).find(([candidate]) => candidate === name)![1];
+      const { idempotencyKey } = await requestOf(op, StripePayments.capabilities);
+      expect(idempotencyKey).toMatch(/^effect-payments-retry-[0-9a-f-]{36}$/);
+    },
+  );
+
+  it.each(operations(undefined).map(([name]) => name))(
     "%s refuses a raw string before sending anything",
     async (name) => {
       // Untyped code can still pass a string the brand would have refused.
       const bad = "not a valid key" as IdempotencyKey.IdempotencyKey;
       const op = operations(bad).find(([candidate]) => candidate === name)![1];
-      const fake = fakeStripeHttp(() => ({}));
+      const stub = stubStripe(() => ({}));
       const error = await Effect.runPromise(
         Effect.flip(
-          op.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(fake.layer)),
+          op.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(stub.layer)),
         ),
       );
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
-      expect(fake.calls).toEqual([]);
+      expect(stub.calls).toEqual([]);
     },
   );
 
   it("sends none on the cancel operations", async () => {
-    const fake = fakeStripeHttp(() => ({}));
+    const stub = stubStripe(() => ({}));
     await Effect.runPromise(
       Effect.exit(
         Effect.gen(function* () {
           yield* Effect.exit(Subscription.cancel("sub_1"));
           yield* Effect.exit(PaymentIntent.cancel("pi_1"));
-        }).pipe(Effect.provide(StripePayments.capabilities), Effect.provide(fake.layer)),
+        }).pipe(Effect.provide(noRetries), Effect.provide(stub.layer)),
       ),
     );
-    expect(fake.calls.map((call) => call.idempotencyKey)).toEqual([undefined, undefined]);
+    expect(stub.calls.map((call) => [call.method, call.headers.get("idempotency-key")])).toEqual([
+      ["DELETE", null],
+      ["POST", null],
+    ]);
   });
 });
 

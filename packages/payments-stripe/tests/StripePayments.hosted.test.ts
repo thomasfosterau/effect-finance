@@ -3,9 +3,8 @@ import { Effect, Layer, Redacted } from "effect";
 import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
 import * as BillingPortal from "@thomasfosterau/effect-payments/BillingPortal";
 import { PaymentInvalidRequestError, PaymentProviderError } from "@thomasfosterau/effect-payments";
-import type { StripeRequest } from "../src/StripeHttp.ts";
 import * as StripePayments from "../src/StripePayments.ts";
-import { fakeStripeHttp, jsonResponse, stubFetch, withTestClock } from "./support.ts";
+import { formOf, jsonResponse, stubFetch, stubStripeTable, withTestClock } from "./support.ts";
 
 /**
  * The hosted-page capabilities (#40): Checkout and the Billing Portal. The
@@ -29,18 +28,18 @@ const portal: BillingPortal.CreateParams = {
   returnUrl: "https://example.test/account/billing",
 };
 
-const keyOf = (request: StripeRequest) => `${request.method} ${request.path}`;
-
-/** Run `effect` against the capabilities over a fake transport answering from `answers`. */
+/** Run `effect` against the capabilities over a stubbed API answering from `answers`. */
 const run = <A, E>(
   effect: Effect.Effect<A, E, Layer.Success<typeof StripePayments.capabilities>>,
   answers: Record<string, unknown>,
 ) => {
-  const fake = fakeStripeHttp((request) => answers[keyOf(request)]);
+  const stub = stubStripeTable(answers);
   return {
-    calls: fake.calls,
+    calls: stub.calls,
     result: Effect.runPromise(
-      effect.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(fake.layer)),
+      withTestClock(
+        effect.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(stub.layer)),
+      ),
     ),
   };
 };
@@ -58,10 +57,9 @@ describe("StripePayments checkoutSessionsLayer", () => {
     expect(session).toBeInstanceOf(CheckoutSession.CheckoutSession);
     expect(session.id).toBe("cs_1");
     expect(session.url).toBe("https://checkout.stripe.com/c/pay/cs_1");
-    expect(calls[0]).toEqual({
-      method: "POST",
-      path: "/v1/checkout/sessions",
-      params: {
+    expect(calls[0]).toMatchObject({ method: "POST", path: "/v1/checkout/sessions" });
+    expect(calls[0]?.params).toEqual(
+      formOf({
         mode: "subscription",
         customer: "cus_1",
         line_items: [{ price: "price_monthly", quantity: 1 }],
@@ -69,8 +67,8 @@ describe("StripePayments checkoutSessionsLayer", () => {
         cancel_url: "https://example.test/pricing",
         metadata: undefined,
         subscription_data: { metadata: { user_id: "user-1" } },
-      },
-    });
+      }),
+    );
   });
 
   it("forwards explicit quantities and session metadata, and omits subscription data when absent", async () => {
@@ -85,16 +83,20 @@ describe("StripePayments checkoutSessionsLayer", () => {
       { "POST /v1/checkout/sessions": { id: "cs_2", url: "https://checkout.stripe.com/cs_2" } },
     );
     await result;
-    expect(calls[0]?.params).toMatchObject({
-      mode: "payment",
-      customer: undefined,
-      line_items: [
-        { price: "price_a", quantity: 3 },
-        { price: "price_b", quantity: 1 },
-      ],
-      metadata: { order: "o-1" },
-      subscription_data: undefined,
-    });
+    expect(calls[0]?.params).toEqual(
+      formOf({
+        mode: "payment",
+        customer: undefined,
+        line_items: [
+          { price: "price_a", quantity: 3 },
+          { price: "price_b", quantity: 1 },
+        ],
+        success_url: "https://example.test/ok",
+        cancel_url: "https://example.test/no",
+        metadata: { order: "o-1" },
+        subscription_data: undefined,
+      }),
+    );
   });
 
   it.each([{ id: "cs_1" }, { id: "cs_1", url: null }, { id: "cs_1", url: "" }])(
@@ -116,17 +118,26 @@ describe("StripePayments checkoutSessionsLayer", () => {
       "POST /v1/checkout/sessions": { id: "cs_3", url: "https://checkout.stripe.com/cs_3" },
     });
     await result;
-    expect(calls[0]?.params).toMatchObject({ mode: "payment", subscription_data: undefined });
+    expect(calls[0]?.params).toMatchObject({ mode: "payment" });
+    expect(
+      Object.keys(calls[0]?.params ?? {}).some((key) => key.startsWith("subscription_data")),
+    ).toBe(false);
   });
 
   it("passes a Stripe rejection through the neutral channel", async () => {
     const error = await run(Effect.flip(CheckoutSession.create(checkout)), {
-      "POST /v1/checkout/sessions": Effect.fail(
-        new PaymentInvalidRequestError({ message: "No such price: 'price_monthly'" }),
-      ),
+      "POST /v1/checkout/sessions": jsonResponse(400, {
+        error: {
+          type: "invalid_request_error",
+          code: "resource_missing",
+          message: "No such price: 'price_monthly'",
+          param: "line_items[0][price]",
+        },
+      }),
     }).result;
     expect(error).toBeInstanceOf(PaymentInvalidRequestError);
     expect(error.message).toContain("No such price");
+    expect(error).toMatchObject({ param: "line_items[0][price]", statusCode: 400 });
   });
 });
 
@@ -143,11 +154,10 @@ describe("StripePayments billingPortalSessionsLayer", () => {
     expect(session).toBeInstanceOf(BillingPortal.BillingPortalSession);
     expect(session.id).toBe("bps_1");
     expect(session.url).toBe("https://billing.stripe.com/p/session/bps_1");
-    expect(calls[0]).toEqual({
-      method: "POST",
-      path: "/v1/billing_portal/sessions",
-      params: { customer: "cus_1", return_url: "https://example.test/account/billing" },
-    });
+    expect(calls[0]).toMatchObject({ method: "POST", path: "/v1/billing_portal/sessions" });
+    expect(calls[0]?.params).toEqual(
+      formOf({ customer: "cus_1", return_url: "https://example.test/account/billing" }),
+    );
   });
 
   it.each([{ id: "bps_1" }, { id: "bps_1", url: "" }])(
@@ -162,7 +172,7 @@ describe("StripePayments billingPortalSessionsLayer", () => {
   );
 });
 
-describe("hosted sessions over the fetch transport", () => {
+describe("hosted sessions over StripePayments.layer", () => {
   /** `StripePayments.layer` over a stubbed `fetch` answering `body` to every request. */
   const wire = (body: unknown) => {
     const { http, calls } = stubFetch(() => jsonResponse(200, body));

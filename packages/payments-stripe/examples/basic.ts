@@ -50,7 +50,7 @@ const program = Effect.gen(function* () {
 
 // Choose the provider here. To run on Stripe from an env var instead, use
 // `StripePayments.layerFromEnv()`.
-// The fetch transport runs on `effect/http`'s `HttpClient`: provide
+// The capabilities run on `effect/http`'s `HttpClient`: provide
 // `FetchHttpClient.layer` (Node, Workers, browsers). The key is a `Redacted`.
 const layer = StripePayments.layer({
   apiKey: Redacted.make(process.env.STRIPE_API_KEY || "sk_test_..."),

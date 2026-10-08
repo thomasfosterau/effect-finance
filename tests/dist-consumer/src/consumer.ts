@@ -9,6 +9,7 @@
 
 import { type Effect, type Layer, Redacted } from "effect";
 import type { HttpClient } from "effect/http";
+import type { Credentials } from "@distilled.cloud/stripe/Credentials";
 import type Stripe from "stripe";
 import {
   money,
@@ -120,6 +121,9 @@ export type Checks = [
     >
   >,
   /** _stripeFailsWithConfig */ Assert<Equals<Layer.Error<typeof stripeLayer>, PaymentConfigError>>,
+  /** _stripeCapabilitiesRequireDistilled */ Assert<
+    Equals<Layer.Services<typeof StripePayments.capabilities>, Credentials | HttpClient.HttpClient>
+  >,
   /** _paypalProvidesRefunds */ Assert<
     Refund.Refunds extends Layer.Success<typeof paypalLayer> ? true : false
   >,

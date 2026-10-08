@@ -242,6 +242,8 @@
     "generate:schemas": "node scripts/generate-stripe-schemas.ts"
   },
   "dependencies": {
+    "@distilled.cloud/core": "catalog:",
+    "@distilled.cloud/stripe": "catalog:",
     "@thomasfosterau/effect-payments": "workspace:^"
   },
   "devDependencies": {
@@ -254,7 +256,7 @@
     "stripe": "catalog:"
   },
   "peerDependencies": {
-    "effect": "catalog:peers",
+    "effect": "catalog:peers-distilled",
     "stripe": "catalog:peers"
   },
   "peerDependenciesMeta": {

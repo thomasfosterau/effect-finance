@@ -2,35 +2,86 @@
  * Stripe implementations of the vendor-neutral payments capabilities.
  *
  * Each capability defined by `@thomasfosterau/effect-payments` is implemented
- * here as a `Layer` over the {@link StripeHttp} transport: neutral parameters
- * are mapped onto Stripe's form-encoded ones, and every response is decoded
- * with `Schema` before it is mapped onto a neutral entity. The {@link layer} /
- * {@link layerFromEnv} helpers bundle the fetch transport together with every
- * capability, so a program written against the neutral core is satisfied by
- * one `Effect.provide` (plus an `HttpClient`, e.g. `FetchHttpClient.layer`).
- * To run on the SDK instead, provide {@link capabilities} with the `Stripe`
- * module's layer.
+ * here as a `Layer` over Distilled's Stripe operations
+ * (`@distilled.cloud/stripe`): neutral parameters are mapped onto the
+ * operation's input, the call runs under this package's request policy
+ * (`Stripe-Version` pinned to {@link DISTILLED_API_VERSION}, the SDK's retries and
+ * per-attempt timeout, redirects refused, failures mapped onto the neutral
+ * {@link PaymentsError} channel), and every response is decoded with `Schema`
+ * before it is mapped onto a neutral entity.
+ *
+ * The per-capability layers and {@link capabilities} need Distilled's
+ * `Credentials` and an `HttpClient`. The {@link layer} / {@link layerFromEnv} /
+ * {@link layerConfig} helpers supply the credentials from configuration, so a
+ * program written against the neutral core is satisfied by one
+ * `Effect.provide` plus an `HttpClient` (e.g. `FetchHttpClient.layer`).
  *
  * @module
  */
 
-import { Effect, Layer } from "effect";
+import { type Context, Effect, Layer, Predicate } from "effect";
 import type { HttpClient } from "effect/http";
+import type { Credentials } from "@distilled.cloud/stripe/Credentials";
 import {
-  Customer as CustomerNS,
-  Product as ProductNS,
-  Price as PriceNS,
-  PaymentIntent as PaymentIntentNS,
-  Subscription as SubscriptionNS,
-  Refund as RefundNS,
-  CheckoutSession as CheckoutSessionNS,
-  BillingPortal as BillingPortalNS,
-  IdempotencyKey as IdempotencyKeyNS,
+  CreateBillingPortalSession,
+  CreateCheckoutSession,
+  CreateCustomer,
+  CreatePaymentIntent,
+  CreatePaymentIntentCancel,
+  CreatePaymentIntentConfirm,
+  CreatePrice,
+  CreateProduct,
+  CreateRefund,
+  CreateSubscription,
+  DeleteCustomer,
+  DeleteProduct,
+  DeleteSubscription,
+  GetCustomer,
+  GetCustomers,
+  GetPaymentIntent,
+  GetPaymentIntents,
+  GetPrice,
+  GetPrices,
+  GetProduct,
+  GetProducts,
+  GetRefund,
+  GetRefunds,
+  GetSubscription,
+  GetSubscriptions,
+  UpdateCustomer,
+  UpdatePaymentIntent,
+  UpdatePrice,
+  UpdateProduct,
+  UpdateRefund,
+  UpdateSubscription,
+} from "@distilled.cloud/stripe/stripe";
+// The capability modules are imported by subpath, as namespaces: a bundler can
+// then tell that the tags passed to the pure layer constructions below are
+// side-effect free, and drop every capability (and the Distilled operations
+// it calls) a program does not use.
+import * as BillingPortalNS from "@thomasfosterau/effect-payments/BillingPortal";
+import * as CheckoutSessionNS from "@thomasfosterau/effect-payments/CheckoutSession";
+import * as CustomerNS from "@thomasfosterau/effect-payments/Customer";
+import * as IdempotencyKeyNS from "@thomasfosterau/effect-payments/IdempotencyKey";
+import * as PaymentIntentNS from "@thomasfosterau/effect-payments/PaymentIntent";
+import * as PriceNS from "@thomasfosterau/effect-payments/Price";
+import * as ProductNS from "@thomasfosterau/effect-payments/Product";
+import * as RefundNS from "@thomasfosterau/effect-payments/Refund";
+import * as SubscriptionNS from "@thomasfosterau/effect-payments/Subscription";
+import {
   type PaymentConfigError,
+  PaymentInvalidRequestError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
-import type { StripeParams } from "./internal/params.js";
-import { path, type RequestPath, withPath } from "./internal/index.js";
+import {
+  layer as clientLayer,
+  layerConfig as clientLayerConfig,
+  layerFromContext as clientLayerFromContext,
+  layerFromEnv as clientLayerFromEnv,
+  type Method,
+  type Operation,
+  StripeClient,
+} from "./internal/distilled.js";
 import {
   decodeBillingPortalSession,
   decodeCheckoutSession,
@@ -48,317 +99,424 @@ import {
   decodeSubscription,
   decodeSubscriptionPage,
 } from "./internal/mapping.js";
-import {
-  layer as httpLayer,
-  layerConfig as httpLayerConfig,
-  layerFromEnv as httpLayerFromEnv,
-  type LayerConfigOptions,
-  StripeHttp,
-  type StripeHttpConfig,
-  type StripeMethod,
-} from "./StripeHttp.js";
+import { omitUndefined } from "./internal/omitUndefined.js";
+import type { LayerConfigOptions, StripeHttpConfig } from "./StripeHttp.js";
 
 /**
- * One call through the transport, its response decoded by `decode`. Parameter
- * objects are passed as assembled: the form encoder skips `undefined` values.
- * `idempotencyKey` is the neutral key of a create or confirm operation, sent
- * as the `Idempotency-Key` header.
+ * The Stripe API version every capability layer pins in `Stripe-Version`
+ * unless configured: the one the pinned `@distilled.cloud/stripe` release's
+ * schemas are generated from (`2026-07-29.dahlia` for `1.0.0-rc.13`). It moves
+ * whenever this package moves its Distilled pin, so create the webhook
+ * endpoints whose events a program reads beside the capabilities at this
+ * version. The raw resource modules and `StripeHttp` pin `DEFAULT_API_VERSION`
+ * instead.
+ */
+export { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
+
+/**
+ * The requirements of a capability layer: Distilled's `Credentials` (the key
+ * and API origin, e.g. `Credentials.credentials({ apiKey })` from
+ * `@distilled.cloud/stripe/Credentials`) and an `HttpClient`.
+ */
+type Requirements = Credentials | HttpClient.HttpClient;
+
+/**
+ * Refuse an id that is not a non-empty string before anything is sent:
+ * Distilled would splice `""` into the path (`/v1/customers/` is the list),
+ * and an `undefined` from untyped code would leave the label in it.
+ */
+const checkId = (resource: string, id: string): Effect.Effect<void, PaymentInvalidRequestError> =>
+  Predicate.isString(id) && id !== ""
+    ? Effect.void
+    : Effect.fail(
+        new PaymentInvalidRequestError({
+          message: `The ${resource} id must be a non-empty string`,
+          param: "id",
+        }),
+      );
+
+/**
+ * One call through the client, its response decoded by `decode`. `id`, when
+ * given, names the resource and the path id the input carries, checked
+ * first; `idempotencyKey` is the neutral key of a create or confirm
+ * operation, sent as the `Idempotency-Key` header after
+ * `IdempotencyKey.validate`.
  */
 const call =
-  (http: StripeHttp["Service"]) =>
-  <A>(
-    method: StripeMethod,
-    requestPath: RequestPath,
-    params: StripeParams | undefined,
+  (client: StripeClient["Service"]) =>
+  <I, O, E, A>(
+    method: Method,
+    operation: Operation<I, O, E>,
+    input: I,
     decode: (body: unknown) => Effect.Effect<A, PaymentsError>,
-    idempotencyKey?: string | undefined,
+    options: {
+      readonly id?: readonly [resource: string, id: string] | undefined;
+      readonly idempotencyKey?: string | undefined;
+    } = {},
   ): Effect.Effect<A, PaymentsError> =>
     // The key is checked before anything is sent: the brand guarantees its
     // shape for typed callers, this refuses a raw string from untyped code.
-    Effect.flatMap(IdempotencyKeyNS.validate(idempotencyKey), (key) =>
-      withPath(requestPath, (valid) =>
-        Effect.flatMap(http.request({ method, path: valid, params, idempotencyKey: key }), decode),
+    Effect.flatMap(IdempotencyKeyNS.validate(options.idempotencyKey), (key) =>
+      (options.id === undefined ? Effect.void : checkId(...options.id)).pipe(
+        Effect.andThen(client.call(method, operation, input, key)),
+        Effect.flatMap(decode),
       ),
     );
+
+/** The request function a capability's implementation is written against. */
+type Request = ReturnType<typeof call>;
+
+/** A capability layer over the client, given the service it builds from it. */
+const over = <I, S>(
+  tag: Context.Key<I, S>,
+  build: (request: Request) => NoInfer<S>,
+): Layer.Layer<I, never, StripeClient> =>
+  Layer.effect(
+    tag,
+    Effect.map(StripeClient, (client) => build(call(client))),
+  );
 
 // ---------------------------------------------------------------------------
 // Customers
 // ---------------------------------------------------------------------------
 
-/** Stripe implementation of the {@link CustomerNS.Customers} capability. */
-export const customersLayer: Layer.Layer<CustomerNS.Customers, never, StripeHttp> = Layer.effect(
-  CustomerNS.Customers,
-  Effect.map(StripeHttp, (http) => {
-    const request = call(http);
-    const fields = (params: CustomerNS.UpdateParams) => ({
+const customers = /* @__PURE__ */ over(CustomerNS.Customers, (request) => {
+  const fields = (params: CustomerNS.UpdateParams) =>
+    omitUndefined({
       email: params.email,
       name: params.name,
       phone: params.phone,
       description: params.description,
       metadata: params.metadata,
     });
-    return CustomerNS.Customers.of({
-      create: (params) =>
-        request("POST", "/v1/customers", fields(params), decodeCustomer, params.idempotencyKey),
-      retrieve: (id) => request("GET", path`/v1/customers/${id}`, undefined, decodeCustomer),
-      update: (id, params) =>
-        request("POST", path`/v1/customers/${id}`, fields(params), decodeCustomer),
-      del: (id) => request("DELETE", path`/v1/customers/${id}`, undefined, decodeDeleted),
-      list: (params) =>
-        request(
-          "GET",
-          "/v1/customers",
-          { limit: params?.limit, email: params?.email, starting_after: params?.startingAfter },
-          decodeCustomerPage,
-        ),
-    });
-  }),
-);
+  return {
+    create: (params) =>
+      request("POST", CreateCustomer, fields(params), decodeCustomer, {
+        idempotencyKey: params.idempotencyKey,
+      }),
+    retrieve: (id) =>
+      request("GET", GetCustomer, { customer: id }, decodeCustomer, { id: ["customer", id] }),
+    update: (id, params) =>
+      request("POST", UpdateCustomer, { customer: id, ...fields(params) }, decodeCustomer, {
+        id: ["customer", id],
+      }),
+    del: (id) =>
+      request("DELETE", DeleteCustomer, { customer: id }, decodeDeleted, { id: ["customer", id] }),
+    list: (params) =>
+      request(
+        "GET",
+        GetCustomers,
+        omitUndefined({
+          limit: params?.limit,
+          email: params?.email,
+          starting_after: params?.startingAfter,
+        }),
+        decodeCustomerPage,
+      ),
+  };
+});
+
+/** Stripe implementation of the {@link CustomerNS.Customers} capability. */
+export const customersLayer: Layer.Layer<CustomerNS.Customers, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(customers, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // Products
 // ---------------------------------------------------------------------------
 
-/** Stripe implementation of the {@link ProductNS.Products} capability. */
-export const productsLayer: Layer.Layer<ProductNS.Products, never, StripeHttp> = Layer.effect(
-  ProductNS.Products,
-  Effect.map(StripeHttp, (http) => {
-    const request = call(http);
-    const fields = (params: ProductNS.UpdateParams) => ({
+const products = /* @__PURE__ */ over(ProductNS.Products, (request) => {
+  const fields = (params: ProductNS.UpdateParams) =>
+    omitUndefined({
       name: params.name,
       description: params.description,
       active: params.active,
       metadata: params.metadata,
     });
-    return ProductNS.Products.of({
-      create: (params) =>
-        request("POST", "/v1/products", fields(params), decodeProduct, params.idempotencyKey),
-      retrieve: (id) => request("GET", path`/v1/products/${id}`, undefined, decodeProduct),
-      update: (id, params) =>
-        request("POST", path`/v1/products/${id}`, fields(params), decodeProduct),
-      del: (id) => request("DELETE", path`/v1/products/${id}`, undefined, decodeDeleted),
-      list: (params) =>
-        request(
-          "GET",
-          "/v1/products",
-          { limit: params?.limit, active: params?.active, starting_after: params?.startingAfter },
-          decodeProductPage,
-        ),
-    });
-  }),
-);
+  return {
+    create: (params) =>
+      request("POST", CreateProduct, { ...fields(params), name: params.name }, decodeProduct, {
+        idempotencyKey: params.idempotencyKey,
+      }),
+    retrieve: (id) => request("GET", GetProduct, { id }, decodeProduct, { id: ["product", id] }),
+    update: (id, params) =>
+      request("POST", UpdateProduct, { id, ...fields(params) }, decodeProduct, {
+        id: ["product", id],
+      }),
+    del: (id) => request("DELETE", DeleteProduct, { id }, decodeDeleted, { id: ["product", id] }),
+    list: (params) =>
+      request(
+        "GET",
+        GetProducts,
+        omitUndefined({
+          limit: params?.limit,
+          active: params?.active,
+          starting_after: params?.startingAfter,
+        }),
+        decodeProductPage,
+      ),
+  };
+});
+
+/** Stripe implementation of the {@link ProductNS.Products} capability. */
+export const productsLayer: Layer.Layer<ProductNS.Products, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(products, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // Prices
 // ---------------------------------------------------------------------------
 
+const prices = /* @__PURE__ */ over(PriceNS.Prices, (request) => ({
+  create: (params) =>
+    request(
+      "POST",
+      CreatePrice,
+      omitUndefined({
+        product: params.product,
+        currency: params.currency,
+        unit_amount: params.unitAmount,
+        recurring:
+          params.recurring &&
+          omitUndefined({
+            interval: params.recurring.interval,
+            interval_count: params.recurring.intervalCount,
+          }),
+        active: params.active,
+        metadata: params.metadata,
+      }),
+      decodePrice,
+      { idempotencyKey: params.idempotencyKey },
+    ),
+  retrieve: (id) => request("GET", GetPrice, { price: id }, decodePrice, { id: ["price", id] }),
+  update: (id, params) =>
+    request(
+      "POST",
+      UpdatePrice,
+      { price: id, ...omitUndefined({ active: params.active, metadata: params.metadata }) },
+      decodePrice,
+      { id: ["price", id] },
+    ),
+  list: (params) =>
+    request(
+      "GET",
+      GetPrices,
+      omitUndefined({
+        limit: params?.limit,
+        product: params?.product,
+        active: params?.active,
+        starting_after: params?.startingAfter,
+      }),
+      decodePricePage,
+    ),
+}));
+
 /** Stripe implementation of the {@link PriceNS.Prices} capability. */
-export const pricesLayer: Layer.Layer<PriceNS.Prices, never, StripeHttp> = Layer.effect(
-  PriceNS.Prices,
-  Effect.map(StripeHttp, (http) => {
-    const request = call(http);
-    return PriceNS.Prices.of({
-      create: (params) =>
-        request(
-          "POST",
-          "/v1/prices",
-          {
-            product: params.product,
-            currency: params.currency,
-            unit_amount: params.unitAmount,
-            recurring: params.recurring && {
-              interval: params.recurring.interval,
-              interval_count: params.recurring.intervalCount,
-            },
-            active: params.active,
-            metadata: params.metadata,
-          },
-          decodePrice,
-          params.idempotencyKey,
-        ),
-      retrieve: (id) => request("GET", path`/v1/prices/${id}`, undefined, decodePrice),
-      update: (id, params) =>
-        request(
-          "POST",
-          path`/v1/prices/${id}`,
-          { active: params.active, metadata: params.metadata },
-          decodePrice,
-        ),
-      list: (params) =>
-        request(
-          "GET",
-          "/v1/prices",
-          {
-            limit: params?.limit,
-            product: params?.product,
-            active: params?.active,
-            starting_after: params?.startingAfter,
-          },
-          decodePricePage,
-        ),
-    });
-  }),
-);
+export const pricesLayer: Layer.Layer<PriceNS.Prices, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(prices, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // PaymentIntents
 // ---------------------------------------------------------------------------
 
-/** Stripe implementation of the {@link PaymentIntentNS.PaymentIntents} capability. */
-export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, never, StripeHttp> =
-  Layer.effect(
-    PaymentIntentNS.PaymentIntents,
-    Effect.map(StripeHttp, (http) => {
-      const request = call(http);
-      return PaymentIntentNS.PaymentIntents.of({
-        create: (params) =>
-          request(
-            "POST",
-            "/v1/payment_intents",
-            {
-              amount: params.amount,
-              currency: params.currency,
-              customer: params.customer,
-              payment_method: params.paymentMethod,
-              description: params.description,
-              metadata: params.metadata,
-            },
-            decodePaymentIntent,
-            params.idempotencyKey,
-          ),
-        retrieve: (id) =>
-          request("GET", path`/v1/payment_intents/${id}`, undefined, decodePaymentIntent),
-        update: (id, params) =>
-          request(
-            "POST",
-            path`/v1/payment_intents/${id}`,
-            { amount: params.amount, description: params.description, metadata: params.metadata },
-            decodePaymentIntent,
-          ),
-        confirm: (id, params) =>
-          request(
-            "POST",
-            path`/v1/payment_intents/${id}/confirm`,
-            { payment_method: params?.paymentMethod },
-            decodePaymentIntent,
-            params?.idempotencyKey,
-          ),
-        cancel: (id) =>
-          request("POST", path`/v1/payment_intents/${id}/cancel`, undefined, decodePaymentIntent),
-        list: (params) =>
-          request(
-            "GET",
-            "/v1/payment_intents",
-            {
-              limit: params?.limit,
-              customer: params?.customer,
-              starting_after: params?.startingAfter,
-            },
-            decodePaymentIntentPage,
-          ),
-      });
+const paymentIntents = /* @__PURE__ */ over(PaymentIntentNS.PaymentIntents, (request) => ({
+  create: (params) =>
+    request(
+      "POST",
+      CreatePaymentIntent,
+      omitUndefined({
+        amount: params.amount,
+        currency: params.currency,
+        customer: params.customer,
+        payment_method: params.paymentMethod,
+        description: params.description,
+        metadata: params.metadata,
+      }),
+      decodePaymentIntent,
+      { idempotencyKey: params.idempotencyKey },
+    ),
+  retrieve: (id) =>
+    request("GET", GetPaymentIntent, { intent: id }, decodePaymentIntent, {
+      id: ["payment intent", id],
     }),
-  );
+  update: (id, params) =>
+    request(
+      "POST",
+      UpdatePaymentIntent,
+      {
+        intent: id,
+        ...omitUndefined({
+          amount: params.amount,
+          description: params.description,
+          metadata: params.metadata,
+        }),
+      },
+      decodePaymentIntent,
+      { id: ["payment intent", id] },
+    ),
+  confirm: (id, params) =>
+    request(
+      "POST",
+      CreatePaymentIntentConfirm,
+      { intent: id, ...omitUndefined({ payment_method: params?.paymentMethod }) },
+      decodePaymentIntent,
+      { id: ["payment intent", id], idempotencyKey: params?.idempotencyKey },
+    ),
+  cancel: (id) =>
+    request("POST", CreatePaymentIntentCancel, { intent: id }, decodePaymentIntent, {
+      id: ["payment intent", id],
+    }),
+  list: (params) =>
+    request(
+      "GET",
+      GetPaymentIntents,
+      omitUndefined({
+        limit: params?.limit,
+        customer: params?.customer,
+        starting_after: params?.startingAfter,
+      }),
+      decodePaymentIntentPage,
+    ),
+}));
+
+/** Stripe implementation of the {@link PaymentIntentNS.PaymentIntents} capability. */
+export const paymentIntentsLayer: Layer.Layer<PaymentIntentNS.PaymentIntents, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(paymentIntents, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
 
-/** Stripe implementation of the {@link SubscriptionNS.Subscriptions} capability. */
-export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never, StripeHttp> =
-  Layer.effect(
-    SubscriptionNS.Subscriptions,
-    Effect.map(StripeHttp, (http) => {
-      const request = call(http);
-      return SubscriptionNS.Subscriptions.of({
-        create: (params) =>
-          request(
-            "POST",
-            "/v1/subscriptions",
-            {
-              customer: params.customer,
-              items: params.items.map((item) => ({ price: item.price, quantity: item.quantity })),
-              cancel_at_period_end: params.cancelAtPeriodEnd,
-              metadata: params.metadata,
-            },
-            decodeSubscription,
-            params.idempotencyKey,
-          ),
-        retrieve: (id) =>
-          request("GET", path`/v1/subscriptions/${id}`, undefined, decodeSubscription),
-        update: (id, params) =>
-          request(
-            "POST",
-            path`/v1/subscriptions/${id}`,
-            { cancel_at_period_end: params.cancelAtPeriodEnd, metadata: params.metadata },
-            decodeSubscription,
-          ),
-        cancel: (id) =>
-          request("DELETE", path`/v1/subscriptions/${id}`, undefined, decodeSubscription),
-        list: (params) =>
-          request(
-            "GET",
-            "/v1/subscriptions",
-            {
-              limit: params?.limit,
-              customer: params?.customer,
-              status: params?.status,
-              starting_after: params?.startingAfter,
-            },
-            decodeSubscriptionPage,
-          ),
-      });
+const subscriptions = /* @__PURE__ */ over(SubscriptionNS.Subscriptions, (request) => ({
+  create: (params) =>
+    request(
+      "POST",
+      CreateSubscription,
+      omitUndefined({
+        customer: params.customer,
+        items: params.items.map((item) =>
+          omitUndefined({ price: item.price, quantity: item.quantity }),
+        ),
+        cancel_at_period_end: params.cancelAtPeriodEnd,
+        metadata: params.metadata,
+      }),
+      decodeSubscription,
+      { idempotencyKey: params.idempotencyKey },
+    ),
+  retrieve: (id) =>
+    request("GET", GetSubscription, { subscription_exposed_id: id }, decodeSubscription, {
+      id: ["subscription", id],
     }),
-  );
+  update: (id, params) =>
+    request(
+      "POST",
+      UpdateSubscription,
+      {
+        subscription_exposed_id: id,
+        ...omitUndefined({
+          cancel_at_period_end: params.cancelAtPeriodEnd,
+          metadata: params.metadata,
+        }),
+      },
+      decodeSubscription,
+      { id: ["subscription", id] },
+    ),
+  cancel: (id) =>
+    request("DELETE", DeleteSubscription, { subscription_exposed_id: id }, decodeSubscription, {
+      id: ["subscription", id],
+    }),
+  list: (params) =>
+    request(
+      "GET",
+      GetSubscriptions,
+      omitUndefined({
+        limit: params?.limit,
+        customer: params?.customer,
+        status: params?.status,
+        starting_after: params?.startingAfter,
+      }),
+      decodeSubscriptionPage,
+    ),
+}));
+
+/** Stripe implementation of the {@link SubscriptionNS.Subscriptions} capability. */
+export const subscriptionsLayer: Layer.Layer<SubscriptionNS.Subscriptions, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(subscriptions, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // Refunds
 // ---------------------------------------------------------------------------
 
+const refunds = /* @__PURE__ */ over(RefundNS.Refunds, (request) => ({
+  create: (params) =>
+    request(
+      "POST",
+      CreateRefund,
+      omitUndefined({
+        payment_intent: params.paymentIntent,
+        charge: params.charge,
+        amount: params.amount,
+        // Passed through verbatim: Stripe validates `reason` against its
+        // enum and answers an unknown value with an invalid-request error.
+        reason: params.reason,
+        metadata: params.metadata,
+      }),
+      decodeRefund,
+      { idempotencyKey: params.idempotencyKey },
+    ),
+  retrieve: (id) => request("GET", GetRefund, { refund: id }, decodeRefund, { id: ["refund", id] }),
+  update: (id, params) =>
+    request(
+      "POST",
+      UpdateRefund,
+      { refund: id, ...omitUndefined({ metadata: params.metadata }) },
+      decodeRefund,
+      { id: ["refund", id] },
+    ),
+  list: (params) =>
+    request(
+      "GET",
+      GetRefunds,
+      omitUndefined({
+        limit: params?.limit,
+        payment_intent: params?.paymentIntent,
+        charge: params?.charge,
+        starting_after: params?.startingAfter,
+      }),
+      decodeRefundPage,
+    ),
+}));
+
 /** Stripe implementation of the {@link RefundNS.Refunds} capability. */
-export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, StripeHttp> = Layer.effect(
-  RefundNS.Refunds,
-  Effect.map(StripeHttp, (http) => {
-    const request = call(http);
-    return RefundNS.Refunds.of({
-      create: (params) =>
-        request(
-          "POST",
-          "/v1/refunds",
-          {
-            payment_intent: params.paymentIntent,
-            charge: params.charge,
-            amount: params.amount,
-            // Passed through verbatim: Stripe validates `reason` against its
-            // enum and answers an unknown value with an invalid-request error.
-            reason: params.reason,
-            metadata: params.metadata,
-          },
-          decodeRefund,
-          params.idempotencyKey,
-        ),
-      retrieve: (id) => request("GET", path`/v1/refunds/${id}`, undefined, decodeRefund),
-      update: (id, params) =>
-        request("POST", path`/v1/refunds/${id}`, { metadata: params.metadata }, decodeRefund),
-      list: (params) =>
-        request(
-          "GET",
-          "/v1/refunds",
-          {
-            limit: params?.limit,
-            payment_intent: params?.paymentIntent,
-            charge: params?.charge,
-            starting_after: params?.startingAfter,
-          },
-          decodeRefundPage,
-        ),
-    });
-  }),
-);
+export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, Requirements> =
+  /* @__PURE__ */ Layer.provide(refunds, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // CheckoutSessions
 // ---------------------------------------------------------------------------
+
+const checkoutSessions = /* @__PURE__ */ over(CheckoutSessionNS.CheckoutSessions, (request) => ({
+  create: (params) =>
+    request(
+      "POST",
+      CreateCheckoutSession,
+      omitUndefined({
+        mode: params.mode,
+        customer: params.customer,
+        line_items: params.lineItems.map((item) => ({
+          price: item.price,
+          quantity: item.quantity ?? 1,
+        })),
+        success_url: params.successUrl,
+        cancel_url: params.cancelUrl,
+        metadata: params.metadata,
+        subscription_data:
+          params.mode === "subscription" && params.subscriptionMetadata
+            ? { metadata: params.subscriptionMetadata }
+            : undefined,
+      }),
+      decodeCheckoutSession,
+      { idempotencyKey: params.idempotencyKey },
+    ),
+}));
 
 /**
  * Stripe implementation of the {@link CheckoutSessionNS.CheckoutSessions}
@@ -370,41 +528,25 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, StripeHttp> = La
 export const checkoutSessionsLayer: Layer.Layer<
   CheckoutSessionNS.CheckoutSessions,
   never,
-  StripeHttp
-> = Layer.effect(
-  CheckoutSessionNS.CheckoutSessions,
-  Effect.map(StripeHttp, (http) => {
-    const request = call(http);
-    return CheckoutSessionNS.CheckoutSessions.of({
-      create: (params) =>
-        request(
-          "POST",
-          "/v1/checkout/sessions",
-          {
-            mode: params.mode,
-            customer: params.customer,
-            line_items: params.lineItems.map((item) => ({
-              price: item.price,
-              quantity: item.quantity ?? 1,
-            })),
-            success_url: params.successUrl,
-            cancel_url: params.cancelUrl,
-            metadata: params.metadata,
-            subscription_data:
-              params.mode === "subscription" && params.subscriptionMetadata
-                ? { metadata: params.subscriptionMetadata }
-                : undefined,
-          },
-          decodeCheckoutSession,
-          params.idempotencyKey,
-        ),
-    });
-  }),
-);
+  Requirements
+> = /* @__PURE__ */ Layer.provide(checkoutSessions, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // BillingPortalSessions
 // ---------------------------------------------------------------------------
+
+const billingPortalSessions = /* @__PURE__ */ over(
+  BillingPortalNS.BillingPortalSessions,
+  (request) => ({
+    create: (params) =>
+      request(
+        "POST",
+        CreateBillingPortalSession,
+        { customer: params.customer, return_url: params.returnUrl },
+        decodeBillingPortalSession,
+      ),
+  }),
+);
 
 /**
  * Stripe implementation of the {@link BillingPortalNS.BillingPortalSessions}
@@ -414,31 +556,30 @@ export const checkoutSessionsLayer: Layer.Layer<
 export const billingPortalSessionsLayer: Layer.Layer<
   BillingPortalNS.BillingPortalSessions,
   never,
-  StripeHttp
-> = Layer.effect(
-  BillingPortalNS.BillingPortalSessions,
-  Effect.map(StripeHttp, (http) => {
-    const request = call(http);
-    return BillingPortalNS.BillingPortalSessions.of({
-      create: (params) =>
-        request(
-          "POST",
-          "/v1/billing_portal/sessions",
-          { customer: params.customer, return_url: params.returnUrl },
-          decodeBillingPortalSession,
-        ),
-    });
-  }),
-);
+  Requirements
+> = /* @__PURE__ */ Layer.provide(billingPortalSessions, clientLayerFromContext);
 
 // ---------------------------------------------------------------------------
 // Bundles
 // ---------------------------------------------------------------------------
 
+/** Every capability over one client. */
+const every = /* @__PURE__ */ Layer.mergeAll(
+  customers,
+  products,
+  prices,
+  paymentIntents,
+  subscriptions,
+  refunds,
+  checkoutSessions,
+  billingPortalSessions,
+);
+
 /**
- * Every neutral capability implemented on top of an existing
- * {@link StripeHttp} transport — the fetch one (`StripeHttp.layer`) or the
- * SDK one (`Stripe.layer`), provided separately.
+ * Every neutral capability over Distilled's `Credentials` and an `HttpClient`
+ * in context, at the default request policy (`Stripe-Version` pinned to
+ * {@link DISTILLED_API_VERSION}, two retries, 80 s per attempt). Use {@link layer} to
+ * configure the policy.
  */
 export const capabilities: Layer.Layer<
   | CustomerNS.Customers
@@ -450,50 +591,44 @@ export const capabilities: Layer.Layer<
   | CheckoutSessionNS.CheckoutSessions
   | BillingPortalNS.BillingPortalSessions,
   never,
-  StripeHttp
-> = Layer.mergeAll(
-  customersLayer,
-  productsLayer,
-  pricesLayer,
-  paymentIntentsLayer,
-  subscriptionsLayer,
-  refundsLayer,
-  checkoutSessionsLayer,
-  billingPortalSessionsLayer,
-);
+  Requirements
+> = /* @__PURE__ */ Layer.provide(every, clientLayerFromContext);
 
 /**
- * Every neutral capability over the fetch transport, built from
- * configuration. Requires an `HttpClient` (`FetchHttpClient.layer`).
+ * Every neutral capability, built from configuration: the key and base URL
+ * become Distilled's credentials, and the API version, retries, timeout and
+ * connected account are the request policy (`uploadsBaseUrl` is unused: no
+ * capability uploads). Fails with `PaymentConfigError` for an empty key.
+ * Requires an `HttpClient` (`FetchHttpClient.layer`).
  */
 export const layer = (
   config: StripeHttpConfig,
 ): Layer.Layer<Layer.Success<typeof capabilities>, PaymentConfigError, HttpClient.HttpClient> =>
-  Layer.provide(capabilities, httpLayer(config));
+  Layer.provide(every, clientLayer(config));
 
 /**
- * Every neutral capability over the fetch transport, with the key read from
- * a configuration variable (`STRIPE_API_KEY` by default). Requires an
+ * Every neutral capability, with the key read from a configuration variable
+ * (`STRIPE_API_KEY` by default) while the layer is built. Requires an
  * `HttpClient` (`FetchHttpClient.layer`).
  */
 export const layerFromEnv = (
-  envVar?: string,
+  envVar: string = "STRIPE_API_KEY",
 ): Layer.Layer<Layer.Success<typeof capabilities>, PaymentConfigError, HttpClient.HttpClient> =>
-  Layer.provide(capabilities, httpLayerFromEnv(envVar));
+  Layer.provide(every, clientLayerFromEnv(envVar));
 
 /**
  * Every neutral capability in the "not configured ≡ down" posture: the key is
  * read from a configuration variable (`STRIPE_API_KEY` by default) at CALL
  * time, never while the layer is built, so building it cannot fail and an
  * application without Stripe configured still starts. While the variable is
- * absent every capability call fails with `PaymentsUnavailable`; once it is
- * present, calls go over the fetch transport. Requires an `HttpClient`
- * (`FetchHttpClient.layer`). Each call reads the calling fiber's
- * `ConfigProvider` first, then falls back to the one the layer was built
- * under, so a provider attached with `Layer.provide` is honoured. See
- * `StripeHttp.layerConfig`.
+ * absent, empty or unreadable every capability call fails with
+ * `PaymentsUnavailable` before anything is sent; once it is present, calls go
+ * to Stripe with that key. Requires an `HttpClient` (`FetchHttpClient.layer`).
+ * Each call reads the calling fiber's `ConfigProvider` first, then falls back
+ * to the one the layer was built under, so a provider attached with
+ * `Layer.provide` is honoured.
  */
 export const layerConfig = (
-  options?: LayerConfigOptions,
+  options: LayerConfigOptions = {},
 ): Layer.Layer<Layer.Success<typeof capabilities>, never, HttpClient.HttpClient> =>
-  Layer.provide(capabilities, httpLayerConfig(options));
+  Layer.provide(every, clientLayerConfig(options));

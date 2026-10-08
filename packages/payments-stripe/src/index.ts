@@ -4,13 +4,15 @@
  * The Stripe implementation of the vendor-neutral
  * `@thomasfosterau/effect-payments` core. It provides:
  *
- * - **`StripeHttp`** — the fetch-only transport over `effect/http`'s
- *   `HttpClient` (form-encoded bodies, pinned `Stripe-Version`, `Redacted`
- *   key), which runs in a Cloudflare Worker with no Node API and no SDK.
  * - **`StripePayments`** — `Layer`s that implement every neutral capability
- *   (including `CheckoutSessions` and `BillingPortalSessions`) over that
- *   transport, plus the `layer` / `layerFromEnv` / `layerConfig` bundles of
- *   the transport and every capability.
+ *   (including `CheckoutSessions` and `BillingPortalSessions`) over
+ *   Distilled's Stripe operations (`@distilled.cloud/stripe`), with a pinned
+ *   `Stripe-Version`, the SDK's retry policy and Stripe's failures mapped onto
+ *   the neutral errors, plus the `layer` / `layerFromEnv` / `layerConfig`
+ *   bundles that build every capability from configuration.
+ * - **`StripeHttp`** — the fetch-only transport of the raw resource modules,
+ *   over `effect/http`'s `HttpClient` (form-encoded bodies, pinned
+ *   `Stripe-Version`, `Redacted` key), with no Node API and no SDK.
  * - **Raw resource modules** (`Customer`, `Product`, `Charge`, `Treasury`, …) —
  *   the full-fidelity Stripe escape hatch for the many resources that have no
  *   vendor-neutral equivalent, typed with the `stripe` package's declarations,
@@ -48,7 +50,7 @@
 // and the neutral error channel).
 export * as Payments from "@thomasfosterau/effect-payments";
 
-// The fetch-only transport + neutral capability implementations. The SDK
+// The neutral capability implementations + the raw modules' transport. The SDK
 // transport (`./Stripe`) is deliberately not re-exported here: it loads the
 // optional `stripe` peer, and this entry point must load without it.
 export * as StripeHttp from "./StripeHttp.js";
