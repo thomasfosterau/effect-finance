@@ -523,6 +523,7 @@ describe("PayPal client secrets", () => {
             ConfigProvider.fromUnknown({
               PAYPAL_CLIENT_ID: "client_env",
               PAYPAL_CLIENT_SECRET: "secret_env",
+              PAYPAL_ENV: "live",
             }),
           ),
         ),
@@ -540,7 +541,12 @@ describe("PayPal client secrets", () => {
           Effect.scoped,
           Effect.provide(http),
           Effect.provide(
-            ConfigProvider.layer(ConfigProvider.fromUnknown({ PAYPAL_CLIENT_ID: "client_env" })),
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown({
+                PAYPAL_CLIENT_ID: "client_env",
+                PAYPAL_ENV: "live",
+              }),
+            ),
           ),
         ),
       ),
@@ -686,7 +692,11 @@ describe("PayPal layerFromEnv and empty variables", () => {
     ).pipe(
       Effect.provide(layerFromEnv()),
       Effect.provide(http),
-      Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: values, ...options }))),
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({ env: { PAYPAL_ENV: "live", ...values }, ...options }),
+        ),
+      ),
     );
     return { program, calls };
   };
@@ -705,7 +715,7 @@ describe("PayPal layerFromEnv and empty variables", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("uses the default endpoint when PAYPAL_BASE_URL is empty", async () => {
+  it("uses the PAYPAL_ENV endpoint when PAYPAL_BASE_URL is empty", async () => {
     const { program, calls } = build({
       PAYPAL_CLIENT_ID: "client_env",
       PAYPAL_CLIENT_SECRET: "secret_env",
@@ -734,6 +744,82 @@ describe("PayPal layerFromEnv and empty variables", () => {
     expect(error).toBeInstanceOf(PaymentConfigError);
     expect(error.message).toContain("baseUrl");
     expect(calls).toHaveLength(0);
+  });
+});
+
+// #90: PAYPAL_ENV is required and selects the endpoint; PAYPAL_BASE_URL,
+// when set, still wins.
+describe("PayPal PAYPAL_ENV", () => {
+  const CREDENTIALS = { PAYPAL_CLIENT_ID: "client_env", PAYPAL_CLIENT_SECRET: "secret_env" };
+  const build = (values: Record<string, string>) => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+    const program = Effect.flatMap(PayPalClient, (client) =>
+      client.request({ method: "GET", path: "/probe" }),
+    ).pipe(
+      Effect.provide(layerFromEnv()),
+      Effect.provide(http),
+      Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: values }))),
+    );
+    return { program, calls };
+  };
+
+  it.each([
+    ["live", "https://api-m.paypal.com"],
+    ["sandbox", "https://api-m.sandbox.paypal.com"],
+  ] as const)("sends %s requests to %s", async (environment, host) => {
+    const { program, calls } = build({ ...CREDENTIALS, PAYPAL_ENV: environment });
+    await Effect.runPromise(program);
+    expect(calls.map((call) => call.url)).toEqual([`${host}${LOGIN_PATH}`, `${host}/probe`]);
+  });
+
+  it.each([
+    ["is unset", CREDENTIALS],
+    ["is empty", { ...CREDENTIALS, PAYPAL_ENV: "" }],
+    ["is not live or sandbox", { ...CREDENTIALS, PAYPAL_ENV: "production" }],
+    [
+      "is unset, even with PAYPAL_BASE_URL",
+      { ...CREDENTIALS, PAYPAL_BASE_URL: "https://proxy.example.test" },
+    ],
+  ] as const)(
+    "fails with a PaymentConfigError naming PAYPAL_ENV when it %s",
+    async (_label, values) => {
+      const { program, calls } = build(values);
+      const error = await Effect.runPromise(Effect.flip(program));
+      expect(error).toBeInstanceOf(PaymentConfigError);
+      expect(error.message).toContain("PAYPAL_ENV");
+      expect(calls).toHaveLength(0);
+    },
+  );
+
+  it("lets PAYPAL_BASE_URL override the PAYPAL_ENV endpoint", async () => {
+    const { program, calls } = build({
+      ...CREDENTIALS,
+      PAYPAL_ENV: "sandbox",
+      PAYPAL_BASE_URL: "https://proxy.example.test",
+    });
+    await Effect.runPromise(program);
+    expect(calls[0]?.url).toBe(`https://proxy.example.test${LOGIN_PATH}`);
+  });
+
+  it("maps make's environment option, live by default, with baseUrl winning", async () => {
+    const loginUrl = async (over: Partial<PayPalConfig>) => {
+      const { http, calls } = stubFetch(() => jsonResponse(200, { id: "x" }));
+      await Effect.runPromise(
+        make(config(over)).pipe(
+          Effect.flatMap((client) => client.request({ method: "GET", path: "/probe" })),
+          Effect.provide(http),
+        ),
+      );
+      return calls[0]?.url;
+    };
+    expect(await loginUrl({})).toBe(`https://api-m.paypal.com${LOGIN_PATH}`);
+    expect(await loginUrl({ environment: "live" })).toBe(`https://api-m.paypal.com${LOGIN_PATH}`);
+    expect(await loginUrl({ environment: "sandbox" })).toBe(
+      `https://api-m.sandbox.paypal.com${LOGIN_PATH}`,
+    );
+    expect(await loginUrl({ environment: "sandbox", baseUrl: "https://proxy.example.test" })).toBe(
+      `https://proxy.example.test${LOGIN_PATH}`,
+    );
   });
 });
 
