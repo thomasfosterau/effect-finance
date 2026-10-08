@@ -131,7 +131,7 @@ The rules:
   | Stripe | 255 characters | at least 24 hours | unverified ([#93](https://github.com/thomasfosterau/effect-payments/issues/93)) |
   | Airwallex | about 64 characters | unknown | unverified ([#93](https://github.com/thomasfosterau/effect-payments/issues/93)) |
 
-  The 1 to 64 character shape fits PayPal's limits and stays within the unverified Stripe and Airwallex figures.
+  The 1 to 64 character shape fits PayPal's Orders (1 to 108) and Payments (refunds, 1 to 10 000) limits; PayPal states no limit for Catalog Products and Subscriptions. It stays within the unverified Stripe and Airwallex figures.
 
 Mapping: Stripe sends `Idempotency-Key`; PayPal sends `PayPal-Request-Id` (on the `POST`); Airwallex sends `request_id` in place of its fresh per-call id. Without a key, PayPal sends no id, Airwallex keeps a fresh per-call `request_id` and Stripe's transport generates a key of its own per call (for its own internal retries); none of those deduplicates your retry.
 
