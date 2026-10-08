@@ -1,7 +1,7 @@
 /**
  * The one Vite+ configuration every package in this workspace shares: the
- * task graph (`check`, `build`, `test:unit`, `test:coverage`), the `vp pack`
- * (tsdown) settings and the vitest / coverage settings. Each
+ * task graph (`check`, `build`, `test:unit`, `test:coverage`, `docgen`), the
+ * `vp pack` (tsdown) settings and the vitest / coverage settings. Each
  * `packages/<name>/vite.config.ts` is a one-call instantiation of it.
  *
  * Adapted from the effect-web library's `vite.package.ts`. The difference is
@@ -29,6 +29,7 @@ const cacheInputs = [
   { auto: true },
   "!node_modules/**",
   "!coverage/**",
+  "!docs/**",
   { pattern: "!node_modules/**", base: "workspace" as const },
   { pattern: "pnpm-lock.yaml", base: "workspace" as const },
 ];
@@ -95,6 +96,17 @@ export const packageConfig = ({ url }: PackageConfigOptions) => {
           env: ["VITEST_MAX_WORKERS", "NODE_OPTIONS"],
           input: cacheInputs,
           output: ["coverage/**"],
+        },
+        // Type-checks AND RUNS every JSDoc `@example` (see the package's
+        // docgen.json), then writes the git-ignored API reference to `docs/`.
+        // An example imports packages by name exactly as a consumer does,
+        // which resolves through `exports` to `dist/`: this package's own
+        // build edge (which carries the sibling builds with it).
+        docgen: {
+          command: "docgen",
+          dependsOn: ["build"],
+          input: cacheInputs,
+          output: ["docs/**"],
         },
       },
     },

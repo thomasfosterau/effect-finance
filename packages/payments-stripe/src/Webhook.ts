@@ -491,18 +491,21 @@ export interface WebhookConfig {
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
  * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
- * const program = Effect.gen(function* () {
- *   const event = yield* Webhook.constructEvent(
- *     requestBody,
- *     stripeSignatureHeader,
- *     "whsec_your_secret"
- *   );
- *   console.log("Event type:", event.type);
- *   return event;
- * });
+ * const handle = (requestBody: string, stripeSignatureHeader: string) =>
+ *   Effect.gen(function* () {
+ *     const event = yield* Webhook.constructEvent(
+ *       requestBody,
+ *       stripeSignatureHeader,
+ *       "whsec_your_secret"
+ *     );
+ *     console.log("Event type:", event.type);
+ *     return event;
+ *   });
  *
  * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
- * await Effect.runPromise(program.pipe(Effect.provide(layer)));
+ * // Run once per delivery, with the raw body and its Stripe-Signature header.
+ * const onDelivery = (requestBody: string, stripeSignatureHeader: string) =>
+ *   Effect.runPromise(handle(requestBody, stripeSignatureHeader).pipe(Effect.provide(layer)));
  * ```
  */
 export const constructEvent = (
@@ -548,18 +551,21 @@ export const constructEvent = (
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
  * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
- * const program = Effect.gen(function* () {
- *   const event = yield* Webhook.constructEventAsync(
- *     requestBody,
- *     stripeSignatureHeader,
- *     "whsec_your_secret"
- *   );
- *   console.log("Event type:", event.type);
- *   return event;
- * });
+ * const handle = (requestBody: string, stripeSignatureHeader: string) =>
+ *   Effect.gen(function* () {
+ *     const event = yield* Webhook.constructEventAsync(
+ *       requestBody,
+ *       stripeSignatureHeader,
+ *       "whsec_your_secret"
+ *     );
+ *     console.log("Event type:", event.type);
+ *     return event;
+ *   });
  *
  * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
- * await Effect.runPromise(program.pipe(Effect.provide(layer)));
+ * // Run once per delivery, with the raw body and its Stripe-Signature header.
+ * const onDelivery = (requestBody: string, stripeSignatureHeader: string) =>
+ *   Effect.runPromise(handle(requestBody, stripeSignatureHeader).pipe(Effect.provide(layer)));
  * ```
  */
 export const constructEventAsync = (

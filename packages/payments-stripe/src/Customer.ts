@@ -28,9 +28,9 @@
  *   Layer.provide(FetchHttpClient.layer),
  * );
  *
- * const customers = await Effect.runPromise(
- *   Customer.list({ limit: 10 }).pipe(Effect.provide(layer)),
- * );
+ * // Calls Stripe when invoked, so it needs a real key.
+ * const listCustomers = () =>
+ *   Effect.runPromise(Customer.list({ limit: 10 }).pipe(Effect.provide(layer)));
  * ```
  *
  * @module

@@ -3,9 +3,9 @@
  *
  * Root workspace config. Owns the repo-wide format/lint/staged passes (read
  * statically by `vp fmt` / `vp lint` / `vp staged`) and the root `check` /
- * `test:coverage` aggregates. Every package's own tasks (`check`, `test:unit`,
- * `build`) live in that package's vite.config.ts via ./vite.package.ts; this
- * file deliberately compiles nothing.
+ * `docgen` / `test:coverage` aggregates. Every package's own tasks (`check`,
+ * `test:unit`, `build`, `docgen`) live in that package's vite.config.ts via
+ * ./vite.package.ts; this file deliberately compiles nothing.
  *
  * Copied from the effect-web library's root config (itself from the
  * effect-drizzle-ext library and the gardeneria application): every comment
@@ -236,6 +236,20 @@ export default defineConfig({
           "@thomasfosterau/effect-payments-paypal#check",
           "@thomasfosterau/effect-payments-airwallex#check",
           "@effect-payments/dist-consumer#check",
+        ],
+        cache: false,
+      },
+      // Every package's docgen: type-checks AND RUNS each JSDoc `@example`
+      // against the built `dist/`, then writes the API reference under that
+      // package's (git-ignored) `docs/`. Same pure-graph-node shape as
+      // `check`, so a new package adds itself here too.
+      docgen: {
+        command: "echo 'docgen: every example compiled and ran'",
+        dependsOn: [
+          "@thomasfosterau/effect-payments#docgen",
+          "@thomasfosterau/effect-payments-stripe#docgen",
+          "@thomasfosterau/effect-payments-paypal#docgen",
+          "@thomasfosterau/effect-payments-airwallex#docgen",
         ],
         cache: false,
       },

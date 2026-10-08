@@ -28,7 +28,8 @@
  *   clientId: "...",
  *   apiKey: Redacted.make("..."),
  * }).pipe(Layer.provide(FetchHttpClient.layer));
- * const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+ * // Calls Airwallex when invoked, so it needs real credentials.
+ * const run = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  *
  * @module

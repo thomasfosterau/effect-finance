@@ -16,7 +16,7 @@ Hooks are managed by Vite+; the editable [.vite-hooks/pre-commit](.vite-hooks/pr
 
 ## CI expectations
 
-[ci.yml](.github/workflows/ci.yml) runs one job: `vp check` (format + lint), `vp run check` (the type gate, including the dist-consumer check against the emitted declarations), `vp run -r test:unit`, `vp run -r build`, a regenerate-and-diff of `packages/payments-stripe/src/internal/generated` (`generate:schemas`; fetches the pinned spec), and `pnpm audit --audit-level high`. [release.yml](.github/workflows/release.yml) runs changesets/action on `trunk`: it opens the version PR while unreleased changesets exist and publishes to npmjs once it merges, via OIDC trusted publishing (see [PUBLISHING.md](PUBLISHING.md)).
+[ci.yml](.github/workflows/ci.yml) runs one job: `vp check` (format + lint), `vp run check` (the type gate, including the dist-consumer check against the emitted declarations), `vp run -r test:unit`, `vp run -r build`, `vp run docgen` (type-checks and runs every JSDoc `@example` against `dist/`), a regenerate-and-diff of `packages/payments-stripe/src/internal/generated` (`generate:schemas`; fetches the pinned spec), and `pnpm audit --audit-level high`. [release.yml](.github/workflows/release.yml) runs changesets/action on `trunk`: it opens the version PR while unreleased changesets exist and publishes to npmjs once it merges, via OIDC trusted publishing (see [PUBLISHING.md](PUBLISHING.md)).
 
 ## Docs to update with a change
 
@@ -32,6 +32,7 @@ vp run --filter ./packages/payments-stripe check      # one package's type gate
 vp run -r test:unit                                   # unit tests
 vp test run tests/Webhook.test.ts                     # single file (from inside the package)
 vp run -r build                                       # emit dist/
+vp run docgen                                         # type-check and run every JSDoc @example
 vp run test:coverage                                  # one Istanbul map for fallow
 vp run fallow:audit                                   # change-set review (not a CI gate)
 ```
