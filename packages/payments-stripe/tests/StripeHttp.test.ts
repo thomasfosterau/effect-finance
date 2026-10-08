@@ -23,6 +23,7 @@ import {
   type StripeRequest,
 } from "../src/StripeHttp.ts";
 import { type CapturedRequest, jsonResponse, stubFetch, withTestClock } from "./support.ts";
+import customer from "./fixtures/basil/customer.json" with { type: "json" };
 
 const KEY = "sk_test_not_a_real_key_4242";
 
@@ -46,6 +47,9 @@ const send = (
 };
 
 const ok = () => jsonResponse(200, { id: "cus_1", object: "customer" });
+
+/** A whole customer, for the `Customer` module (which decodes its responses). */
+const customerOk = () => jsonResponse(200, customer);
 
 /** Run to a neutral failure, under a `TestClock` so backoff elapses at once. */
 const failure = (effect: Effect.Effect<unknown, PaymentsError | PaymentConfigError>) =>
@@ -544,7 +548,7 @@ describe("StripeHttp configuration", () => {
   });
 
   it("reads the key from configuration as a Redacted", async () => {
-    const { http, calls } = stubFetch(ok);
+    const { http, calls } = stubFetch(customerOk);
     await Effect.runPromise(
       Customer.retrieve("cus_1").pipe(
         Effect.provide(layerFromEnv()),
@@ -642,7 +646,7 @@ describe("resource modules over the fetch transport", () => {
   });
 
   it("encodes a path segment", async () => {
-    const { http, calls } = stubFetch(ok);
+    const { http, calls } = stubFetch(customerOk);
     await Effect.runPromise(
       Customer.retrieve("cus_1/../balance").pipe(
         Effect.provide(layer(config())),

@@ -14,8 +14,8 @@
  * - **Raw resource modules** (`Customer`, `Product`, `Charge`, `Treasury`, …) —
  *   the full-fidelity Stripe escape hatch for the many resources that have no
  *   vendor-neutral equivalent, typed with the `stripe` package's declarations,
- *   except `CheckoutSession` and `BillingPortal.Session`, which are generated
- *   from Stripe's OpenAPI spec and decoded.
+ *   except `CheckoutSession`, `BillingPortal.Session`, `Customer`, `Product`
+ *   and `Price`, which are generated from Stripe's OpenAPI spec and decoded.
  *
  * The official SDK is an optional alternative transport, imported from its
  * own subpath (`@thomasfosterau/effect-payments-stripe/Stripe`) and never
