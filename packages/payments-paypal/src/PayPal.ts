@@ -115,9 +115,10 @@ export interface PayPalRequest {
    * an endpoint that ignores it is simply not deduplicated). PayPal's OpenAPI
    * specifications set the limits per API: Orders (`/v2/checkout/orders` and
    * its `capture`) takes 1 to 108 characters and keeps the id for 6 hours by
-   * default (up to 72 on request to PayPal); Catalog Products and
-   * Subscriptions (`/v1/billing/plans`, `/v1/billing/subscriptions`) state no
-   * length limit and keep it for 72 hours; Payments (refunds) takes 1 to
+   * default (up to 72 on request to PayPal); Catalog Products
+   * (`/v1/catalogs/products`) and Subscriptions (`/v1/billing/plans`,
+   * `/v1/billing/subscriptions`) state no length limit and keep it for 72
+   * hours; Payments (refunds) takes 1 to
    * 10 000 characters and states no retention. An empty string fails with
    * `PaymentInvalidRequestError` before anything is sent, and a `GET`,
    * `PATCH` or `DELETE` carrying one is rejected the same way rather than
