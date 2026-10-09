@@ -1,5 +1,5 @@
 /**
- * The one route every resource-module operation has: a Distilled operation
+ * The one form every resource-module operation takes: a Distilled operation
  * called with the resource's path ids first, then the rest of its input,
  * then the caller's {@link RequestOptions}, through the {@link StripeHttp}
  * client in context.
@@ -15,7 +15,7 @@ import { Effect, Predicate } from "effect";
 import { PaymentInvalidRequestError, type PaymentsError } from "@thomasfosterau/effect-payments";
 import { type Method, type Operation, type RequestOptions, StripeHttp } from "../StripeHttp.js";
 
-/** Where an operation's call goes: what it needs to know of its Distilled operation. */
+/** What an operation's call needs to know of its Distilled operation. */
 export interface Route {
   /** The operation's HTTP method (a `POST` gets a generated key when it may be retried). */
   readonly method: Method;
