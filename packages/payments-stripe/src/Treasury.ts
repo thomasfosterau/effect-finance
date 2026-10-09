@@ -1,11 +1,11 @@
 /**
  * Stripe Treasury as one namespace: re-exports the `FinancialAccount`,
  * `Transaction`, `InboundTransfer` and `OutboundTransfer` raw resource modules
- * (each also published on its own `./Treasury.<Name>` subpath). Results are
- * typed with the `stripe` package's declarations and are not decoded.
+ * (each also published on its own `./Treasury.<Name>` subpath): Distilled's
+ * operations on each, typed with its declarations and not validated.
  *
  * Operations require `StripeHttp`: provide `StripeHttp.layer` (with
- * `FetchHttpClient.layer`) or the SDK transport's `Stripe.layer`.
+ * `FetchHttpClient.layer`), `StripeHttp.layerConfig` or `StripeHttp.layerFromEnv`.
  *
  * @module
  */

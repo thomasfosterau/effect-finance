@@ -3,6 +3,8 @@ import { describe, it, expect, expectTypeOf } from "vite-plus/test";
 import { readFileSync } from "node:fs";
 // oxlint-disable-next-line effect/avoid-node-imports -- see the import above
 import { createRequire } from "node:module";
+// oxlint-disable-next-line effect/avoid-node-imports -- see the import above
+import { pathToFileURL } from "node:url";
 import { Schema } from "effect";
 import type { CreateWebhookEndpointRequestApiVersion } from "@distilled.cloud/stripe/stripe";
 import { DISTILLED_API_VERSION } from "../src/StripePayments.ts";
@@ -29,7 +31,7 @@ const Manifest = Schema.Struct({
 const installedVersion = (): string => {
   const entry = createRequire(import.meta.url).resolve("@distilled.cloud/stripe");
   // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
-  const text = readFileSync(new URL("../package.json", `file://${entry}`), "utf8");
+  const text = readFileSync(new URL("../package.json", pathToFileURL(entry)), "utf8");
   return Schema.decodeUnknownSync(Schema.fromJsonString(Manifest))(text).version;
 };
 

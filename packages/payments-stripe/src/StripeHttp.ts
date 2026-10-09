@@ -1,39 +1,46 @@
 /**
- * The fetch-only Stripe transport.
+ * The Stripe client every resource module and capability layer runs on:
+ * Distilled's generated operations (`@distilled.cloud/stripe`), run under the
+ * request policy this package has always applied to Stripe.
  *
- * `StripeHttp` is the one service every Stripe resource module and capability
- * layer runs on: a single {@link StripeHttp.request} that speaks Stripe's v1
- * wire protocol over `effect/http`'s `HttpClient`. It needs no Node
- * API and no SDK, so it runs unchanged in a Cloudflare Worker — provide
+ * Distilled builds and sends each request (the bearer key from its
+ * `Credentials`, Stripe's bracketed form encoding, the `Idempotency-Key` /
+ * `Stripe-Account` / `Stripe-Version` headers from `withRequestOptions`) and
+ * reads the response, over `effect/http`'s `HttpClient`: no Node API and no
+ * SDK, so it runs in a Cloudflare Worker (with `nodejs_compat`, since
+ * Distilled reads `process.env` on every request) — provide
  * `FetchHttpClient.layer` in production, or a stubbed `FetchHttpClient.Fetch`
- * in tests.
+ * in tests. Around every operation {@link StripeHttp.call}:
  *
- * What it does on every call:
+ * - **pins `Stripe-Version`** to {@link DISTILLED_API_VERSION}, the version
+ *   Distilled's schemas are generated from, unless configured
+ *   ({@link StripeHttpConfig.apiVersion}) or overridden for one call
+ *   ({@link RequestOptions.apiVersion}). Distilled sends the header only when
+ *   asked, and otherwise the account's dashboard default would decide the
+ *   wire shape;
+ * - **pins lenient response validation**, so a response is never refused
+ *   over a field nobody reads: Distilled's schemas mark fields required that
+ *   a response at an older configured `apiVersion` lacks. The capability
+ *   layers decode the fields they map instead; the resource modules return
+ *   the response as Stripe sent it;
+ * - **owns retries**: Distilled's are switched off, and an attempt that failed
+ *   to connect, or answered `409` / `5xx` (as `Stripe-Should-Retry` allows),
+ *   is retried with the SDK's backoff, reusing one `Idempotency-Key` across
+ *   the attempts of a `POST`;
+ * - **times out** each attempt and **refuses redirects**, which would replay
+ *   the `Authorization` header to whatever host they named;
+ * - **classifies failures** onto the neutral {@link PaymentsError} channel with
+ *   the package's one Stripe error mapping. Distilled's error classes carry
+ *   neither the HTTP status (which decides 401, 403 and 429 whatever the body
+ *   says) nor the whole vendor error object, so the client watches the
+ *   response through the `HttpClient` it hands Distilled and classifies that.
+ *   A failure with no response behind it is a connection failure
+ *   (`PaymentNetworkError`), or a Distilled error mapped to
+ *   `PaymentProviderError` by its tag.
  *
- * - **Authenticates** with the secret key as a bearer token. The key is a
- *   `Redacted` from configuration to the header and never reaches an error or
- *   a log line.
- * - **Pins the API version** in a `Stripe-Version` header
- *   ({@link DEFAULT_API_VERSION} unless configured), so an account-level
- *   dashboard setting cannot change the wire shape under the decoders.
- * - **Form-encodes** parameters the way the SDK does (bracketed nesting,
- *   `items[0][price]`), as the body of a `POST` or the query of a `GET` /
- *   `DELETE`; a file upload goes as `multipart/form-data` to the uploads host.
- * - **Refuses redirects** (`redirect: "error"` on the fetch client): following
- *   one would replay the `Authorization` header at whatever host it named.
- *   `fetch` reports a refused redirect as a network failure, which cannot be
- *   told apart portably from any other, so it is retried like one and then
- *   fails with `PaymentNetworkError`; no attempt ever reaches the redirect
- *   target.
- * - **Retries** connection failures, `409`s and `5xx`s (deferring to a
- *   `Stripe-Should-Retry` header) with the SDK's backoff, reusing one
- *   `Idempotency-Key` across the attempts of a `POST`.
- * - **Maps failures** onto the neutral {@link PaymentsError} channel, decoding
- *   Stripe's `{ error: { type, code, message, param } }` envelope with
- *   `Schema` and applying the same mapping as the SDK transport.
- *
- * The official SDK remains available as an alternative transport (`Stripe`),
- * which provides this same service through `stripe.rawRequest`.
+ * The key stays a `Redacted` until Distilled sets the header; a connection
+ * failure's `cause` is the underlying error, never the request that carries
+ * the header.
  *
  * @module
  */
@@ -50,33 +57,25 @@ import {
   Predicate,
   Random,
   Redacted,
+  Ref,
   Schema,
 } from "effect";
-import { FetchHttpClient, HttpClient, type HttpClientError, HttpClientRequest } from "effect/http";
+import { FetchHttpClient, HttpClient, HttpClientError } from "effect/http";
+import { ResponseValidation } from "@distilled.cloud/core/response-validation";
+import { Credentials, type Config as StripeCredentials } from "@distilled.cloud/stripe/Credentials";
+import { type StripeRequestOptions, withRequestOptions } from "@distilled.cloud/stripe/Protocol";
+import { Retry } from "@distilled.cloud/stripe/Retry";
 import {
   PaymentConfigError,
-  PaymentInvalidRequestError,
+  PaymentProviderError,
   type PaymentsError,
   PaymentsUnavailable,
 } from "@thomasfosterau/effect-payments";
-import { classifyResponse, retryAfterOf, toPaymentsError } from "./internal/error.js";
-import { encodeForm, entriesOf, flattenParams } from "./internal/form.js";
+import { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
+import { classifyResponse, PROVIDER, retryAfterOf, toPaymentsError } from "./internal/error.js";
 import { checkOptions } from "./internal/options.js";
-import type { StripeParams } from "./internal/params.js";
 
-/**
- * The Stripe API version requests are pinned to unless the configuration
- * names another. Three things describe this one version and move together:
- * the `stripe` SDK release the optional peer range allows (18.5.x), the
- * OpenAPI spec the resource schemas are generated from
- * (`scripts/stripe-spec.json`, checked by `tests/generatedSchemas.test.ts`),
- * and this constant. It governs what this transport (and so every raw
- * resource module) sends; the `StripePayments` capability layers pin
- * `StripePayments.DISTILLED_API_VERSION` instead. Webhook events are
- * delivered at the API version of the receiving endpoint (or the account
- * default), not this one.
- */
-export const DEFAULT_API_VERSION = "2025-08-27.basil";
+export { DISTILLED_API_VERSION };
 
 const DEFAULT_BASE_URL = "https://api.stripe.com";
 const DEFAULT_UPLOADS_BASE_URL = "https://files.stripe.com";
@@ -88,15 +87,11 @@ const INITIAL_RETRY_DELAY_S = 0.5;
 const MAX_RETRY_DELAY_S = 5;
 const MAX_RETRY_AFTER_S = 60;
 
-/** Configuration for the fetch transport. */
+/** Configuration for the client. */
 export interface StripeHttpConfig {
   /** The secret (or restricted) API key, `sk_…` / `rk_…`. */
   readonly apiKey: Redacted.Redacted<string>;
-  /**
-   * The `Stripe-Version` to pin. Defaults to {@link DEFAULT_API_VERSION} for
-   * this transport, and to `StripePayments.DISTILLED_API_VERSION` for the
-   * `StripePayments` layers.
-   */
+  /** The `Stripe-Version` to pin. Defaults to {@link DISTILLED_API_VERSION}. */
   readonly apiVersion?: string | undefined;
   /** Retries after a retryable failure. Defaults to 2, as in the SDK. */
   readonly maxNetworkRetries?: number | undefined;
@@ -106,17 +101,14 @@ export interface StripeHttpConfig {
   readonly stripeAccount?: string | undefined;
   /** Override the API origin (e.g. a `stripe-mock` server). */
   readonly baseUrl?: string | undefined;
-  /** Override the file-uploads origin. */
+  /** Override the file-uploads origin (`File.create`). Defaults to `https://files.stripe.com`. */
   readonly uploadsBaseUrl?: string | undefined;
 }
-
-/** The HTTP methods Stripe's v1 API uses. */
-export type StripeMethod = "GET" | "POST" | "DELETE";
 
 /**
  * Per-call options for one Stripe request, the trailing argument of every
  * resource-module operation (the `stripe` SDK's `RequestOptions`, narrowed to
- * the two a payments program needs).
+ * the three a payments program needs).
  */
 export interface RequestOptions {
   /**
@@ -126,146 +118,117 @@ export interface RequestOptions {
    * deduplication. It is sent on whatever method you pass it to; Stripe is
    * understood to ignore it on a `GET` and `DELETE` (unverified, #93), unlike
    * the PayPal and Airwallex clients, which refuse a key on a non-`POST`. An
-   * empty key, like an empty `stripeAccount`, fails with
+   * empty key, like an empty `stripeAccount` or `apiVersion`, fails with
    * `PaymentInvalidRequestError` before anything is sent. Without one, a
-   * `POST` that may be retried by the transport gets a generated key shared
-   * by all of its attempts (which covers the transport's retries only, never
-   * a caller's). The transport sends the value verbatim; Stripe accepts up
-   * to 255 characters (unverified, #93) and rejects the same key reused with
+   * `POST` that may be retried by the client gets a generated key shared by
+   * all of its attempts (which covers the client's retries only, never a
+   * caller's). The client sends the value verbatim; Stripe accepts up to 255
+   * characters (unverified, #93) and rejects the same key reused with
    * different parameters.
    */
   readonly idempotencyKey?: string | undefined;
   /** A connected account to act as (`Stripe-Account`), overriding the configured one. */
   readonly stripeAccount?: string | undefined;
+  /**
+   * The `Stripe-Version` of this one call, overriding the configured one (and
+   * {@link DISTILLED_API_VERSION}). Distilled's types describe the default
+   * version: a response at another is typed, but not shaped, by them.
+   */
+  readonly apiVersion?: string | undefined;
 }
 
-/** One request issued through {@link StripeHttp}. */
-export interface StripeRequest extends RequestOptions {
-  readonly method: StripeMethod;
-  /** The API path, beginning `/v1/`; path segments already URI-encoded. */
-  readonly path: string;
-  /** Parameters, form-encoded into the body (`POST`) or the query. */
-  readonly params?: StripeParams | undefined;
-  /**
-   * Send the parameters as `multipart/form-data` to the uploads origin (the
-   * Files API). A parameter shaped `{ data, name?, type? }` becomes a file
-   * part (`data` a string, a `Uint8Array` or a `Blob`), as does a bare
-   * `Uint8Array` or `Blob`.
-   */
+/** What {@link StripeHttp.call} takes beside the operation: {@link RequestOptions}, and the origin. */
+export interface CallOptions extends RequestOptions {
+  /** Send the request to the file-uploads origin (`POST /v1/files`). */
   readonly upload?: boolean | undefined;
 }
 
 /**
- * The Stripe transport. Resolves to the response's JSON, unchecked: callers
- * name the shape they expect (resource modules) or decode it (capability
- * layers). Tests can provide a fake {@link StripeHttp.request}.
+ * An operation's HTTP method. A `POST` sent without a caller's key gets a
+ * generated one when it may be retried, so its attempts are one write.
+ */
+export type Method = "GET" | "POST" | "DELETE";
+
+/**
+ * One Distilled operation, as the generated `@distilled.cloud/stripe/stripe`
+ * module exports it: an input in, an `Effect` needing Distilled's
+ * `Credentials` and an `HttpClient` out.
+ */
+export type Operation<I, O, E> = (
+  input: I,
+) => Effect.Effect<O, E, Credentials | HttpClient.HttpClient>;
+
+/**
+ * The client the resource modules and capability layers run on. `call` runs
+ * one Distilled operation under the request policy above and resolves to the
+ * response JSON as Distilled read it, **unchecked**: Distilled validates
+ * nothing in lenient mode, so a capability layer decodes the fields it maps,
+ * and a resource module returns it typed as Distilled's output. Tests can
+ * provide a fake {@link StripeHttp.call}.
  */
 export class StripeHttp extends Context.Service<
   StripeHttp,
   {
-    readonly request: (request: StripeRequest) => Effect.Effect<unknown, PaymentsError>;
+    readonly call: <I, O, E>(
+      method: Method,
+      operation: Operation<I, O, E>,
+      input: I,
+      options?: CallOptions | undefined,
+    ) => Effect.Effect<unknown, PaymentsError>;
   }
 >()("@effect-payments-stripe/StripeHttp") {}
 
-/** A file part of an upload, as the SDK accepts it. */
-interface FilePart {
-  readonly data: unknown;
-  readonly name?: string | undefined;
-  readonly type?: string | undefined;
+/** What one attempt saw of the response, read before Distilled reads it. */
+interface Observed {
+  readonly status: number;
+  readonly headers: Readonly<Record<string, string | undefined>>;
+  /** The JSON body, or `None` for a body that is not JSON. */
+  readonly body: Option.Option<unknown>;
 }
 
-const isFilePart = (value: unknown): value is FilePart =>
-  Predicate.isObject(value) && "data" in value;
-
-/** Raw bytes passed directly as a parameter, which are a file too. */
-const isBytes = (value: unknown): value is Blob | Uint8Array =>
-  value instanceof Blob || value instanceof Uint8Array;
-
-const blobOf = (part: FilePart): Blob | undefined => {
-  const options = { type: part.type ?? "application/octet-stream" };
-  if (part.data instanceof Blob) return part.data;
-  if (Predicate.isString(part.data)) return new Blob([part.data], options);
-  if (part.data instanceof Uint8Array) {
-    // SAFETY: a `Uint8Array` over any buffer is a valid `BlobPart` at runtime;
-    // the DOM typings only admit one over a plain `ArrayBuffer`.
-    return new Blob([part.data as Uint8Array<ArrayBuffer>], options);
-  }
-  return undefined;
-};
-
-/** One multipart field: text, or a file with its name. */
-type FormPart =
-  | { readonly name: string; readonly text: string }
-  | { readonly name: string; readonly blob: Blob; readonly filename: string };
-
-/** One upload parameter's multipart fields, or why it cannot be sent. */
-const formPartsOf = ([key, input]: readonly [string, unknown]): Effect.Effect<
-  ReadonlyArray<FormPart>,
-  PaymentInvalidRequestError
-> => {
-  const value: unknown = isBytes(input) ? { data: input } : input;
-  if (!isFilePart(value)) {
-    return Effect.succeed(flattenParams({ [key]: value }).map(([name, text]) => ({ name, text })));
-  }
-  const blob = blobOf(value);
-  return blob === undefined
-    ? Effect.fail(
-        new PaymentInvalidRequestError({
-          message: `Upload parameter "${key}" must carry its data as a string, a Uint8Array or a Blob`,
-          param: key,
-        }),
-      )
-    : Effect.succeed([{ name: key, blob, filename: value.name ?? "blob" }]);
-};
-
-/** The multipart body of an upload. */
-const formDataOf = (
-  params: StripeParams | undefined,
-): Effect.Effect<FormData, PaymentInvalidRequestError> =>
-  Effect.map(Effect.forEach(entriesOf(params), formPartsOf, { concurrency: 1 }), (fields) => {
-    const form = new FormData();
-    fields.flat().forEach((part) => {
-      if ("text" in part) form.append(part.name, part.text);
-      else form.append(part.name, part.blob, part.filename);
-    });
-    return form;
-  });
-
-/** A request's outcome, before it is judged: a response, or no response. */
+/** One attempt's outcome, before it is judged. */
 type Outcome = Data.TaggedEnum<{
-  Response: {
-    readonly status: number;
-    readonly headers: Readonly<Record<string, string | undefined>>;
-    readonly body: Option.Option<unknown>;
-  };
+  /** Distilled succeeded on a 2xx with a JSON body. */
+  Success: { readonly body: unknown };
+  /** A response that decides the outcome: a non-2xx, or a 2xx that is not JSON. */
+  Response: Observed;
+  /** No response: a connection failure or a timeout. */
   Transport: { readonly message: string; readonly cause: unknown };
+  /** A Distilled failure with no non-2xx response behind it. */
+  Rejected: { readonly error: unknown };
 }>;
-const Outcome = Data.taggedEnum<Outcome>();
+const Outcome = /* @__PURE__ */ Data.taggedEnum<Outcome>();
 
-const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
+const decodeJson = /* @__PURE__ */ Schema.decodeUnknownOption(
+  /* @__PURE__ */ Schema.fromJsonString(Schema.Unknown),
+);
 
 const isOk = (status: number): boolean => status >= 200 && status < 300;
 
+/** Distilled's retries, switched off: this client retries on its own policy. */
+const NO_RETRY = { while: () => false };
+
 /**
- * The SDK's retry rule: always after a connection failure; otherwise as the
- * `Stripe-Should-Retry` header says, and without one on a `409` or a `5xx`.
+ * The SDK's retry rule for a response: as the `Stripe-Should-Retry` header
+ * says, and without one on a `409` or a `5xx`.
  */
-const isRetryable: (outcome: Outcome) => boolean = Outcome.$match({
+const isRetryableResponse = ({ status, headers }: Observed): boolean => {
+  if (isOk(status)) return false;
+  const advice = headers["stripe-should-retry"];
+  return advice === undefined ? status === 409 || status >= 500 : advice === "true";
+};
+
+/** The SDK's retry rule: always after a connection failure, else by the response. */
+const isRetryable: (outcome: Outcome) => boolean = /* @__PURE__ */ Outcome.$match({
+  Success: () => false,
+  Response: isRetryableResponse,
   Transport: () => true,
-  Response: ({ status, headers }) => {
-    if (isOk(status)) return false;
-    const advice = headers["stripe-should-retry"];
-    if (advice === "false") return false;
-    if (advice === "true") return true;
-    return status === 409 || status >= 500;
-  },
+  Rejected: () => false,
 });
 
-/** The `Retry-After` a response asked for, in seconds. */
-const retryAfterOfOutcome: (outcome: Outcome) => number | undefined = Outcome.$match({
-  Transport: () => undefined,
-  Response: ({ headers }) => retryAfterOf(headers["retry-after"]),
-});
+/** The `Retry-After` an outcome's response asked for, in seconds. */
+const retryAfterOfOutcome = (outcome: Outcome): number | undefined =>
+  Outcome.$is("Response")(outcome) ? retryAfterOf(outcome.headers["retry-after"]) : undefined;
 
 /**
  * The SDK's backoff before retry `retries + 1`: exponential from 0.5 s,
@@ -283,193 +246,221 @@ const backoff = (retries: number, retryAfter: number | undefined): Effect.Effect
     return Effect.sleep(Duration.millis(seconds * 1000));
   });
 
-/** A string `message` on an unknown cause, if it has one. */
-const messageOf = (cause: unknown): string | undefined =>
-  Predicate.hasProperty(cause, "message") && Predicate.isString(cause.message)
-    ? cause.message
+/** A string field of an unknown value, if it has one. */
+const stringField = (value: unknown, field: string): string | undefined =>
+  Predicate.hasProperty(value, field) && Predicate.isString(value[field])
+    ? value[field]
     : undefined;
 
 /**
- * The underlying failure of an `HttpClientError`, without the request it
- * carries — whose `Authorization` header holds the key.
+ * A Distilled failure as an outcome. An `HttpClientError` means no response
+ * arrived; its `cause` is kept, never the request, whose headers carry the key.
  */
-const transportOf = (error: HttpClientError.HttpClientError): Outcome => {
+const failureOf = (error: unknown): Outcome => {
+  if (!HttpClientError.isHttpClientError(error)) return Outcome.Rejected({ error });
   const reason = error.reason;
   const cause = "cause" in reason ? reason.cause : undefined;
-  const description =
-    "description" in reason && Predicate.isString(reason.description)
-      ? reason.description
-      : undefined;
   return Outcome.Transport({
-    message: description ?? messageOf(cause) ?? reason._tag,
+    message: stringField(reason, "description") ?? stringField(cause, "message") ?? reason._tag,
     cause,
   });
 };
 
-/** The JSON of a 2xx, or a neutral error for anything else. */
-const settleResponse = ({
-  status,
-  headers,
-  body,
-}: Data.TaggedEnum.Value<Outcome, "Response">): Effect.Effect<unknown, PaymentsError> => {
-  if (!isOk(status)) {
-    return Effect.fail(
-      toPaymentsError(
-        classifyResponse(status, headers["retry-after"], Option.getOrUndefined(body)),
-      ),
-    );
-  }
-  return Option.match(body, {
-    onSome: Effect.succeed,
-    onNone: () =>
-      Effect.fail(
-        toPaymentsError({
-          kind: "StripeAPIError",
-          message: "Invalid JSON received from the Stripe API",
-          statusCode: status,
-        }),
-      ),
-  });
-};
-
-/** Judge a final outcome: the JSON of a 2xx, or a neutral error. */
-const settle = (outcome: Outcome, retries: number): Effect.Effect<unknown, PaymentsError> =>
-  Outcome.$match(outcome, {
-    Response: settleResponse,
-    Transport: ({ message, cause }) => {
-      const retried = retries > 0 ? ` Request was retried ${retries} times.` : "";
-      return Effect.fail(
-        toPaymentsError({
-          kind: "StripeConnectionError",
-          message: `An error occurred with our connection to Stripe (${message}).${retried}`,
-          raw: cause,
-        }),
-      );
+/**
+ * The outcome of one attempt. A response, once seen, decides it whatever
+ * Distilled made of it: a non-2xx is classified from its status, headers and
+ * body, and a 2xx whose body is not JSON fails as one.
+ */
+const judge = (outcome: Outcome, observed: Option.Option<Observed>): Outcome =>
+  Option.match(observed, {
+    onNone: () => outcome,
+    onSome: (response) => {
+      const decides = Outcome.$is("Success")(outcome)
+        ? !isOk(response.status) || Option.isNone(response.body)
+        : !isOk(response.status);
+      return decides ? Outcome.Response(response) : outcome;
     },
   });
 
-/** Set a header when it has a value. */
-const withHeader =
-  (name: string, value: string | undefined) =>
-  (request: HttpClientRequest.HttpClientRequest): HttpClientRequest.HttpClientRequest =>
-    value === undefined ? request : HttpClientRequest.setHeader(request, name, value);
+/** A response that decides an outcome, as a neutral error. */
+const responseError = ({ status, headers, body }: Observed): PaymentsError =>
+  isOk(status)
+    ? toPaymentsError({
+        kind: "StripeAPIError",
+        message: "Invalid JSON received from the Stripe API",
+        statusCode: status,
+      })
+    : toPaymentsError(
+        classifyResponse(status, headers["retry-after"], Option.getOrUndefined(body)),
+      );
 
-/**
- * Build the fetch transport from configuration. Fails with
- * {@link PaymentConfigError} when the key is empty.
- */
-export const make = (
-  config: StripeHttpConfig,
-): Effect.Effect<StripeHttp["Service"], PaymentConfigError, HttpClient.HttpClient> =>
-  Effect.gen(function* () {
-    if (Redacted.value(config.apiKey) === "") {
-      return yield* new PaymentConfigError({ message: "Stripe API key is required" });
-    }
-    const http = yield* HttpClient.HttpClient;
-    const apiVersion = config.apiVersion || DEFAULT_API_VERSION;
-    const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
-    const uploadsBaseUrl = config.uploadsBaseUrl ?? DEFAULT_UPLOADS_BASE_URL;
-    const maxRetries = Math.max(0, config.maxNetworkRetries ?? DEFAULT_MAX_NETWORK_RETRIES);
-    const timeout = Duration.millis(config.timeout ?? DEFAULT_TIMEOUT_MS);
+/** A Distilled failure with no response behind it, as a neutral error named by its tag. */
+const rejectedError = ({ error }: { readonly error: unknown }): PaymentsError =>
+  new PaymentProviderError({
+    message: stringField(error, "message") ?? "The Stripe request failed",
+    provider: PROVIDER,
+    code: stringField(error, "_tag") ?? "StripeUnknownError",
+    cause: error,
+  });
 
-    /** Execute with redirects refused, keeping any other fetch defaults. */
-    const execute = (request: HttpClientRequest.HttpClientRequest) =>
-      Effect.flatMap(Effect.serviceOption(FetchHttpClient.RequestInit), (init) =>
-        http.execute(request).pipe(
+/** Judge a final outcome, after `retries` retries: the JSON of a 2xx, or a neutral error. */
+const settle = (outcome: Outcome, retries: number): Effect.Effect<unknown, PaymentsError> =>
+  Outcome.$match(outcome, {
+    Success: ({ body }) => Effect.succeed(body),
+    Response: (response) => Effect.fail(responseError(response)),
+    Transport: ({ message, cause }) =>
+      Effect.fail(
+        toPaymentsError({
+          kind: "StripeConnectionError",
+          message: `An error occurred with our connection to Stripe (${message}).${
+            retries > 0 ? ` Request was retried ${retries} times.` : ""
+          }`,
+          raw: cause,
+        }),
+      ),
+    Rejected: (rejected) => Effect.fail(rejectedError(rejected)),
+  });
+
+/** The client's credentials and request policy. */
+interface MakeOptions extends Omit<StripeHttpConfig, "apiKey" | "baseUrl"> {
+  /** The key and API origin, resolved on every call; may fail (`PaymentsUnavailable`). */
+  readonly credentials: Effect.Effect<StripeCredentials, PaymentsError>;
+}
+
+/** Build the client over the `HttpClient` in context. */
+const makeWith = (
+  options: MakeOptions,
+): Effect.Effect<StripeHttp["Service"], never, HttpClient.HttpClient> =>
+  Effect.map(HttpClient.HttpClient, (http) => {
+    const apiVersion = options.apiVersion || DISTILLED_API_VERSION;
+    const uploadsBaseUrl = options.uploadsBaseUrl ?? DEFAULT_UPLOADS_BASE_URL;
+    const maxRetries = Math.max(0, options.maxNetworkRetries ?? DEFAULT_MAX_NETWORK_RETRIES);
+    const timeout = Duration.millis(options.timeout ?? DEFAULT_TIMEOUT_MS);
+    const timedOut = Outcome.Transport({
+      message: `request timed out after ${Duration.toMillis(timeout)} ms`,
+      cause: undefined,
+    });
+
+    /** One attempt of `operation`, reduced to an {@link Outcome}; fails only by defect. */
+    const attempt = <I, O, E>(
+      operation: Operation<I, O, E>,
+      input: I,
+      requestOptions: StripeRequestOptions,
+      credentials: StripeCredentials,
+    ): Effect.Effect<Outcome> =>
+      Effect.gen(function* () {
+        const observed = yield* Ref.make(Option.none<Observed>());
+        // Read the body first (the response caches it, so Distilled reads it
+        // again), and keep what the classification needs.
+        const watched = HttpClient.transform(http, (response) =>
+          Effect.tap(response, (seen) =>
+            Effect.flatMap(seen.text, (text) =>
+              Ref.set(
+                observed,
+                Option.some({ status: seen.status, headers: seen.headers, body: decodeJson(text) }),
+              ),
+            ),
+          ),
+        );
+        const init = yield* Effect.serviceOption(FetchHttpClient.RequestInit);
+        const outcome = yield* operation(input).pipe(
+          // Every typed failure becomes an outcome to judge; defects stay defects.
+          Effect.match({
+            onSuccess: (body) => Outcome.Success({ body }),
+            onFailure: failureOf,
+          }),
+          withRequestOptions(requestOptions),
+          Effect.provideService(Credentials, Effect.succeed(credentials)),
+          Effect.provideService(HttpClient.HttpClient, watched),
+          Effect.provideService(Retry, NO_RETRY),
+          Effect.provideService(ResponseValidation, "lenient"),
           Effect.provideService(FetchHttpClient.RequestInit, {
             ...Option.getOrElse(init, () => ({})),
             redirect: "error",
           }),
-        ),
-      );
-
-    /** One attempt, reduced to an {@link Outcome}; never fails. */
-    const attempt = (request: HttpClientRequest.HttpClientRequest): Effect.Effect<Outcome> =>
-      execute(request).pipe(
-        Effect.flatMap((response) =>
-          Effect.map(response.text, (text) =>
-            Outcome.Response({
-              status: response.status,
-              headers: response.headers,
-              body: decodeJson(text),
-            }),
-          ),
-        ),
-        Effect.timeoutOption(timeout),
-        Effect.map(
-          Option.getOrElse(() =>
-            Outcome.Transport({
-              message: `request timed out after ${Duration.toMillis(timeout)} ms`,
-              cause: undefined,
-            }),
-          ),
-        ),
-        Effect.catchTag("HttpClientError", (error) => Effect.succeed(transportOf(error))),
-      );
+          Effect.timeoutOption(timeout),
+          Effect.map(Option.getOrElse(() => timedOut)),
+        );
+        return judge(outcome, yield* Ref.get(observed));
+      });
 
     const run = (
-      request: HttpClientRequest.HttpClientRequest,
+      once: Effect.Effect<Outcome>,
       retries: number,
     ): Effect.Effect<unknown, PaymentsError> =>
-      Effect.flatMap(attempt(request), (outcome) =>
+      Effect.flatMap(once, (outcome) =>
         retries < maxRetries && isRetryable(outcome)
-          ? Effect.andThen(
-              backoff(retries, retryAfterOfOutcome(outcome)),
-              run(request, retries + 1),
-            )
+          ? Effect.andThen(backoff(retries, retryAfterOfOutcome(outcome)), run(once, retries + 1))
           : settle(outcome, retries),
       );
 
-    const build = (
-      request: StripeRequest,
-      idempotencyKey: string | undefined,
-    ): Effect.Effect<HttpClientRequest.HttpClientRequest, PaymentInvalidRequestError> => {
-      const origin = request.upload ? uploadsBaseUrl : baseUrl;
-      const authenticate = (base: HttpClientRequest.HttpClientRequest) =>
-        base.pipe(
-          HttpClientRequest.bearerToken(config.apiKey),
-          HttpClientRequest.acceptJson,
-          HttpClientRequest.setHeader("Stripe-Version", apiVersion),
-          withHeader("Stripe-Account", request.stripeAccount ?? config.stripeAccount),
-          withHeader("Idempotency-Key", idempotencyKey),
-        );
-
-      if (request.method !== "POST") {
-        const query = encodeForm(request.params);
-        const url = `${origin}${request.path}${query === "" ? "" : `?${query}`}`;
-        return Effect.succeed(authenticate(HttpClientRequest.make(request.method)(url)));
-      }
-      const base = authenticate(HttpClientRequest.post(`${origin}${request.path}`));
-      if (!request.upload) {
-        return Effect.succeed(
-          HttpClientRequest.bodyText(
-            base,
-            encodeForm(request.params),
-            "application/x-www-form-urlencoded",
-          ),
-        );
-      }
-      return Effect.map(formDataOf(request.params), (form) =>
-        HttpClientRequest.bodyFormData(base, form),
-      );
-    };
-
-    const request = Effect.fn("StripeHttp.request")(function* (request: StripeRequest) {
-      yield* checkOptions(request);
-      const idempotencyKey =
-        request.idempotencyKey ??
-        (request.method === "POST" && maxRetries > 0
+    const call = Effect.fn("StripeHttp.call")(function* <I, O, E>(
+      method: Method,
+      operation: Operation<I, O, E>,
+      input: I,
+      callOptions: CallOptions = {},
+    ) {
+      const stripeAccount = callOptions.stripeAccount ?? options.stripeAccount;
+      yield* checkOptions({
+        idempotencyKey: callOptions.idempotencyKey,
+        stripeAccount,
+        apiVersion: callOptions.apiVersion,
+      });
+      const resolved = yield* options.credentials;
+      const credentials = callOptions.upload
+        ? { ...resolved, apiBaseUrl: uploadsBaseUrl }
+        : resolved;
+      const key =
+        callOptions.idempotencyKey ??
+        (method === "POST" && maxRetries > 0
           ? `effect-payments-retry-${yield* Effect.sync(() => globalThis.crypto.randomUUID())}`
           : undefined);
-      return yield* run(yield* build(request, idempotencyKey), 0);
+      const requestOptions: StripeRequestOptions = {
+        apiVersion: callOptions.apiVersion ?? apiVersion,
+        idempotencyKey: key,
+        stripeAccount,
+      };
+      return yield* run(attempt(operation, input, requestOptions, credentials), 0);
     });
 
-    return StripeHttp.of({ request });
+    return StripeHttp.of({ call });
   });
 
 /**
- * The fetch transport as a layer. Requires an `HttpClient`: provide
- * `FetchHttpClient.layer` (Workers, browsers, Node ≥ 18).
+ * The client over Distilled's `Credentials` in context, at the default
+ * request policy ({@link DISTILLED_API_VERSION}, two retries, 80 s per
+ * attempt). The capability layers (`StripePayments.customersLayer`, …) are
+ * built over this.
+ */
+export const layerFromContext: Layer.Layer<StripeHttp, never, Credentials | HttpClient.HttpClient> =
+  /* @__PURE__ */ Layer.effect(
+    StripeHttp,
+    /* @__PURE__ */ Effect.flatMap(Credentials, (credentials) => makeWith({ credentials })),
+  );
+
+/** The credentials a configuration names. */
+const credentialsOf = (
+  apiKey: Redacted.Redacted<string>,
+  baseUrl: string | undefined,
+): StripeCredentials => ({ apiKey, apiBaseUrl: baseUrl ?? DEFAULT_BASE_URL });
+
+/**
+ * Build the client from configuration. Fails with {@link PaymentConfigError}
+ * when the key is empty.
+ */
+export const make = (
+  config: StripeHttpConfig,
+): Effect.Effect<StripeHttp["Service"], PaymentConfigError, HttpClient.HttpClient> =>
+  Redacted.value(config.apiKey) === ""
+    ? Effect.fail(new PaymentConfigError({ message: "Stripe API key is required" }))
+    : makeWith({
+        ...config,
+        credentials: Effect.succeed(credentialsOf(config.apiKey, config.baseUrl)),
+      });
+
+/**
+ * The client from configuration, as a layer. Requires an `HttpClient`:
+ * provide `FetchHttpClient.layer` (Workers, browsers, Node ≥ 18).
  */
 export const layer = (
   config: StripeHttpConfig,
@@ -477,9 +468,10 @@ export const layer = (
   Layer.effect(StripeHttp, make(config));
 
 /**
- * The fetch transport with its key read from a configuration variable
- * (through the current `ConfigProvider`, which defaults to the process
- * environment), at the default API version.
+ * The client with its key read from a configuration variable (through the
+ * current `ConfigProvider`, which defaults to the process environment) while
+ * the layer is built, at the default request policy. Fails with
+ * {@link PaymentConfigError} when it is absent or empty.
  */
 export const layerFromEnv = (
   envVar: string = "STRIPE_API_KEY",
@@ -533,13 +525,12 @@ const readKey = (
     );
 
 /**
- * The fetch transport in the "not configured ≡ down" posture: the key is read
- * from a configuration variable on EVERY call, never while the layer is built.
+ * The client in the "not configured ≡ down" posture: the key is read from a
+ * configuration variable on EVERY call, never while the layer is built.
  * Building it therefore cannot fail — an application without Stripe
  * configured still starts — and a call made while the variable is absent,
- * empty or unreadable fails with {@link PaymentsUnavailable}, the same failure
- * a Stripe outage looks like to the program. A call made while it is present
- * goes over the fetch transport with that key.
+ * empty or unreadable fails with {@link PaymentsUnavailable} before anything
+ * is sent, the same failure a Stripe outage looks like to the program.
  *
  * **Which `ConfigProvider`.** Each call reads the calling fiber's
  * `ConfigProvider` first (so a per-request provider, or one the runtime
@@ -548,44 +539,35 @@ const readKey = (
  * layer itself (`layerConfig().pipe(Layer.provide(ConfigProvider.layer(…)))`)
  * is therefore honoured, as it is for {@link layerFromEnv}.
  */
-export const layerConfig = (
-  options: LayerConfigOptions = {},
-): Layer.Layer<StripeHttp, never, HttpClient.HttpClient> =>
+export const layerConfig = ({
+  envVar = "STRIPE_API_KEY",
+  ...options
+}: LayerConfigOptions = {}): Layer.Layer<StripeHttp, never, HttpClient.HttpClient> =>
   Layer.effect(
     StripeHttp,
     Effect.gen(function* () {
-      const client = yield* HttpClient.HttpClient;
       const builtUnder = yield* ConfigProvider.ConfigProvider;
-      const { envVar = "STRIPE_API_KEY", ...config } = options;
       const unavailable = Effect.failSync(
         () =>
           new PaymentsUnavailable({
             message: `Stripe is not configured in this environment (${envVar} is not set or is empty)`,
-            provider: "stripe",
+            provider: PROVIDER,
           }),
       );
-      /** The key from the caller's provider, else from the one the layer was built under. */
-      const currentKey = Effect.flatMap(ConfigProvider.ConfigProvider, (caller) =>
+      const credentials = Effect.flatMap(ConfigProvider.ConfigProvider, (caller) =>
         Effect.flatMap(readKey(envVar, caller), (key) =>
           Option.isSome(key) || caller === builtUnder
             ? Effect.succeed(key)
             : readKey(envVar, builtUnder),
         ),
+      ).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () => unavailable,
+            onSome: (apiKey) => Effect.succeed(credentialsOf(apiKey, options.baseUrl)),
+          }),
+        ),
       );
-      const request = Effect.fn("StripeHttp.layerConfig.request")(function* (
-        request: StripeRequest,
-      ) {
-        const apiKey = yield* currentKey;
-        if (Option.isNone(apiKey)) {
-          return yield* unavailable;
-        }
-        // `make` fails only on an empty key, which was ruled out above.
-        const http = yield* make({ ...config, apiKey: apiKey.value }).pipe(
-          Effect.provideService(HttpClient.HttpClient, client),
-          Effect.catchTag("PaymentConfigError", () => unavailable),
-        );
-        return yield* http.request(request);
-      });
-      return StripeHttp.of({ request });
+      return yield* makeWith({ ...options, credentials });
     }),
   );

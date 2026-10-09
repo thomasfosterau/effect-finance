@@ -74,15 +74,6 @@ import {
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
 import {
-  layer as clientLayer,
-  layerConfig as clientLayerConfig,
-  layerFromContext as clientLayerFromContext,
-  layerFromEnv as clientLayerFromEnv,
-  type Method,
-  type Operation,
-  StripeClient,
-} from "./internal/distilled.js";
-import {
   decodeBillingPortalSession,
   decodeCheckoutSession,
   decodeCustomer,
@@ -100,7 +91,17 @@ import {
   decodeSubscriptionPage,
 } from "./internal/mapping.js";
 import { omitUndefined } from "./internal/omitUndefined.js";
-import type { LayerConfigOptions, StripeHttpConfig } from "./StripeHttp.js";
+import {
+  layer as clientLayer,
+  layerConfig as clientLayerConfig,
+  type LayerConfigOptions,
+  layerFromContext as clientLayerFromContext,
+  layerFromEnv as clientLayerFromEnv,
+  type Method,
+  type Operation,
+  StripeHttp,
+  type StripeHttpConfig,
+} from "./StripeHttp.js";
 
 /**
  * The Stripe API version every capability layer pins in `Stripe-Version`
@@ -108,8 +109,7 @@ import type { LayerConfigOptions, StripeHttpConfig } from "./StripeHttp.js";
  * schemas are generated from (`2026-07-29.dahlia` for `1.0.0-rc.13`). It moves
  * whenever this package moves its Distilled pin, so create the webhook
  * endpoints whose events a program reads beside the capabilities at this
- * version. The raw resource modules and `StripeHttp` pin `DEFAULT_API_VERSION`
- * instead.
+ * version. The resource modules and `StripeHttp` pin the same one.
  */
 export { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
 
@@ -143,7 +143,7 @@ const checkId = (resource: string, id: string): Effect.Effect<void, PaymentInval
  * `IdempotencyKey.validate`.
  */
 const call =
-  (client: StripeClient["Service"]) =>
+  (client: StripeHttp["Service"]) =>
   <I, O, E, A>(
     method: Method,
     operation: Operation<I, O, E>,
@@ -158,7 +158,7 @@ const call =
     // shape for typed callers, this refuses a raw string from untyped code.
     Effect.flatMap(IdempotencyKeyNS.validate(options.idempotencyKey), (key) =>
       (options.id === undefined ? Effect.void : checkId(...options.id)).pipe(
-        Effect.andThen(client.call(method, operation, input, key)),
+        Effect.andThen(client.call(method, operation, input, { idempotencyKey: key })),
         Effect.flatMap(decode),
       ),
     );
@@ -170,10 +170,10 @@ type Request = ReturnType<typeof call>;
 const over = <I, S>(
   tag: Context.Key<I, S>,
   build: (request: Request) => NoInfer<S>,
-): Layer.Layer<I, never, StripeClient> =>
+): Layer.Layer<I, never, StripeHttp> =>
   Layer.effect(
     tag,
-    Effect.map(StripeClient, (client) => build(call(client))),
+    Effect.map(StripeHttp, (client) => build(call(client))),
   );
 
 // ---------------------------------------------------------------------------

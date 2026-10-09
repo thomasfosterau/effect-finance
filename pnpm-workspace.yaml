@@ -27,13 +27,16 @@ catalog:
   "@changesets/changelog-github": ^1.0.1
   "@changesets/cli": ^3.0.3
   # Distilled's Stripe client (alchemy-run/distilled, Apache-2.0): the
-  # operations, wire encoding and typed errors `StripePayments` runs on (#146).
-  # A runtime dependency of @thomasfosterau/effect-payments-stripe, pinned
-  # EXACTLY: it is pre-1.0 and ships a new rc every week or two, so a release
-  # moves only through the ordinary dependency-update flow. Its schemas are
-  # generated from Stripe's 2026-07-29.dahlia spec; the wrapper pins
-  # `Stripe-Version` to its own DEFAULT_API_VERSION (2025-08-27.basil) on every
-  # request and decodes only the fields it maps.
+  # operations, wire encoding and typed errors `StripePayments` and every
+  # Stripe resource module run on (#146). A runtime dependency of
+  # @thomasfosterau/effect-payments-stripe, pinned EXACTLY: it is pre-1.0 and
+  # ships a new rc every week or two, so a release moves only through the
+  # ordinary dependency-update flow. Its schemas are generated from Stripe's
+  # 2026-07-29.dahlia spec, which the wrapper pins in `Stripe-Version`
+  # (DISTILLED_API_VERSION) on every request. A bump also regenerates the
+  # resource modules (`generate:resources`) and updates the followed version
+  # (`tests/distilledApiVersion.test.ts` and `tests/resources.test.ts` fail
+  # until both are done).
   "@distilled.cloud/stripe": 1.0.0-rc.13
   # Distilled's PayPal client (same repository and licence): the operations
   # and wire encoding `PayPalPayments` runs on (#146). A runtime dependency
@@ -54,7 +57,6 @@ catalog:
   # satisfies it; the examples themselves type-check under the native `tsc`.
   "@effect/docgen": 4.0.0
   "@effect/language-service": ^0.87.3
-  "@effect/openapi-generator": 4.0.0
   "@effect/platform-node": 4.0.0
   # Effect Language Service as a native (TypeScript-Go) binary — the TS7 side
   # of the 6/7 split. `effect-tsgo patch` overwrites the native `tsc` binary
@@ -117,14 +119,10 @@ catalogs:
     # or earlier; the code is built against effect 4.0.0; the floor stays rc.118 because
     # 4.0.0 removed nothing the packages use and `>=4.0.0-rc.118` admits it.
     effect: ">=4.0.0-rc.118"
-    # Optional (`peerDependenciesMeta`): only the `./Stripe` SDK transport and
-    # the SDK-based `./Webhook` verifier load it, plus the resource modules
-    # not yet migrated to generated types (#81) for their types. Caret, not
-    # `>=`: the SDK's API version is what it sends and what those types
-    # describe (18.5 → 2025-08-27.basil, the fetch transport's
-    # DEFAULT_API_VERSION and the pinned OpenAPI spec of
-    # packages/payments-stripe/scripts/stripe-spec.json), so a new release
-    # moves all of them together.
+    # Optional (`peerDependenciesMeta`): only the types of the SDK-based
+    # `./Webhook` verifier (`constructEvent*`, which runs on an SDK client the
+    # program builds) name it; no module loads it (#146). Caret, not `>=`:
+    # the verifier's `Stripe.Event` is the SDK's type at its API version.
     stripe: ^18.5.0
   # The `effect` peer range of a package that depends on Distilled
   # (@thomasfosterau/effect-payments-stripe and -paypal, #146).

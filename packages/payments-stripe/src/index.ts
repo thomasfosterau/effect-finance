@@ -10,19 +10,21 @@
  *   `Stripe-Version`, the SDK's retry policy and Stripe's failures mapped onto
  *   the neutral errors, plus the `layer` / `layerFromEnv` / `layerConfig`
  *   bundles that build every capability from configuration.
- * - **`StripeHttp`** — the fetch-only transport of the raw resource modules,
- *   over `effect/http`'s `HttpClient` (form-encoded bodies, pinned
- *   `Stripe-Version`, `Redacted` key), with no Node API and no SDK.
- * - **Raw resource modules** (`Customer`, `Product`, `Charge`, `Treasury`, …) —
- *   the full-fidelity Stripe escape hatch for the many resources that have no
- *   vendor-neutral equivalent, typed with the `stripe` package's declarations,
- *   except `CheckoutSession`, `BillingPortal.Session`, `Customer`, `Product`,
- *   `Price`, `Subscription`, `SubscriptionSchedule` and `Invoice`, which are
- *   generated from Stripe's OpenAPI spec and decoded.
+ * - **`StripeHttp`** — the client the resource modules run on: Distilled's
+ *   operations under the same request policy as the capabilities, over
+ *   `effect/http`'s `HttpClient`, with no Node API and no SDK.
+ * - **Raw resource modules** (`Customer`, `Invoice`, `Charge`, `Treasury`, …) —
+ *   the Stripe escape hatch for what the neutral capabilities do not cover:
+ *   every Distilled operation on each resource, typed with Distilled's
+ *   declarations and wrapped with the pinned `Stripe-Version` and
+ *   {@link RequestOptions}.
+ * - **`Webhook`** — the WebCrypto webhook verifier, and the SDK-based one for
+ *   a program that provides its own `stripe` client.
  *
- * The official SDK is an optional alternative transport, imported from its
- * own subpath (`@thomasfosterau/effect-payments-stripe/Stripe`) and never
- * loaded by this entry point.
+ * This entry point re-exports every resource module, so its declarations
+ * reach Distilled's whole operations module (about 7.5 MB); a program that
+ * needs one resource imports its subpath (or only `StripePayments`, whose
+ * declarations stay small).
  *
  * This is the payments analogue of Effect's AI modules: one abstraction, one
  * package per provider, with provider-specific APIs still exposed.
@@ -50,9 +52,7 @@
 // and the neutral error channel).
 export * as Payments from "@thomasfosterau/effect-payments";
 
-// The neutral capability implementations + the raw modules' transport. The SDK
-// transport (`./Stripe`) is deliberately not re-exported here: it loads the
-// optional `stripe` peer, and this entry point must load without it.
+// The neutral capability implementations + the raw modules' client.
 export * as StripeHttp from "./StripeHttp.js";
 export * as StripePayments from "./StripePayments.js";
 
@@ -101,5 +101,6 @@ export * as BillingPortalSession from "./BillingPortal.Session.js";
 export * as SubscriptionSchedule from "./SubscriptionSchedule.js";
 export * as Webhook from "./Webhook.js";
 
-export type { StripeError as StripeErrors } from "./internal/index.js";
+/** Every failure of a Stripe call: the neutral `PaymentsError` channel. */
+export type { PaymentsError as StripeErrors } from "@thomasfosterau/effect-payments";
 export type { RequestOptions, StripeHttpConfig } from "./StripeHttp.js";

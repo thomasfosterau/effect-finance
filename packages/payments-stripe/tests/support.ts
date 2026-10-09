@@ -1,41 +1,14 @@
 /**
- * Test doubles shared by the Stripe suites: a fake {@link StripeHttp} that
- * records what the resource modules ask for, a stubbed `fetch` served as
- * `effect/http`'s `HttpClient` for the transport, and {@link stubStripe}, the
- * same stub decoded into Stripe calls for the capability layers (which run on
- * Distilled's operations). No test reaches `api.stripe.com`.
+ * Test doubles shared by the Stripe suites: a stubbed `fetch` served as
+ * `effect/http`'s `HttpClient`, and {@link stubStripe}, the same stub decoded
+ * into Stripe calls for the capability layers and resource modules (which run
+ * on Distilled's operations). No test reaches `api.stripe.com`.
  */
 
-import { Effect, Fiber, Layer, Redacted } from "effect";
+import { Effect, Fiber, Layer, Predicate, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 import { Credentials } from "@distilled.cloud/stripe/Credentials";
-import type { PaymentsError } from "@thomasfosterau/effect-payments";
-import { StripeHttp, type StripeRequest } from "../src/StripeHttp.ts";
-import { encodeForm } from "../src/internal/form.ts";
-import type { StripeParams } from "../src/internal/params.ts";
-
-/**
- * A fake transport answering each request with `respond(request)` — a body,
- * or an `Effect` for a failure — and recording every request it was asked.
- */
-export const fakeStripeHttp = (respond: (request: StripeRequest) => unknown = () => ({})) => {
-  const calls: Array<StripeRequest> = [];
-  const layer = Layer.succeed(
-    StripeHttp,
-    StripeHttp.of({
-      request: (request) =>
-        Effect.suspend(() => {
-          calls.push(request);
-          const answer = respond(request);
-          return Effect.isEffect(answer)
-            ? (answer as Effect.Effect<unknown, PaymentsError>)
-            : Effect.succeed(answer);
-        }),
-    }),
-  );
-  return { layer, calls };
-};
 
 /** A request as the stubbed `fetch` saw it. */
 export interface CapturedRequest {
@@ -131,13 +104,24 @@ export interface StripeCall {
   readonly headers: Headers;
 }
 
+/** One parameter flattened into its bracketed form fields. */
+const fieldsOf = (key: string, value: unknown): ReadonlyArray<readonly [string, string]> =>
+  value === undefined || value === null
+    ? []
+    : Array.isArray(value)
+      ? value.flatMap((item, index) => fieldsOf(`${key}[${index}]`, item))
+      : Predicate.isObject(value)
+        ? Object.entries(value).flatMap(([name, item]) => fieldsOf(`${key}[${name}]`, item))
+        : [[key, String(value)]];
+
 /**
- * `params` flattened the way the `stripe` SDK form-encodes them, for
- * comparison with a {@link StripeCall}'s `params`: undefined members vanish,
- * `metadata: { tier: "pro" }` becomes `"metadata[tier]": "pro"`.
+ * `params` flattened the way Stripe reads a form body, for comparison with a
+ * {@link StripeCall}'s `params`: undefined members vanish, `metadata: { tier:
+ * "pro" }` becomes `"metadata[tier]": "pro"` and `items: [{ price }]`
+ * becomes `"items[0][price]"`.
  */
-export const formOf = (params: StripeParams): Record<string, string> =>
-  Object.fromEntries(new URLSearchParams(encodeForm(params)));
+export const formOf = (params: Readonly<Record<string, unknown>>): Record<string, string> =>
+  Object.fromEntries(Object.entries(params).flatMap(([key, value]) => fieldsOf(key, value)));
 
 /**
  * A stubbed Stripe API for the capability layers: `answer` maps each call to a
