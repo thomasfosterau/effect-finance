@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
-import { ConfigProvider, Effect, Layer, Predicate, Redacted } from "effect";
-import { type HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
+import { ConfigProvider, Duration, Effect, Layer, Predicate, Redacted } from "effect";
+import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { TestClock } from "effect/testing";
 import { strict as strictValidation } from "@distilled.cloud/core/response-validation";
 import { ConfigError } from "@distilled.cloud/paypal/Errors";
@@ -22,9 +22,10 @@ import {
   PaymentRateLimitError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
-import * as PayPal from "../src/PayPal.ts";
-import type { PayPalConfig } from "../src/PayPal.ts";
 import * as PayPalPayments from "../src/PayPalPayments.ts";
+import type { PayPalConfig } from "../src/PayPalPayments.ts";
+import { send } from "../src/internal/auth.ts";
+import { errorBodyOf, handlePayPalError } from "../src/internal/error.ts";
 import {
   type CapturedRequest,
   callOf,
@@ -39,8 +40,9 @@ import {
 /**
  * `PayPalPayments` on Distilled's operations (#146): what reaches the wire,
  * where the access token comes from, and how each failure Distilled reports
- * lands on the neutral channel. The expectations are `PayPalClient`'s
- * (`tests/PayPal.test.ts`), which the capability layers ran on before.
+ * lands on the neutral channel. The expectations are those of the
+ * hand-written `PayPalClient` the capability layers ran on before (removed in
+ * #146; its session cases are in `PayPalPayments.session.test.ts`).
  */
 
 type Capabilities = Layer.Success<typeof PayPalPayments.capabilities>;
@@ -520,17 +522,27 @@ describe("PayPalPayments requests", () => {
 });
 
 describe("PayPalPayments errors", () => {
-  /** The error `PayPalClient.request` fails with on `response`: the mapping the capabilities ran on. */
-  const viaClient = (response: () => Response | Promise<Response>) => {
-    const api = paypal(response);
-    return Effect.runPromise(
+  /**
+   * The error `response` maps onto read directly, without Distilled: sent
+   * and read by the session's `send`, a non-2xx classified from its status
+   * and error body. This is the mapping the hand-written `PayPalClient`
+   * applied, which the capabilities ran on before #146.
+   */
+  const viaSession = (response: () => Response | Promise<Response>) =>
+    Effect.runPromise(
       Effect.flip(
-        Effect.flatMap(PayPal.PayPalClient, (client) =>
-          client.request({ method: "GET", path: "/v1/catalogs/products/PROD-1" }),
-        ).pipe(Effect.provide(PayPal.layer(config())), Effect.provide(api.http)),
+        Effect.gen(function* () {
+          const http = yield* HttpClient.HttpClient;
+          const reply = yield* send(
+            http,
+            HttpClientRequest.get(`${LIVE}/v1/catalogs/products/PROD-1`),
+            Duration.infinity,
+            "request",
+          );
+          return yield* handlePayPalError(reply.status, errorBodyOf(reply.json));
+        }).pipe(Effect.provide(paypal(response).http)),
       ),
     );
-  };
   /** The error `Product.retrieve` fails with on `response`. */
   const viaCapability = (response: () => Response | Promise<Response>) =>
     run(Effect.flip(Product.retrieve("PROD-1")), paypal(response).http);
@@ -582,17 +594,17 @@ describe("PayPalPayments errors", () => {
     [507, body("INSUFFICIENT_STORAGE", "Full"), "InternalServerError", PaymentProviderError],
     [418, { message: 7, details: "not an array" }, "UnknownPaypalError", PaymentProviderError],
   ] as const)(
-    "a %i (Distilled: %#) maps as PayPalClient maps it",
+    "a %i (Distilled: %#) maps as PayPalClient mapped it",
     async (status, payload, tag, neutral) => {
       const response = () => jsonResponse(status, payload);
       expect(await viaDistilled(response)).toBe(tag);
       const capability = await viaCapability(response);
       expect(capability).toBeInstanceOf(neutral);
-      expect(fieldsOf(capability)).toEqual(fieldsOf(await viaClient(response)));
+      expect(fieldsOf(capability)).toEqual(fieldsOf(await viaSession(response)));
     },
   );
 
-  it("maps the status, param and code as PayPalClient does", async () => {
+  it("maps the status, param and code as PayPalClient did", async () => {
     const bad = await viaCapability(() =>
       jsonResponse(400, body("INVALID_REQUEST", "Bad", [{ field: "/name", issue: "MISSING" }])),
     );
@@ -609,12 +621,12 @@ describe("PayPalPayments errors", () => {
     expect(limited).toMatchObject({ message: "Slow down" });
   });
 
-  it("a non-JSON error body maps as PayPalClient maps it", async () => {
+  it("a non-JSON error body maps as PayPalClient mapped it", async () => {
     const response = () => new Response("<html>Bad Gateway</html>", { status: 502 });
     const capability = await viaCapability(response);
     expect(capability).toBeInstanceOf(PaymentProviderError);
     expect(capability.message).toBe("PayPal request failed with status 502");
-    expect(fieldsOf(capability)).toEqual(fieldsOf(await viaClient(response)));
+    expect(fieldsOf(capability)).toEqual(fieldsOf(await viaSession(response)));
   });
 
   it("a 2xx whose body is not JSON fails to decode, as PayPalClient's {} did", async () => {
@@ -631,13 +643,13 @@ describe("PayPalPayments errors", () => {
     expect(price.id).toBe("P-1");
   });
 
-  it("a connection failure is a PaymentNetworkError, as PayPalClient reports it", async () => {
+  it("a connection failure is a PaymentNetworkError, as PayPalClient reported it", async () => {
     const response = () => {
       throw new TypeError("fetch failed");
     };
     const capability = await viaCapability(response);
     expect(capability).toBeInstanceOf(PaymentNetworkError);
-    expect(fieldsOf(capability)).toEqual(fieldsOf(await viaClient(response)));
+    expect(fieldsOf(capability)).toEqual(fieldsOf(await viaSession(response)));
   });
 
   it("a request that never answers fails with PaymentNetworkError after the timeout", async () => {
@@ -723,8 +735,28 @@ describe("PayPalPayments errors", () => {
         ),
       ),
     );
+    // A token response that does not decode, one of them carrying a token.
+    const loginMalformed = await Promise.all(
+      [{ access_token: 42 }, { access_token: `${TOKEN}leak`, expires_in: "x" }].map((answer) =>
+        run(
+          Effect.flip(Product.retrieve("PROD-1")),
+          paypal(
+            () => jsonResponse(200, PRODUCT),
+            () => jsonResponse(200, answer),
+          ).http,
+        ),
+      ),
+    );
     const basic = btoa(`client_1:${CLIENT_SECRET}`);
-    for (const error of [auth, invalid, network, loginRefused, loginDown, timeout]) {
+    for (const error of [
+      auth,
+      invalid,
+      network,
+      loginRefused,
+      loginDown,
+      timeout,
+      ...loginMalformed,
+    ]) {
       // `JSON.stringify` and `String` go through Effect's `Headers`
       // redaction, so they would miss a request kept anywhere in the error;
       // walk every value it holds instead.
