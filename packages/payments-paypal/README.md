@@ -57,7 +57,7 @@ const products = PayPalPayments.productsLayer.pipe(
 
 ### Calls of your own
 
-This package publishes no PayPal REST client of its own: `./PayPal` (`PayPalClient`, `PayPal.layer` / `layerFromEnv` / `make`, `PayPalRequest`) was removed once the capabilities ran on Distilled. For an endpoint the capabilities do not cover, call `@distilled.cloud/paypal`'s operations directly, with an access token you obtained yourself (this package's OAuth login is internal to `layer` / `layerFromEnv`). Depend on `@distilled.cloud/paypal` at exactly this package's version of it:
+This package publishes no PayPal REST client of its own: `./PayPal` (`PayPalClient`, `PayPal.layer` / `layerFromEnv` / `make`, `PayPalRequest`) was removed once the capabilities ran on Distilled. For an endpoint the capabilities do not cover, call `@distilled.cloud/paypal`'s operations directly, with an access token you obtained yourself (this package's OAuth login is internal to `layer` / `layerFromEnv`). Depend on `@distilled.cloud/paypal` at exactly this package's version of it (`1.0.0-rc.13` today; check this package's `dependencies` after an upgrade):
 
 ```typescript
 import { Effect, Layer } from "effect";
