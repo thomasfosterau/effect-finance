@@ -7,9 +7,9 @@ export default defineConfig({
       // entry but `./Stripe` loads the optional `stripe` SDK at runtime
       // (src/sdkOptional.ts) and that the resource modules migrated to
       // generated Schema types (#56) name it in no declaration
-      // (src/declarationsFreeOfSdk.ts), and that no declaration reaches
-      // Distilled's generated Stripe operations (src/distilledDeclarations.ts,
-      // #146). Depends on every package's build so
+      // (src/declarationsFreeOfSdk.ts), and that no Stripe or PayPal
+      // declaration reaches Distilled's generated operations
+      // (src/distilledDeclarations.ts, #146). Depends on every package's build so
       // `vp run check` at the root always exercises fresh `dist/` output.
       check: {
         command:

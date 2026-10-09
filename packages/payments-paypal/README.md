@@ -2,7 +2,7 @@
 
 A PayPal implementation of the vendor-neutral effect-payments core.
 
-It implements the capabilities PayPal supports from [`@thomasfosterau/effect-payments`](https://www.npmjs.com/package/@thomasfosterau/effect-payments) over PayPal's REST API, through `effect/http` with no vendor SDK.
+It implements the capabilities PayPal supports from [`@thomasfosterau/effect-payments`](https://www.npmjs.com/package/@thomasfosterau/effect-payments) over [Distilled's PayPal operations](https://www.npmjs.com/package/@distilled.cloud/paypal) (`@distilled.cloud/paypal`, on `effect/http`: no vendor SDK, and no Node API but a `process` global; see [Runtime: a `process` global](#runtime-a-process-global)), authenticated by this package's own OAuth login. A low-level `PayPalClient` stays for calls of your own.
 
 The same neutral program runs on PayPal, Stripe or Airwallex — only the layer you provide changes.
 
@@ -12,7 +12,7 @@ The same neutral program runs on PayPal, Stripe or Airwallex — only the layer 
 pnpm add @thomasfosterau/effect-payments @thomasfosterau/effect-payments-paypal effect
 ```
 
-`effect` is a peer dependency.
+`effect` is a peer dependency, at `^4.0.0`: that is the peer range `@distilled.cloud/paypal` and `@distilled.cloud/core` declare, and no `4.0.0-rc.*` prerelease satisfies it. Those two are dependencies, pinned exactly (they are pre-1.0): about 9 MB installed with core's `graphql` dependency (shared with the Stripe package when both are installed), of which a bundler keeps only the operations the capabilities you use call.
 
 ## Usage
 
@@ -37,6 +37,28 @@ const layer = PayPalPayments.layer({
 const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 ```
 
+### What the layers require
+
+`PayPalPayments.layer` / `layerFromEnv` need only an `HttpClient`: they log in with the client credentials. The individual capability layers (`productsLayer` … `refundsLayer`) and `capabilities` need Distilled's `Credentials` and an `HttpClient` instead, and send the credentials' access token as it is, with no login and no refresh:
+
+```typescript
+import { Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
+import { fromApiKey } from "@distilled.cloud/paypal/Credentials";
+import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
+
+// An access token you obtained yourself; depend on `@distilled.cloud/paypal`
+// at exactly this package's version of it to import `fromApiKey`.
+const products = PayPalPayments.productsLayer.pipe(
+  Layer.provide(fromApiKey({ apiKey: "A21AA…", apiBaseUrl: "https://api-m.sandbox.paypal.com" })),
+  Layer.provide(FetchHttpClient.layer),
+);
+```
+
+### Runtime: a `process` global
+
+The capability layers need a `process` global with an `env` object. Distilled reads `process.env.DISTILLED_DEBUG_HTTP`, unguarded, each time it builds a request and each time it reads a response, so where there is no `process` global every capability call dies with a defect, not a `PaymentsError`. Node, Bun and Deno have one; on **Cloudflare Workers, enable the `nodejs_compat` compatibility flag**. Loading the package, building the layers and the OAuth login do not touch `process`, and neither does `PayPalClient`. While `DISTILLED_DEBUG_HTTP` is set, Distilled writes each request's method and path template (`POST /v2/checkout/orders/{id}/capture`) and each response's status to `console.error`; it logs no header, body or id.
+
 ## Supported capabilities
 
 PayPal's billing suite and checkout APIs map onto a subset of the core capabilities — a different subset from Airwallex, which makes it a good test of the abstraction:
@@ -56,7 +78,8 @@ Because each capability is an independent Effect service, a program that only us
 ## Notes
 
 - **Money** — the core uses minor units (e.g. cents); PayPal uses major-unit decimal _strings_ (e.g. `"10.00"`). This provider converts in both directions with integer arithmetic, using PayPal's own currency table (`HUF`, `JPY` and `TWD` take no decimals; `KWD`, `TND` and the other ISO 4217 three-decimal currencies take three). A response amount with more decimals than its currency allows, or beyond the safe-integer range in minor units, fails with `PaymentProviderError` instead of being rounded; a request amount that is negative or not a safe integer fails with `PaymentInvalidRequestError` before anything is sent.
-- **`PayPal`** — the client service performs the OAuth client-credentials handshake and caches the access token. Every request goes through `effect/http`'s `HttpClient`, which the layer requires — provide `FetchHttpClient.layer` in production, or a stub `HttpClient` (or a stub `FetchHttpClient.Fetch`) in tests; set `environment: "sandbox"` (or `PAYPAL_ENV=sandbox`) for testing against PayPal sandbox.
+- **On Distilled** — each capability call is one of Distilled's generated operations (`createOrder`, `getPlan`, …), sent with the access token of this package's OAuth client-credentials login (cached, refreshed a minute before it expires, forgotten after a 401). Around every call the layers apply the request policy `PayPalClient` has always applied: `Content-Type` and `Accept: application/json` on every request (PayPal refuses a bodyless `POST` without a content type), no retries (Distilled's are switched off), a per-request timeout, and every failure (an HTTP status, a connection failure, a Distilled error) mapped onto the neutral errors from the response's status and PayPal's error body. The layers keep Distilled's response validation lenient even under its `ResponseValidation.strict`: its schemas mark nested members required (a billing cycle's `sequence`, a link's `href`, …) that the layers never read, and the layers decode the fields they map instead.
+- **`PayPal`** — the low-level client service: the same OAuth login and cached token, and one `request` method for calls of your own to PayPal's REST API. Every request goes through `effect/http`'s `HttpClient`, which the layer requires — provide `FetchHttpClient.layer` in production, or a stub `HttpClient` (or a stub `FetchHttpClient.Fetch`) in tests; set `environment: "sandbox"` (or `PAYPAL_ENV=sandbox`) for testing against PayPal sandbox.
 - **Timeouts** — the token login fails with `PaymentNetworkError` after `loginTimeout` ms (default 30 000) and any other request after `timeout` ms (default 80 000, as in the Stripe transport). Logins are serialised, so without a bound one hung login would stall every request on the client; after a timeout the next caller logs in afresh. `layerFromEnv` uses the defaults; pass `loginTimeout` / `timeout` to `layer` to change them (`Infinity` disables one; `0`, a negative number or `NaN` fails with `PaymentConfigError`). Two things to know:
   - `timeout` covers the resource request only, not getting a token. Callers that arrive while a login is in flight share its outcome: they get its token, or they all fail with its error after about one `loginTimeout`. The next call after a failure starts a fresh login.
   - A **non-GET that times out has an unknown outcome**: the vendor may have applied the write. Don't blindly retry a create, capture or refund without a key: the client's `requestId` (below) is what lets the vendor recognise the repeat.
@@ -76,13 +99,14 @@ Because each capability is an independent Effect service, a program that only us
 - **Empty variables** — `layerFromEnv` reads `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV` and the optional `PAYPAL_BASE_URL` through `Config`. Effect treats a literal empty string as a missing value, so an empty id, secret or `PAYPAL_ENV` fails with `PaymentConfigError`, and an empty `PAYPAL_BASE_URL` means the `PAYPAL_ENV` endpoint, not a blank URL. `make` refuses a `baseUrl` that is blank or not an absolute http(s) URL with `PaymentConfigError`.
 - **Secrets** — `clientSecret` is a `Redacted<string>` (`Redacted.make(...)`; `layerFromEnv` reads it with `Config.Redacted`), so the client secret never reaches a log line or an error.
 - **Decoded responses** — every PayPal response the capabilities read is decoded with a `Schema` at the boundary; a response that does not match fails with `PaymentProviderError` instead of producing a half-built entity. `PayPalClient.request` returns `unknown`.
+- **Ids** — a path id (`Product.retrieve(id)`, `Subscription.cancel(id)`, …) that is not a non-empty string fails with `PaymentInvalidRequestError` (`param: "id"`) before anything is sent, and so does `Subscription.create` without an item (`param: "items"`).
 
 ## API
 
 | Module | Purpose |
 | --- | --- |
-| `PayPalPayments` | `layer` / `layerFromEnv` (client + every supported capability; need an `HttpClient`), `capabilities` (over an existing `PayPalClient`), the individual capability layers, and the `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs. |
-| `PayPal` | The `PayPalClient` service (OAuth handshake, cached token, `request`), `layer` / `layerFromEnv` / `make`, and the `PayPalConfig` / `PayPalEnvironment` / `PayPalRequest` types. |
+| `PayPalPayments` | `layer` / `layerFromEnv` (the OAuth login + every supported capability; need an `HttpClient`), `capabilities` and the individual capability layers (over Distilled's `Credentials` and an `HttpClient`), and the `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs. |
+| `PayPal` | The `PayPalClient` service (OAuth handshake, cached token, `request`) for calls of your own, `layer` / `layerFromEnv` / `make`, and the `PayPalConfig` / `PayPalEnvironment` / `PayPalRequest` types. |
 
 The root entry re-exports both as namespaces, plus the core as `Payments`.
 

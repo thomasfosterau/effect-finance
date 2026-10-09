@@ -5,7 +5,7 @@
  * @module
  */
 
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import {
   PaymentAuthenticationError,
   PaymentInvalidRequestError,
@@ -31,6 +31,10 @@ export const PayPalErrorBody = Schema.Struct({
   ),
 });
 export type PayPalErrorBody = typeof PayPalErrorBody.Type;
+
+/** A vendor error body, decoded leniently: an unexpected shape maps as absent. */
+export const errorBodyOf = (json: unknown): PayPalErrorBody | undefined =>
+  Option.getOrUndefined(Schema.decodeUnknownOption(PayPalErrorBody)(json));
 
 /**
  * Map a PayPal HTTP status + error body onto a neutral payments error.

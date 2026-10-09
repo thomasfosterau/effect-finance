@@ -47,6 +47,8 @@
     "access": "public"
   },
   "dependencies": {
+    "@distilled.cloud/core": "catalog:",
+    "@distilled.cloud/paypal": "catalog:",
     "@thomasfosterau/effect-payments": "workspace:^"
   },
   "devDependencies": {
@@ -56,7 +58,7 @@
     "effect": "catalog:"
   },
   "peerDependencies": {
-    "effect": "catalog:peers"
+    "effect": "catalog:peers-distilled"
   },
   "engines": {
     "node": ">=22"

@@ -4,11 +4,13 @@
  * A PayPal implementation of the vendor-neutral
  * `@thomasfosterau/effect-payments` core. It provides:
  *
- * - **`PayPal`** — the PayPal client service (OAuth handshake + HTTP) and the
- *   `Layer`s that construct it from configuration or the environment.
+ * - **`PayPal`** — the low-level PayPal client service (OAuth handshake +
+ *   HTTP) for calls of your own, and the `Layer`s that construct it from
+ *   configuration or the environment.
  * - **`PayPalPayments`** — `Layer`s that implement the `Products`, `Prices`,
  *   `PaymentIntents`, `Subscriptions` and `Refunds` capabilities on top of
- *   PayPal, plus `layer`/`layerFromEnv` bundles.
+ *   Distilled's PayPal operations (`@distilled.cloud/paypal`), plus
+ *   `layer`/`layerFromEnv` bundles that log in with the client credentials.
  *
  * PayPal has no first-class customer resource, so it does not implement the
  * core's `Customers` capability. The same neutral program runs on PayPal,

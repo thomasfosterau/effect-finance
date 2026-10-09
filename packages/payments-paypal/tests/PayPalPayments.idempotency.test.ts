@@ -8,8 +8,8 @@ import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
 import * as IdempotencyKey from "@thomasfosterau/effect-payments/IdempotencyKey";
 import { PaymentInvalidRequestError, PaymentNetworkError } from "@thomasfosterau/effect-payments";
-import { PayPalClient, type PayPalRequest } from "../src/PayPal.ts";
 import * as PayPalPayments from "../src/PayPalPayments.ts";
+import { capabilitiesOver, stubPayPal } from "./support.ts";
 
 /**
  * The neutral `idempotencyKey` (#55, closing #66) on the create and confirm
@@ -21,20 +21,11 @@ const KEY = IdempotencyKey.IdempotencyKey.make("write-0001");
 
 type Capabilities = Layer.Success<typeof PayPalPayments.capabilities>;
 
-/** Run `operation` over a fake client answering `{}` (the decode fails; the request was recorded first). */
+/** Run `operation` over a stubbed API answering `{}` (the decode fails; the request was recorded first). */
 const requestsOf = async (operation: Effect.Effect<unknown, unknown, Capabilities>) => {
-  const calls: Array<PayPalRequest> = [];
-  const client = PayPalClient.of({
-    request: (request) => Effect.sync(() => (calls.push(request), {})),
-  });
+  const { calls, layer } = stubPayPal(() => ({}));
   const exit = await Effect.runPromise(
-    Effect.exit(
-      operation.pipe(
-        Effect.provide(
-          Layer.provide(PayPalPayments.capabilities, Layer.succeed(PayPalClient, client)),
-        ),
-      ),
-    ),
+    Effect.exit(operation.pipe(Effect.provide(capabilitiesOver(layer)))),
   );
   return { calls, exit };
 };
@@ -107,30 +98,22 @@ describe("PayPal maps the neutral idempotencyKey to PayPal-Request-Id", () => {
   );
 
   it("sends no key on a refund's lookups, only on the refund itself", async () => {
-    const calls: Array<PayPalRequest> = [];
-    const client = PayPalClient.of({
-      request: (request) =>
-        Effect.sync(() => {
-          calls.push(request);
-          if (request.path.startsWith("/v2/checkout/orders/")) {
-            return {
-              id: "ORD-1",
-              status: "COMPLETED",
-              purchase_units: [{ payments: { captures: [{ id: "CAP-2" }] } }],
-            };
+    const { calls, layer } = stubPayPal((request) =>
+      request.path.startsWith("/v2/checkout/orders/")
+        ? {
+            id: "ORD-1",
+            status: "COMPLETED",
+            purchase_units: [{ payments: { captures: [{ id: "CAP-2" }] } }],
           }
-          return {
+        : {
             id: "REF-1",
             status: "PENDING",
             amount: { currency_code: "USD", value: "1.00" },
-          };
-        }),
-    });
+          },
+    );
     await Effect.runPromise(
       Refund.create({ paymentIntent: "ORD-1", idempotencyKey: KEY }).pipe(
-        Effect.provide(
-          Layer.provide(PayPalPayments.capabilities, Layer.succeed(PayPalClient, client)),
-        ),
+        Effect.provide(capabilitiesOver(layer)),
       ),
     );
     expect(calls.map((call) => [call.method, call.requestId])).toEqual([

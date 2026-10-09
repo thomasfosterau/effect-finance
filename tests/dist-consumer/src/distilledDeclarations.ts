@@ -1,54 +1,56 @@
 /**
- * The consumer type-check cost of #146: `@distilled.cloud/stripe` puts every
- * Stripe operation in one generated module whose declaration file is about
- * 7.5 MB, and a consumer whose declarations reach it type-checks all of it.
- * `StripePayments` runs on those operations but names only Distilled's
- * `Credentials` (its own small subpath) in its declarations.
+ * The consumer type-check cost of #146: Distilled's generated operation
+ * modules are large declaration files (`@distilled.cloud/stripe` puts every
+ * Stripe operation in one of about 7.5 MB; `@distilled.cloud/paypal`'s
+ * Orders module alone is about 0.8 MB), and a consumer whose declarations
+ * reach one type-checks all of it. `StripePayments` and `PayPalPayments` run
+ * on those operations but name only Distilled's `Credentials` (each its own
+ * small subpath) in their declarations.
  *
- * Walks the `.d.ts` graph of `packages/payments-stripe/dist/` from every
- * published entry point (following `import … from`, `export … from` and
- * `import("…")` types into the shared declaration chunks) and fails if any
- * declaration reachable from one names a `@distilled.cloud/*` module other
- * than the small subpaths below, which load no generated operation. Run by
- * this package's `check` task against the fresh `dist/` its build edges
- * produce. Plain Node: nothing here is Effect code.
+ * Walks the `.d.ts` graph of each package's `dist/` from every published
+ * entry point (following `import … from`, `export … from` and `import("…")`
+ * types into the shared declaration chunks) and fails if any declaration
+ * reachable from one names a `@distilled.cloud/*` module other than the small
+ * subpath below, which loads no generated operation. Run by this package's
+ * `check` task against the fresh `dist/` its build edges produce. Plain Node:
+ * nothing here is Effect code.
  */
 
-import { reachableFrom, read, specifiersIn } from "./declarationGraph.ts";
+import { graphOf } from "./declarationGraph.ts";
 
 const DISTILLED = "@distilled.cloud/";
 
-/** The Distilled subpaths a declaration may name: none loads the generated operations. */
-const LIGHT = new Set(["@distilled.cloud/stripe/Credentials"]);
+/** Each package on Distilled, and the one Distilled subpath its declarations may name. */
+const PACKAGES = [
+  { directory: "payments-stripe", light: "@distilled.cloud/stripe/Credentials" },
+  { directory: "payments-paypal", light: "@distilled.cloud/paypal/Credentials" },
+] as const;
 
-// SAFETY: the package manifest always carries an `exports` map whose entries
-// name their declarations (vite.package.ts derives the pack entries from it).
-const manifest = JSON.parse(read("../package.json")) as {
-  readonly exports: Record<string, { readonly types: string }>;
-};
-const entries = Object.values(manifest.exports).map((target) =>
-  target.types.replace("./dist/", ""),
-);
+const failures = PACKAGES.flatMap(({ directory, light }) => {
+  const { entries, reachableFrom, specifiersIn } = graphOf(directory);
+  const heavy = entries().flatMap((entry) =>
+    reachableFrom(entry).flatMap((file) =>
+      specifiersIn(file)
+        .filter((specifier) => specifier.startsWith(DISTILLED) && specifier !== light)
+        .map(
+          (specifier) =>
+            `heavy Distilled declaration: ${directory}: ${entry} -> ${file} -> ${specifier}`,
+        ),
+    ),
+  );
+  const named = entries().some((entry) =>
+    reachableFrom(entry).some((file) => specifiersIn(file).includes(light)),
+  );
+  return named
+    ? heavy
+    : [...heavy, `sanity check failed: no ${directory} declaration names ${light}`];
+});
 
-const heavy = entries.flatMap((entry) =>
-  reachableFrom(entry).flatMap((file) =>
-    specifiersIn(file)
-      .filter((specifier) => specifier.startsWith(DISTILLED) && !LIGHT.has(specifier))
-      .map((specifier) => `${entry} -> ${file} -> ${specifier}`),
-  ),
-);
-const named = entries.some((entry) =>
-  reachableFrom(entry).some((file) => specifiersIn(file).some((item) => LIGHT.has(item))),
-);
-
-if (heavy.length > 0 || !named) {
-  for (const trail of heavy) process.stderr.write(`heavy Distilled declaration: ${trail}\n`);
-  if (!named) {
-    process.stderr.write("sanity check failed: no declaration names Distilled's Credentials\n");
-  }
+if (failures.length > 0) {
+  for (const failure of failures) process.stderr.write(`${failure}\n`);
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    `Distilled declarations stay light: ${entries.length} entries name only ${[...LIGHT].join(", ")}\n`,
+    `Distilled declarations stay light: ${PACKAGES.map(({ directory, light }) => `${directory} names only ${light}`).join("; ")}\n`,
   );
 }

@@ -15,6 +15,9 @@ catalogs:
     '@distilled.cloud/core':
       specifier: 1.0.0-rc.13
       version: 1.0.0-rc.13
+    '@distilled.cloud/paypal':
+      specifier: 1.0.0-rc.13
+      version: 1.0.0-rc.13
     '@distilled.cloud/stripe':
       specifier: 1.0.0-rc.13
       version: 1.0.0-rc.13
@@ -174,6 +177,12 @@ importers:
 
   packages/payments-paypal:
     dependencies:
+      '@distilled.cloud/core':
+        specifier: 'catalog:'
+        version: 1.0.0-rc.13(effect@4.0.0)
+      '@distilled.cloud/paypal':
+        specifier: 'catalog:'
+        version: 1.0.0-rc.13(effect@4.0.0)
       '@thomasfosterau/effect-payments':
         specifier: workspace:^
         version: link:../payments
@@ -227,6 +236,9 @@ importers:
 
   tests/dist-consumer:
     dependencies:
+      '@distilled.cloud/paypal':
+        specifier: 'catalog:'
+        version: 1.0.0-rc.13(effect@4.0.0)
       '@distilled.cloud/stripe':
         specifier: 'catalog:'
         version: 1.0.0-rc.13(effect@4.0.0)
@@ -404,6 +416,11 @@ packages:
 
   '@distilled.cloud/core@1.0.0-rc.13':
     resolution: {integrity: sha512-RYyrxW+F5zrTuu1UWV/JoycholBCIkXIusYJdDniDwCdmbjdKGl07KlkkeeY774uBawNGf+pt1ESNGeLVnNHsg==}
+    peerDependencies:
+      effect: 4.0.0
+
+  '@distilled.cloud/paypal@1.0.0-rc.13':
+    resolution: {integrity: sha512-gktpW5U6qCL5B0zX65nWGuYd6TSlJ2jsq3TG2ySoAeAcWKgjmZFxyMMSBuxQEygbEWH5n0sHi//XGgbYxAnvww==}
     peerDependencies:
       effect: 4.0.0
 
@@ -2890,6 +2907,11 @@ snapshots:
     dependencies:
       effect: 4.0.0
       graphql: 16.11.0
+
+  '@distilled.cloud/paypal@1.0.0-rc.13(effect@4.0.0)':
+    dependencies:
+      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.0)
+      effect: 4.0.0
 
   '@distilled.cloud/stripe@1.0.0-rc.13(effect@4.0.0)':
     dependencies:

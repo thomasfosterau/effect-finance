@@ -6,27 +6,20 @@ import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
 import { PaymentInvalidRequestError, PaymentProviderError } from "@thomasfosterau/effect-payments";
-import { PayPalClient, type PayPalRequest } from "../src/PayPal.ts";
-import * as PayPalPayments from "../src/PayPalPayments.ts";
+import type * as PayPalPayments from "../src/PayPalPayments.ts";
+import { capabilitiesOver, type PayPalCall, stubPayPal } from "./support.ts";
 
 /**
- * A fake PayPal client: records every request and returns whatever `responder`
- * produces, so we can assert both the neutral mapping and the request bodies the
- * layers build — without any network.
+ * A stubbed PayPal API: records every request and answers whatever
+ * `responder` produces, so we can assert both the neutral mapping and the
+ * request bodies the layers build — without any network.
  */
-const makeFakeClient = (responder: (req: PayPalRequest) => unknown) => {
-  const calls: PayPalRequest[] = [];
-  const client = PayPalClient.of({
-    request: (req: PayPalRequest) => {
-      calls.push(req);
-      return Effect.succeed(responder(req));
-    },
-  });
-  return { client, calls };
+const makeFakeClient = (responder: (req: PayPalCall) => unknown) => {
+  const { calls, layer } = stubPayPal(responder);
+  return { client: layer, calls };
 };
 
-const provide = (client: typeof PayPalClient.Service) =>
-  Layer.provide(PayPalPayments.capabilities, Layer.succeed(PayPalClient, client));
+const provide = capabilitiesOver;
 
 describe("PayPalPayments capabilities", () => {
   it("maps a catalog product", async () => {
@@ -255,7 +248,7 @@ describe("PayPalPayments decoding", () => {
   /** Run `effect` against a client answering `body`, to its failure. */
   const failure = <E>(
     effect: Effect.Effect<unknown, E, Layer.Success<typeof PayPalPayments.capabilities>>,
-    body: (req: PayPalRequest) => unknown,
+    body: (req: PayPalCall) => unknown,
   ): Promise<E> =>
     Effect.runPromise(
       Effect.flip(effect).pipe(Effect.provide(provide(makeFakeClient(body).client))),
@@ -393,7 +386,7 @@ describe("PayPalPayments decoding", () => {
 
 describe("PayPalPayments money", () => {
   /** An order echoing the amount it was created with. */
-  const echoOrder = (req: PayPalRequest) => ({
+  const echoOrder = (req: PayPalCall) => ({
     id: "ORD-1",
     status: "CREATED",
     purchase_units: [
