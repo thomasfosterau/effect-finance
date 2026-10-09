@@ -29,7 +29,7 @@
  * @module
  */
 
-import { type Context, Effect, Layer, Predicate } from "effect";
+import { type Context, Effect, Layer, Predicate, type Redacted } from "effect";
 import type { HttpClient } from "effect/http";
 import type { Credentials } from "@distilled.cloud/paypal/Credentials";
 import {
@@ -69,7 +69,6 @@ import {
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
 import { checkMinorUnits } from "@thomasfosterau/effect-payments/internal";
-import type { PayPalConfig } from "./PayPal.js";
 import {
   DistilledClient,
   layer as clientLayer,
@@ -90,6 +89,54 @@ import {
 } from "./internal/mapping.js";
 import { toMajorString } from "./internal/money.js";
 import { omitUndefined } from "./internal/omitUndefined.js";
+
+/**
+ * Which PayPal environment the capabilities talk to: `live` (real money) or
+ * `sandbox` (PayPal's test environment).
+ */
+export type PayPalEnvironment = "live" | "sandbox";
+
+/** The configuration {@link layer} logs in and sends every request with. */
+export interface PayPalConfig {
+  /** The REST app's client id. */
+  readonly clientId: string;
+  /** The client secret, kept `Redacted` so it never reaches a log line or an error. */
+  readonly clientSecret: Redacted.Redacted<string>;
+  /**
+   * The environment to talk to, which selects the API base URL: `live`
+   * (`https://api-m.paypal.com`) or `sandbox`
+   * (`https://api-m.sandbox.paypal.com`). Defaults to `live`; `baseUrl`, when
+   * set, wins over it. {@link layerFromEnv} always passes it (`PAYPAL_ENV` is
+   * required there).
+   */
+  readonly environment?: PayPalEnvironment | undefined;
+  /**
+   * Override the API base URL (by default the {@link PayPalConfig.environment}'s
+   * endpoint). Must be an absolute http(s) URL: an empty or relative value
+   * fails {@link layer} with {@link PaymentConfigError} rather than falling
+   * back to an environment's endpoint.
+   */
+  readonly baseUrl?: string | undefined;
+  /**
+   * How long the token login may take, in milliseconds, before it fails with
+   * `PaymentNetworkError`. Defaults to 30 000; `Infinity` disables it, and
+   * `0`, a negative number or `NaN` fails with `PaymentConfigError`. Logins are
+   * serialised, so a login that never answers would otherwise stall every
+   * request. Callers that arrive while a login is in flight share its
+   * outcome, so each waits at most about one `loginTimeout`; the next call
+   * after a failure logs in afresh (#65).
+   */
+  readonly loginTimeout?: number | undefined;
+  /**
+   * How long a resource request may take (response headers and body), in
+   * milliseconds, before it fails with `PaymentNetworkError`. Defaults to
+   * 80 000, the Stripe transport's per-attempt timeout; `Infinity` disables it.
+   * It does not include acquiring a token (see `loginTimeout`). A write that
+   * times out has an unknown outcome — PayPal may have applied it — so retry
+   * it only with the same `idempotencyKey` (#66).
+   */
+  readonly timeout?: number | undefined;
+}
 
 /**
  * The requirements of a capability layer: Distilled's `Credentials` (an
@@ -519,7 +566,10 @@ export const layer = (
  * The PayPal capabilities in one layer, with the configuration read from
  * environment variables (`PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, the
  * required `PAYPAL_ENV` of `live` or `sandbox`, and the optional
- * `PAYPAL_BASE_URL` override; see `PayPal.layerFromEnv`). Requires an
+ * `PAYPAL_BASE_URL` override, which wins over `PAYPAL_ENV`'s endpoint). A
+ * missing or misspelt `PAYPAL_ENV` fails with `PaymentConfigError` instead of
+ * selecting live, and an empty variable counts as unset (Effect rc.118 reads
+ * an empty string as missing). Requires an
  * `HttpClient` (`FetchHttpClient.layer`).
  */
 export const layerFromEnv = (

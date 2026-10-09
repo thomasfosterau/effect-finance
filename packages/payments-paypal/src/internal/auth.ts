@@ -1,7 +1,6 @@
 /**
- * The PayPal OAuth session both clients authenticate with: `PayPalClient`
- * (`PayPal.ts`) and the Distilled client the capability layers run on
- * (`internal/distilled.ts`).
+ * The PayPal OAuth session the Distilled client the capability layers run on
+ * (`internal/distilled.ts`) authenticates with.
  *
  * A session validates a {@link PayPalConfig}, resolves the API base URL from
  * its `environment` / `baseUrl`, and owns the client-credentials login: the
@@ -27,7 +26,7 @@ import {
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
 import { shareLogin } from "@thomasfosterau/effect-payments/internal";
-import type { PayPalConfig, PayPalEnvironment } from "../PayPal.js";
+import type { PayPalConfig, PayPalEnvironment } from "../PayPalPayments.js";
 import { errorBodyOf, handlePayPalError, PROVIDER } from "./error.js";
 
 /** The REST API base URL of each {@link PayPalEnvironment}; request paths carry `/v1` or `/v2`. */

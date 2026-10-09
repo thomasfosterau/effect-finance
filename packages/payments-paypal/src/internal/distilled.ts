@@ -1,7 +1,8 @@
 /**
  * The client the capability layers (`PayPalPayments`) reach PayPal through:
  * Distilled's generated operations (`@distilled.cloud/paypal`), run under the
- * request policy `PayPalClient` (`PayPal.ts`) has always applied.
+ * request policy below (the one the package's hand-written REST client
+ * applied before #146 removed it).
  *
  * Distilled builds and sends each request (the URI template and its path ids,
  * the query string, the JSON body, the `PayPal-Request-Id` header of a write)
@@ -12,23 +13,23 @@
  *   from the shared OAuth login and its cache, never from Distilled's
  *   `CredentialsFromEnv`, and a 401 forgets the token that request used;
  * - **sends `Content-Type: application/json` and `Accept: application/json`
- *   on every request**, as `PayPalClient` does: Distilled sends no body (and
- *   so no content type) on a `POST` without body members, and PayPal answers
- *   a bodyless `POST /v1/billing/plans/{id}/activate` without one with 415;
+ *   on every request**: Distilled sends no body (and so no content type) on
+ *   a `POST` without body members, and PayPal answers a bodyless
+ *   `POST /v1/billing/plans/{id}/activate` without one with 415;
  * - **pins lenient response validation**, so a response is never refused over
  *   a field this package does not read; the capability layers decode the
  *   fields they map instead;
- * - **switches Distilled's retries off**: like `PayPalClient`, it never
- *   repeats a request, so a write is retried only by its caller, with the
- *   `PayPal-Request-Id` it chose;
+ * - **switches Distilled's retries off**: it never repeats a request, so a
+ *   write is retried only by its caller, with the `PayPal-Request-Id` it
+ *   chose;
  * - **times out** each request (default 80 s, not including the login);
  * - **classifies failures** onto the neutral {@link PaymentsError} channel
- *   exactly as `PayPalClient` does. Distilled's error classes keep neither the
- *   status nor the whole vendor body, so the client watches the response
- *   through the `HttpClient` it hands Distilled and classifies that with
- *   `handlePayPalError`. A failure with no response behind it is a
- *   connection failure ({@link PaymentNetworkError}), or a Distilled error
- *   mapped to {@link PaymentProviderError} by its tag.
+ *   from the response's status and PayPal's error body. Distilled's error
+ *   classes keep neither the status nor the whole vendor body, so the client
+ *   watches the response through the `HttpClient` it hands Distilled and
+ *   classifies that with `handlePayPalError`. A failure with no response
+ *   behind it is a connection failure ({@link PaymentNetworkError}), or a
+ *   Distilled error mapped to {@link PaymentProviderError} by its tag.
  *
  * The token is a `Redacted` until Distilled sets the header; a connection
  * failure keeps only the underlying cause, never the request that carries it.
@@ -58,11 +59,11 @@ import {
   PaymentProviderError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
-import type { PayPalConfig } from "../PayPal.js";
+import type { PayPalConfig } from "../PayPalPayments.js";
 import { configFromEnv, isOk, sessionOf, networkError, type Session, timedOut } from "./auth.js";
 import { errorBodyOf, handlePayPalError, PROVIDER } from "./error.js";
 
-/** A request is abandoned after 80 s unless configured, as in `PayPalClient`. */
+/** A request is abandoned after 80 s unless configured. */
 const DEFAULT_TIMEOUT = /* @__PURE__ */ Duration.millis(80_000);
 
 /** One Distilled operation, as the generated `@distilled.cloud/paypal/<service>` modules export it. */
@@ -161,9 +162,9 @@ const settle = (outcome: Outcome): Effect.Effect<unknown, PaymentsError> =>
 /**
  * `Content-Type: application/json` on a request Distilled sends without a
  * body (a JSON body carries its own), and `Accept: application/json` on
- * every request: the headers `PayPalClient` has always sent.
+ * every request.
  */
-const asPayPalClientSends = (
+const withJsonHeaders = (
   request: HttpClientRequest.HttpClientRequest,
 ): HttpClientRequest.HttpClientRequest => {
   const accepting = HttpClientRequest.acceptJson(request);
@@ -204,7 +205,7 @@ const make = (
         const observed = yield* Ref.make(Option.none<Observed>());
         // Read the body first (the response caches it, so Distilled reads it
         // again), and keep what the classification needs.
-        const watched = HttpClient.mapRequest(http, asPayPalClientSends).pipe(
+        const watched = HttpClient.mapRequest(http, withJsonHeaders).pipe(
           HttpClient.transform((response) =>
             Effect.tap(response, (seen) =>
               Effect.flatMap(seen.text, (text) =>
@@ -280,7 +281,7 @@ const fromSession = (
 
 /**
  * The client from configuration, logging in with the client credentials.
- * Fails with {@link PaymentConfigError} as `PayPal.make` does.
+ * Fails with {@link PaymentConfigError} when the session refuses `config`.
  */
 export const layer = (
   config: PayPalConfig,
@@ -289,7 +290,7 @@ export const layer = (
 
 /**
  * The client with its configuration read from configuration variables while
- * the layer is built, as `PayPal.layerFromEnv` reads it.
+ * the layer is built (`configFromEnv`).
  */
 export const layerFromEnv = (
   clientIdVar: string,
