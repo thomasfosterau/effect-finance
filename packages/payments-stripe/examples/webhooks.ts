@@ -18,8 +18,8 @@
  * its own deliveries with a test secret.
  *
  * The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an
- * optional alternative; they need the `stripe` peer and the SDK client from
- * `Stripe.layer`.
+ * optional alternative; they need the `stripe` peer and an SDK client the
+ * program provides as `Webhook.StripeService`.
  */
 
 import {

@@ -11,6 +11,7 @@ import { type Effect, type Layer, Redacted } from "effect";
 import type { HttpClient } from "effect/http";
 import type { Credentials as PayPalCredentials } from "@distilled.cloud/paypal/Credentials";
 import type { Credentials } from "@distilled.cloud/stripe/Credentials";
+import type * as Distilled from "@distilled.cloud/stripe/stripe";
 import type Stripe from "stripe";
 import {
   money,
@@ -35,8 +36,8 @@ import * as StripeCustomer from "@thomasfosterau/effect-payments-stripe/Customer
 import * as StripeCheckoutSession from "@thomasfosterau/effect-payments-stripe/CheckoutSession";
 import * as StripeBillingPortalSession from "@thomasfosterau/effect-payments-stripe/BillingPortal.Session";
 import * as StripeVerificationSession from "@thomasfosterau/effect-payments-stripe/Identity.VerificationSession";
+import * as StripeInvoice from "@thomasfosterau/effect-payments-stripe/Invoice";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
-import * as StripeSdk from "@thomasfosterau/effect-payments-stripe/Stripe";
 import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
 import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
 import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
@@ -70,7 +71,6 @@ export const stripeConfigLayer = StripePayments.layerConfig({ envVar: "BILLING_S
 export const stripeHttpConfigLayer = StripeHttp.layerConfig();
 export const unavailableLayer = Stub.unavailable("stripe");
 export const stripeHttpLayer = StripeHttp.layer({ apiKey: Redacted.make("sk_test_123") });
-export const stripeSdkLayer = StripeSdk.layer({ apiKey: Redacted.make("sk_test_123") });
 export const paypalLayer = PayPalPayments.layer({
   clientId: "id",
   clientSecret: Redacted.make("secret"),
@@ -81,6 +81,14 @@ export const airwallexLayer = AirwallexPayments.layer({
   apiKey: Redacted.make("key"),
 });
 export const stripeCustomer = StripeCustomer.retrieve("cus_123");
+/** A resource-module operation with every `RequestOptions` field, the per-call version included. */
+export const stripeCustomerAtVersion = StripeCustomer.retrieve(
+  "cus_123",
+  { expand: ["test_clock"] },
+  { apiVersion: "2025-08-27.basil", idempotencyKey: "key-1", stripeAccount: "acct_123" },
+);
+/** An Invoice action the modules did not expose before they re-exported Distilled (#142). */
+export const stripeInvoicePaid = StripeInvoice.pay("in_123");
 export const stripeCheckoutSession = StripeCheckoutSession.create({
   mode: "payment",
   line_items: [{ price: "price_123", quantity: 1 }],
@@ -91,11 +99,9 @@ export const stripePortalSession = StripeBillingPortalSession.create({
   return_url: "https://example.com/account",
 });
 /**
- * A resource module still typed by the `stripe` package, checked so an
- * unmigrated module's emitted `.d.ts` resolves `Stripe.*` rather than a silent
- * `any`. Identity is in #81's last resource slice (11); the closeout slice
- * removes this check, or slice 11 does if it is merged first, since this
- * assertion fails once Identity is migrated.
+ * A resource module the `stripe` package's types described before #146,
+ * checked so its emitted `.d.ts` resolves Distilled's type rather than a
+ * silent `any`: every resource module is Distilled-typed now.
  */
 export const stripeVerificationSession = StripeVerificationSession.retrieve("vs_123");
 export const event = Webhook.constructEvent("{}", "t=1,v1=sig", "whsec_123");
@@ -164,35 +170,46 @@ export type Checks = [
   /** _stripeResourceRequiresTransport */ Assert<
     Equals<Effect.Services<typeof stripeCustomer>, StripeHttp.StripeHttp>
   >,
-  /** _stripeCustomerIsGenerated */ Assert<
-    Equals<
-      Effect.Success<typeof stripeCustomer>,
-      StripeCustomer.Customer | StripeCustomer.DeletedCustomer
-    >
+  /** _stripeResourceFailsNeutrally */ Assert<
+    Equals<Effect.Error<typeof stripeCustomer>, PaymentsError>
   >,
-  /** _stripeUnmigratedIsSdkTyped */ Assert<
-    Equals<Effect.Success<typeof stripeVerificationSession>, Stripe.Identity.VerificationSession>
+  /** _stripeCustomerIsDistilled */ Assert<
+    Equals<Effect.Success<typeof stripeCustomer>, Distilled.GetCustomerResponse>
   >,
-  /** _stripeCheckoutIsGenerated */ Assert<
-    Equals<Effect.Success<typeof stripeCheckoutSession>, StripeCheckoutSession.Session>
+  /** _stripeCustomerSchemaIsReexported */ Assert<
+    Equals<StripeCustomer.Customer, Distilled.Customer>
+  >,
+  /** _stripeOptionsKeepTheType */ Assert<
+    Equals<Effect.Success<typeof stripeCustomerAtVersion>, Distilled.GetCustomerResponse>
+  >,
+  /** _stripeInvoicePayIsDistilled */ Assert<
+    Equals<Effect.Success<typeof stripeInvoicePaid>, Distilled.Invoice>
+  >,
+  /** _stripeVerificationSessionIsDistilled */ Assert<
+    Equals<Effect.Success<typeof stripeVerificationSession>, Distilled.IdentityVerificationSession>
+  >,
+  /** _stripeCheckoutIsDistilled */ Assert<
+    Equals<Effect.Success<typeof stripeCheckoutSession>, StripeCheckoutSession.CheckoutSession>
   >,
   /** _stripeCheckoutRequiresTransport */ Assert<
     Equals<Effect.Services<typeof stripeCheckoutSession>, StripeHttp.StripeHttp>
   >,
-  /** _stripePortalIsGenerated */ Assert<
-    Equals<Effect.Success<typeof stripePortalSession>, StripeBillingPortalSession.Session>
+  /** _stripePortalIsDistilled */ Assert<
+    Equals<
+      Effect.Success<typeof stripePortalSession>,
+      StripeBillingPortalSession.BillingPortalSession
+    >
   >,
   /** _stripePortalUrlIsRequired */ Assert<
-    Equals<StripeBillingPortalSession.Session["url"], string>
+    Equals<StripeBillingPortalSession.BillingPortalSession["url"], string>
   >,
   /** _stripeHttpNeedsHttpClient */ Assert<
     Equals<Layer.Services<typeof stripeHttpLayer>, HttpClient.HttpClient>
   >,
-  /** _stripeSdkProvidesTransport */ Assert<
-    Equals<Layer.Success<typeof stripeSdkLayer>, StripeHttp.StripeHttp | StripeSdk.StripeService>
-  >,
-  /** _stripeSdkNeedsNothing */ Assert<Equals<Layer.Services<typeof stripeSdkLayer>, never>>,
   /** _webhookEvent */ Assert<Equals<Effect.Success<typeof event>, Stripe.Event>>,
+  /** _webhookNeedsTheProgramsSdkClient */ Assert<
+    Equals<Effect.Services<typeof event>, Webhook.StripeService>
+  >,
   /** _stripeNeedsHttpClient */ Assert<
     Equals<Layer.Services<typeof stripeLayer>, HttpClient.HttpClient>
   >,

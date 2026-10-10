@@ -31,7 +31,9 @@ export const graphOf = (directory: string): DeclarationGraph => {
     // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
     readFileSync(new URL(file, dist), "utf8");
   const specifiersIn = (file: string): ReadonlyArray<string> => {
-    const source = read(file);
+    // Doc comments keep their `@example` imports, which a consumer never
+    // resolves; `/// <reference>` directives are line comments, and kept.
+    const source = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
     return [
       ...source.matchAll(/\b(?:from|import)\s*["']([^"']+)["']/g),
       ...source.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g),

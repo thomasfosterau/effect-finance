@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vite-plus/test";
 import { Effect, Layer } from "effect";
-import { StripeService } from "../src/Stripe.ts";
 import * as Webhook from "../src/Webhook.ts";
+import { StripeService } from "../src/Webhook.ts";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
 import Stripe from "stripe";
 

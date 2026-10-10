@@ -23,9 +23,10 @@ export default defineConfig({
     "*.{js,ts,css,json,md}": "vp check --fix",
   },
   fmt: {
-    // `**/generated/**`: machine-written (packages/payments-stripe/src/internal/generated,
-    // scripts/generate-stripe-schemas.ts); formatting it would only make the
-    // next regeneration a diff of whitespace.
+    // `**/generated/**`: reserved for machine-written code that is not
+    // formatted (none today: the Stripe resource modules, written by
+    // packages/payments-stripe/scripts/generate-resources.ts, are formatted by
+    // the generator itself, which `tests/resources.test.ts` checks).
     ignorePatterns: ["**/dist/**", "**/coverage/**", "**/generated/**", "pnpm-lock.yaml"],
     overrides: [
       {

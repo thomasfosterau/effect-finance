@@ -4,9 +4,8 @@
  *
  * Each Stripe object a capability layer reads is **decoded** with a `Schema`
  * narrowed to the fields the mapping uses. The response comes back from
- * Distilled's operations unchecked (lenient validation, `internal/distilled.ts`),
- * typed by schemas generated from a newer API version than the pinned one, so
- * it is not trusted: a
+ * Distilled's operations unchecked (lenient validation, `StripeHttp`), and at
+ * whatever API version the layer is configured with, so it is not trusted: a
  * 2xx whose body does not decode fails with {@link PaymentProviderError}
  * rather than producing an entity built from `undefined`. Unknown fields are
  * ignored, so a newer API version adding fields does not break decoding.
@@ -34,10 +33,22 @@ import {
   Refund as RefundNS,
   CheckoutSession as CheckoutSessionNS,
   BillingPortal as BillingPortalNS,
-  type PaymentProviderError,
+  PaymentProviderError,
   type Page,
 } from "@thomasfosterau/effect-payments";
-import { malformed } from "./decode.js";
+import { PROVIDER } from "./error.js";
+
+/**
+ * The failure for a 2xx whose body is not the shape a mapping reads:
+ * {@link PaymentProviderError} naming the response (`what`), with the decode
+ * failure as its cause.
+ */
+export const malformed = (what: string, cause?: unknown): PaymentProviderError =>
+  new PaymentProviderError({
+    message: `Stripe returned a malformed ${what} response`,
+    provider: PROVIDER,
+    cause,
+  });
 
 /** The vendor data was decoded just before construction. */
 const TRUSTED: Schema.MakeOptions = { disableChecks: true };

@@ -3,10 +3,10 @@ import { describe, it, expect } from "vite-plus/test";
 import { readdirSync, readFileSync } from "node:fs";
 
 /**
- * `stripe` is an optional peer (#39): only the SDK transport (`src/Stripe.ts`)
- * may load it at runtime. Everything else — the barrel, the fetch transport,
- * the capability layers, every resource module — may use its types only, so a
- * Worker bundle built from them never contains the SDK. This walks the
+ * `stripe` is an optional peer (#39), kept only for the types of the
+ * SDK-based webhook verifier (`Webhook.constructEvent*`, which runs on an SDK
+ * client the program builds): no module loads it at runtime, so a Worker
+ * bundle built from any of them never contains the SDK. This walks the
  * runtime import graph of the sources and fails on any path to `stripe`.
  */
 
@@ -70,17 +70,21 @@ describe("the stripe SDK is optional", () => {
   it("finds the entry points", () => {
     expect(entries).toContain("index.ts");
     expect(entries).toContain("StripeHttp.ts");
-    expect(entries).toContain("Stripe.ts");
+    expect(entries).toContain("Webhook.ts");
+    expect(entries).not.toContain("Stripe.ts");
   });
 
-  it("is loaded by the SDK transport", () => {
-    expect(reaches("Stripe.ts", "stripe")).toBeDefined();
+  it("follows runtime imports, and skips type-only ones", () => {
+    // The walk reaches a package a module loads (Distilled's operations)…
+    expect(reaches("Customer.ts", "@distilled.cloud/stripe/stripe")).toBeDefined();
+    // …and not one it imports for types alone: the webhook verifier's `stripe`.
+    // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
+    expect(readFileSync(new URL("Webhook.ts", SRC), "utf8")).toContain(
+      'import type Stripe from "stripe";',
+    );
   });
 
-  it.each(entries.filter((name) => name !== "Stripe.ts"))(
-    "is never loaded at runtime from %s",
-    (entry) => {
-      expect(reaches(entry, "stripe")).toBeUndefined();
-    },
-  );
+  it.each(entries)("is never loaded at runtime from %s", (entry) => {
+    expect(reaches(entry, "stripe")).toBeUndefined();
+  });
 });

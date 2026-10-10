@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vite-plus/test";
 import { Effect, Redacted, Schema } from "effect";
 import { PaymentProviderError } from "@thomasfosterau/effect-payments";
-import { layer, StripeClient } from "../src/internal/distilled.ts";
+import { layer, StripeHttp } from "../src/StripeHttp.ts";
 import { jsonResponse, stubFetch, TEST_KEY } from "./support.ts";
 
 /**
@@ -18,7 +18,7 @@ const callWith = (failure: unknown) => {
   const { http, calls } = stubFetch(() => jsonResponse(200, {}));
   const result = Effect.runPromise(
     Effect.flip(
-      Effect.flatMap(StripeClient, (client) =>
+      Effect.flatMap(StripeHttp, (client) =>
         client.call("GET", () => Effect.fail(failure), {}),
       ).pipe(
         Effect.provide(layer({ apiKey: Redacted.make(TEST_KEY), maxNetworkRetries: 0 })),
@@ -29,7 +29,7 @@ const callWith = (failure: unknown) => {
   return { result, calls };
 };
 
-describe("StripeClient", () => {
+describe("StripeHttp", () => {
   it("maps a Distilled failure with no response to PaymentProviderError by its tag", async () => {
     const { result, calls } = callWith(new DistilledOnlyError({ message: "schema mismatch" }));
     const error = await result;

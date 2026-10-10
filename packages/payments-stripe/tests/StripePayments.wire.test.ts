@@ -314,17 +314,20 @@ describe("StripePayments request policy", () => {
   });
 
   it("keeps lenient validation when the caller asks Distilled for strict", async () => {
-    // Distilled's schemas follow a newer API version than the pinned one, so
-    // strict validation would refuse this pinned-version subscription.
-    const { http } = stubFetch(() => jsonResponse(200, basilSubscription));
+    // A layer configured with an older API version than the one Distilled's
+    // schemas describe (2025-08-27.basil, before DISTILLED_API_VERSION) gets
+    // responses strict validation would refuse: this basil subscription lacks
+    // fields Distilled marks required.
+    const { http, calls } = stubFetch(() => jsonResponse(200, basilSubscription));
     const subscription = await Effect.runPromise(
       Subscription.retrieve(basilSubscription.id).pipe(
-        Effect.provide(StripePayments.layer(config())),
+        Effect.provide(StripePayments.layer(config({ apiVersion: "2025-08-27.basil" }))),
         Effect.provide(http),
         Effect.provide(strictValidation),
       ),
     );
     expect(subscription.id).toBe(basilSubscription.id);
+    expect(calls[0]?.headers.get("stripe-version")).toBe("2025-08-27.basil");
   });
 });
 

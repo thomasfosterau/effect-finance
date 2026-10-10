@@ -34,10 +34,6 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./Stripe": {
-      "types": "./dist/Stripe.d.ts",
-      "default": "./dist/Stripe.js"
-    },
     "./StripeHttp": {
       "types": "./dist/StripeHttp.d.ts",
       "default": "./dist/StripeHttp.js"
@@ -239,7 +235,7 @@
     "access": "public"
   },
   "scripts": {
-    "generate:schemas": "node scripts/generate-stripe-schemas.ts"
+    "generate:resources": "node scripts/generate-resources.ts"
   },
   "dependencies": {
     "@distilled.cloud/core": "catalog:",
@@ -248,7 +244,6 @@
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
-    "@effect/openapi-generator": "catalog:",
     "@effect/platform-node": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-istanbul": "catalog:",

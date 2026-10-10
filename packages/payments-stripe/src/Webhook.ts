@@ -35,8 +35,8 @@
  *
  * **The SDK-based verifier stays available** as {@link constructEvent} /
  * {@link constructEventAsync} (and the `generateTestHeaderString*` helpers).
- * Those need the SDK client ({@link StripeService} from `Stripe.layer`) and
- * the optional `stripe` peer installed; nothing on the default path loads it.
+ * Those need an SDK client you build ({@link StripeService}) and the
+ * optional `stripe` peer installed; this package never loads the SDK itself.
  *
  * Stripe treats every non-2xx answer as a failed delivery and retries it for
  * a limited period (see https://docs.stripe.com/webhooks), so the status
@@ -105,11 +105,10 @@
  * @module
  */
 
-import { Clock, Effect, Option, Redacted, Schema } from "effect";
+import { Clock, Context, Effect, Option, Redacted, Schema } from "effect";
 import type Stripe from "stripe";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
 import { omitUndefined } from "./internal/omitUndefined.js";
-import { StripeService } from "./internal/sdk.js";
 import {
   anyMatches,
   parseSignatureHeader,
@@ -453,8 +452,21 @@ export const decodeInvoice = (object: unknown): Effect.Effect<InvoiceObject, Sch
   decodeInvoiceObject(object);
 
 // ---------------------------------------------------------------------------
-// SDK-based verifier (optional: needs `Stripe.layer` and the `stripe` peer)
+// SDK-based verifier (optional: needs an SDK client and the `stripe` peer)
 // ---------------------------------------------------------------------------
+
+/**
+ * The official `stripe` SDK client the SDK-based verifier
+ * ({@link constructEvent}, {@link constructEventAsync} and the
+ * `generateTestHeaderString*` helpers) runs on. This package never builds or
+ * loads one: provide your own, `Layer.succeed(StripeService, new Stripe(key))`
+ * (the verifier reads only `stripe.webhooks`, which signs and checks with the
+ * endpoint secret, never the API key). The `stripe` peer is optional, and
+ * this module imports only its types.
+ */
+export class StripeService extends Context.Service<StripeService, Stripe>()(
+  "@effect-payments-stripe/StripeService",
+) {}
 
 /**
  * Configuration for webhook verification
@@ -474,7 +486,7 @@ export interface WebhookConfig {
 /**
  * Construct an Event from a webhook payload and signature with the SDK's
  * verifier — the optional alternative to {@link verify}, needing
- * {@link StripeService} (`Stripe.layer`) and the `stripe` peer.
+ * {@link StripeService} (an SDK client you build) and the `stripe` peer.
  *
  * This function verifies the webhook signature and returns the parsed Event object.
  * It uses the Stripe SDK's `constructEvent` method for synchronous verification.
@@ -487,9 +499,9 @@ export interface WebhookConfig {
  *
  * @example
  * ```typescript
- * import { Effect, Redacted } from "effect";
+ * import { Effect, Layer } from "effect";
+ * import Stripe from "stripe";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
  * const handle = (requestBody: string, stripeSignatureHeader: string) =>
  *   Effect.gen(function* () {
@@ -502,7 +514,7 @@ export interface WebhookConfig {
  *     return event;
  *   });
  *
- * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
+ * const layer = Layer.succeed(Webhook.StripeService, new Stripe("sk_test_..."));
  * // Run once per delivery, with the raw body and its Stripe-Signature header.
  * const onDelivery = (requestBody: string, stripeSignatureHeader: string) =>
  *   Effect.runPromise(handle(requestBody, stripeSignatureHeader).pipe(Effect.provide(layer)));
@@ -547,9 +559,9 @@ export const constructEvent = (
  *
  * @example
  * ```typescript
- * import { Effect, Redacted } from "effect";
+ * import { Effect, Layer } from "effect";
+ * import Stripe from "stripe";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
  * const handle = (requestBody: string, stripeSignatureHeader: string) =>
  *   Effect.gen(function* () {
@@ -562,7 +574,7 @@ export const constructEvent = (
  *     return event;
  *   });
  *
- * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
+ * const layer = Layer.succeed(Webhook.StripeService, new Stripe("sk_test_..."));
  * // Run once per delivery, with the raw body and its Stripe-Signature header.
  * const onDelivery = (requestBody: string, stripeSignatureHeader: string) =>
  *   Effect.runPromise(handle(requestBody, stripeSignatureHeader).pipe(Effect.provide(layer)));
@@ -606,9 +618,9 @@ export const constructEventAsync = (
  *
  * @example
  * ```typescript
- * import { Effect, Redacted } from "effect";
+ * import { Effect, Layer } from "effect";
+ * import Stripe from "stripe";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
  * const program = Effect.gen(function* () {
  *   const payload = JSON.stringify({ type: "payment_intent.succeeded" });
@@ -620,7 +632,7 @@ export const constructEventAsync = (
  *   return event;
  * });
  *
- * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
+ * const layer = Layer.succeed(Webhook.StripeService, new Stripe("sk_test_..."));
  * await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */
@@ -666,9 +678,9 @@ export const generateTestHeaderString = (
  *
  * @example
  * ```typescript
- * import { Effect, Redacted } from "effect";
+ * import { Effect, Layer } from "effect";
+ * import Stripe from "stripe";
  * import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
- * import * as Stripe from "@thomasfosterau/effect-payments-stripe/Stripe";
  *
  * const program = Effect.gen(function* () {
  *   const payload = JSON.stringify({ type: "payment_intent.succeeded" });
@@ -687,7 +699,7 @@ export const generateTestHeaderString = (
  *   return event;
  * });
  *
- * const layer = Stripe.layer({ apiKey: Redacted.make("sk_test_...") });
+ * const layer = Layer.succeed(Webhook.StripeService, new Stripe("sk_test_..."));
  * await Effect.runPromise(program.pipe(Effect.provide(layer)));
  * ```
  */

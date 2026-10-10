@@ -56,13 +56,5 @@ jobs:
       # Type-checks AND runs every JSDoc @example against the built dist/.
       - name: Verify documentation examples (docgen)
         run: vp run docgen
-      - name: Generated Stripe schemas are up to date
-        # Regenerates src/internal/generated/schemas.ts from the spec pinned in
-        # packages/payments-stripe/scripts/stripe-spec.json (the script fetches
-        # that tag of stripe/openapi and refuses any file whose SHA-256 differs
-        # from the pin) and fails on any difference from the committed file.
-        run: |
-          vp run --filter ./packages/payments-stripe generate:schemas
-          git diff --exit-code -- packages/payments-stripe/src/internal/generated
       - name: Audit
         run: pnpm audit --audit-level high
