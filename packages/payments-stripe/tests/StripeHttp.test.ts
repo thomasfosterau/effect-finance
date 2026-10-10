@@ -96,6 +96,47 @@ describe("resource modules over StripeHttp", () => {
     expect(calls[0]?.body).toBeUndefined();
   });
 
+  it("puts a DELETE's params in the query string, with no body, as the SDKs do", async () => {
+    const { result, calls } = over(
+      Subscription.cancel("sub_1", {
+        invoice_now: true,
+        prorate: false,
+        cancellation_details: { comment: "Too pricey (for now)!", feedback: "too_expensive" },
+        expand: ["latest_invoice"],
+      }),
+    );
+    await result;
+    expect(calls[0]?.method).toBe("DELETE");
+    expect(calls[0]?.url.pathname).toBe("/v1/subscriptions/sub_1");
+    expect(calls[0]?.url.search).toBe(
+      "?cancellation_details[comment]=Too%20pricey%20%28for%20now%29%21" +
+        "&cancellation_details[feedback]=too_expensive" +
+        "&expand[0]=latest_invoice&invoice_now=true&prorate=false",
+    );
+    expect(calls[0]?.body).toBeUndefined();
+    expect(calls[0]?.init?.body).toBeUndefined();
+    expect(calls[0]?.headers.get("content-type")).toBeNull();
+  });
+
+  it("puts the params of a DELETE with two ids in the query string", async () => {
+    const { result, calls } = over(Customer.delSource("cus_1", "card_1", { expand: ["customer"] }));
+    await result;
+    expect(calls[0]?.method).toBe("DELETE");
+    expect(calls[0]?.url.toString()).toBe(
+      "https://api.stripe.com/v1/customers/cus_1/sources/card_1?expand[0]=customer",
+    );
+    expect(calls[0]?.init?.body).toBeUndefined();
+    expect(calls[0]?.headers.get("content-type")).toBeNull();
+  });
+
+  it("sends a DELETE without params with no query and no body", async () => {
+    const { result, calls } = over(Subscription.cancel("sub_1"));
+    await result;
+    expect(calls[0]?.url.toString()).toBe("https://api.stripe.com/v1/subscriptions/sub_1");
+    expect(calls[0]?.init?.body).toBeUndefined();
+    expect(calls[0]?.headers.get("content-type")).toBeNull();
+  });
+
   it("orders several ids as the path does", async () => {
     const { result, calls } = over(Person.retrieve("acct_1", "person_1"));
     await result;
@@ -288,12 +329,9 @@ describe("file uploads", () => {
     expect(calls[0]?.headers.get("stripe-version")).toBe(DISTILLED_API_VERSION);
   });
 
-  it("sends a Blob as the file part (Distilled declares `file: string`)", async () => {
+  it("sends a File as the file part, typed without a cast (Distilled declares `file: string`)", async () => {
     const pdf = new globalThis.File(["%PDF-1.4"], "evidence.pdf", { type: "application/pdf" });
-    const { result, calls } = over(
-      // SAFETY: Distilled types `file` as a string; at runtime it sends a Blob as a file part.
-      File.create({ purpose: "dispute_evidence", file: pdf as unknown as string }),
-    );
+    const { result, calls } = over(File.create({ purpose: "dispute_evidence", file: pdf }));
     await result;
     const part = calls[0]?.form?.get("file");
     expect(part).toBeInstanceOf(Blob);
@@ -305,8 +343,7 @@ describe("file uploads", () => {
     const { result, calls } = over(
       File.create({
         purpose: "dispute_evidence",
-        // SAFETY: Distilled types `file` as a string; at runtime it sends a Blob as a file part.
-        file: pdf as unknown as string,
+        file: pdf,
         file_link_data: { create: true, metadata: { case: "dp_1" } },
         expand: ["links"],
       }),

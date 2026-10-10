@@ -44,7 +44,7 @@ export {
  * `CreateFile`.
  */
 export const create: (
-  params: Distilled.CreateFileRequest,
+  params: Omit<Distilled.CreateFileRequest, "file"> & { readonly file: string | Blob },
   options?: RequestOptions | undefined,
 ) => Effect.Effect<Distilled.File, PaymentsError, StripeHttp> = /* @__PURE__ */ operation(
   Distilled.CreateFile,

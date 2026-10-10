@@ -33,7 +33,9 @@ interface Package {
   /** The one Distilled subpath every declaration may name. */
   readonly light: string;
   /** The operations module, and the entries whose declarations name it by design. */
-  readonly heavy?: { readonly module: string; readonly entries: (entry: string) => boolean };
+  readonly heavy?:
+    | { readonly module: string; readonly entries: (entry: string) => boolean }
+    | undefined;
 }
 
 /** The entries of payments-stripe that are not resource modules. */

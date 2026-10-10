@@ -18,6 +18,9 @@
  *   ({@link RequestOptions.apiVersion}). Distilled sends the header only when
  *   asked, and otherwise the account's dashboard default would decide the
  *   wire shape;
+ * - **sends a `DELETE`'s params in the query string**, as the Stripe SDKs
+ *   do (`Subscription.cancel(id, { invoice_now: true })`), where Distilled
+ *   would form-encode them into a body;
  * - **pins lenient response validation**, so a response is never refused
  *   over a field nobody reads: Distilled's schemas mark fields required that
  *   a response at an older configured `apiVersion` lacks. The capability
@@ -60,7 +63,13 @@ import {
   Ref,
   Schema,
 } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientError } from "effect/http";
+import {
+  FetchHttpClient,
+  HttpBody,
+  HttpClient,
+  HttpClientError,
+  HttpClientRequest,
+} from "effect/http";
 import { ResponseValidation } from "@distilled.cloud/core/response-validation";
 import { Credentials, type Config as StripeCredentials } from "@distilled.cloud/stripe/Credentials";
 import { type StripeRequestOptions, withRequestOptions } from "@distilled.cloud/stripe/Protocol";
@@ -208,6 +217,44 @@ const isOk = (status: number): boolean => status >= 200 && status < 300;
 /** Distilled's retries, switched off: this client retries on its own policy. */
 const NO_RETRY = { while: () => false };
 
+const FORM = "application/x-www-form-urlencoded";
+
+/**
+ * `encodeURIComponent` plus the five characters it leaves alone that the
+ * SDK's `qs` escapes (`!`, `'`, `(`, `)`, `*`), with the bracket control
+ * characters left literal, as the SDK sends them (`cancellation_details[comment]`).
+ */
+const escapeQuery = (text: string): string =>
+  encodeURIComponent(text)
+    .replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
+    .replace(/%5B/g, "[")
+    .replace(/%5D/g, "]");
+
+/**
+ * A `DELETE`'s params, moved from the form body Distilled encodes them into
+ * (it keeps a body off a `GET` or `HEAD` only) to the query string, where the
+ * Stripe SDKs send them (`DELETE /v1/subscriptions/sub_1?invoice_now=true`);
+ * the body and its `Content-Type` are dropped. Any other request passes as is.
+ */
+const deleteParamsToQuery = (
+  request: HttpClientRequest.HttpClientRequest,
+): HttpClientRequest.HttpClientRequest => {
+  const { body } = request;
+  if (request.method !== "DELETE" || body._tag !== "Uint8Array" || body.contentType !== FORM) {
+    return request;
+  }
+  const query = [...new URLSearchParams(body.text ?? new TextDecoder().decode(body.body))]
+    .map(([key, value]) => `${escapeQuery(key)}=${escapeQuery(value)}`)
+    .join("&");
+  const bodyless = HttpClientRequest.setBody(request, HttpBody.empty);
+  return query === ""
+    ? bodyless
+    : HttpClientRequest.setUrl(
+        bodyless,
+        `${request.url}${request.url.includes("?") ? "&" : "?"}${query}`,
+      );
+};
+
 /**
  * The SDK's retry rule for a response: as the `Stripe-Should-Retry` header
  * says, and without one on a `409` or a `5xx`.
@@ -352,15 +399,21 @@ const makeWith = (
         const observed = yield* Ref.make(Option.none<Observed>());
         // Read the body first (the response caches it, so Distilled reads it
         // again), and keep what the classification needs.
-        const watched = HttpClient.transform(http, (response) =>
-          Effect.tap(response, (seen) =>
-            Effect.flatMap(seen.text, (text) =>
-              Ref.set(
-                observed,
-                Option.some({ status: seen.status, headers: seen.headers, body: decodeJson(text) }),
+        const watched = HttpClient.transform(
+          HttpClient.mapRequest(http, deleteParamsToQuery),
+          (response) =>
+            Effect.tap(response, (seen) =>
+              Effect.flatMap(seen.text, (text) =>
+                Ref.set(
+                  observed,
+                  Option.some({
+                    status: seen.status,
+                    headers: seen.headers,
+                    body: decodeJson(text),
+                  }),
+                ),
               ),
             ),
-          ),
         );
         const init = yield* Effect.serviceOption(FetchHttpClient.RequestInit);
         const outcome = yield* operation(input).pipe(
