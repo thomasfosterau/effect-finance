@@ -203,6 +203,27 @@ export const OVERRIDES = {
   DeleteSubscription: { name: "cancel" },
 } satisfies Overrides;
 
+/** Retyped members by Distilled operation name, then member name: the member's type. */
+type ParamTypes = Readonly<Record<string, Readonly<Record<string, string>>>>;
+
+/**
+ * Params members retyped where Distilled's declaration is narrower than what
+ * the operation sends, by Distilled operation name, then member: the member
+ * is dropped from Distilled's input type and declared again, required, as
+ * the given type.
+ */
+const PARAM_TYPES = {
+  // Distilled declares `file: string`; its multipart encoder sends a `Blob`
+  // (a `File` included) as the file part, which is how a file is uploaded.
+  CreateFile: { file: "string | Blob" },
+} satisfies ParamTypes;
+
+/** The members the operation Distilled names `name` retypes, as `[member, type]` pairs. */
+const retypedOf = (
+  name: string,
+  paramTypes: ParamTypes = PARAM_TYPES,
+): ReadonlyArray<readonly [string, string]> => Object.entries(paramTypes[name] ?? {});
+
 /** The override of the operation Distilled names `name`, if there is one. */
 const overrideOf = (name: string, overrides: Overrides = OVERRIDES): Override | undefined =>
   overrides[name];
@@ -492,6 +513,9 @@ const staleEntries = (operations: ReadonlyArray<DistilledOperation>): ReadonlyAr
     ...Object.keys(OVERRIDES)
       .filter((name) => !known.has(name))
       .map((name) => `OVERRIDES names ${name}, which Distilled no longer has`),
+    ...Object.keys(PARAM_TYPES)
+      .filter((name) => !known.has(name))
+      .map((name) => `PARAM_TYPES names ${name}, which Distilled no longer has`),
     ...UNEXPOSED.filter(
       (prefix) => !operations.some((operation) => longestMatch(operation.path, [prefix])),
     ).map((prefix) => `UNEXPOSED lists ${prefix}, which no operation is under`),
@@ -637,10 +661,16 @@ const typeOf = (name: string): string => (KEYWORDS.has(name) ? name : `Distilled
 
 const signatureOf = (operation: Planned): string => {
   const ids = operation.ids.map((id) => `${id}: string`);
-  const rest =
-    operation.ids.length === 0
+  const retyped = retypedOf(operation.name);
+  const omitted = [...operation.ids, ...retyped.map(([member]) => member)];
+  const base =
+    omitted.length === 0
       ? `Distilled.${operation.input}`
-      : `Omit<Distilled.${operation.input}, ${operation.ids.map((id) => JSON.stringify(id)).join(" | ")}>`;
+      : `Omit<Distilled.${operation.input}, ${omitted.map((id) => JSON.stringify(id)).join(" | ")}>`;
+  const rest =
+    retyped.length === 0
+      ? base
+      : `${base} & { ${retyped.map(([member, type]) => `readonly ${member}: ${type}`).join("; ")} }`;
   const params =
     operation.params === "none"
       ? []

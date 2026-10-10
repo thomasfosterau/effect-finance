@@ -80,12 +80,11 @@ catalog:
   # Runs docgen's compiled examples (a peer of @effect/docgen).
   tsx: ^4.23.15
   # The official Stripe SDK: a dev dependency of
-  # @thomasfosterau/effect-payments-stripe (its types describe the results of
-  # the resource modules not yet migrated to generated Schema types, #81; its
-  # client backs the optional SDK transport and the SDK-based webhook
-  # verifier) and an OPTIONAL peer (`catalogs.peers`) — the fetch-only
-  # transport (#39) never loads it. 18.5.x is the release whose API version
-  # is 2025-08-27.basil, the version this package pins.
+  # @thomasfosterau/effect-payments-stripe, and an OPTIONAL peer there
+  # (`catalogs.peers`). Its types serve only the SDK-based `./Webhook`
+  # verifier (`constructEvent*`), and its client is built only by the tests
+  # and doc `@example`s that run that verifier; no module loads it at runtime
+  # (#146).
   stripe: ^18.5.0
   # TypeScript 6/7 side-by-side: TS7 (the native Go compiler) ships no JS API
   # until 7.1, so JS-API consumers (@effect/language-service, tsdown's

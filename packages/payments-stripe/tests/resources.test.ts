@@ -168,6 +168,13 @@ describe("the resource plan", () => {
     expect(names("Subscription")).toEqual(expect.arrayContaining(["resume", "migrate", "search"]));
   });
 
+  it("names each API path and each subpath in RESOURCES once", () => {
+    const paths = RESOURCES.flatMap((resource) => resource.paths);
+    expect(paths.filter((path, index) => paths.indexOf(path) !== index)).toEqual([]);
+    const subpaths = RESOURCES.map((resource) => resource.subpath);
+    expect(subpaths.filter((subpath, index) => subpaths.indexOf(subpath) !== index)).toEqual([]);
+  });
+
   it("lists only paths no module holds as unexposed", () => {
     const held = RESOURCES.flatMap((resource) => resource.paths);
     expect(
