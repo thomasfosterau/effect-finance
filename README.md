@@ -1,5 +1,7 @@
 # effect-payments
 
+**Disclaimer:** This is an experiment, mostly created with Claude Code. Don’t use this in production.
+
 A vendor-neutral payments core for Effect, with Stripe, PayPal and Airwallex providers. Write a program against the core's capabilities; choose the provider by the layer you provide.
 
 | Package | Purpose |
