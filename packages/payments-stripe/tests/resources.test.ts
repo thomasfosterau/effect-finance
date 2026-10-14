@@ -124,6 +124,31 @@ describe("the resource plan", () => {
     );
   });
 
+  it("reads each operation's params apart from its path ids", () => {
+    const update = operations.find((operation) => operation.name === "UpdateCustomer")!;
+    expect(update.ids).toEqual(["customer"]);
+    expect(update.members).not.toContain("customer");
+    expect(update.members).toContain("email");
+  });
+
+  it("reports a PARAM_TYPES entry whose operation is gone", () => {
+    const without = operations.filter((operation) => operation.name !== "CreateFile");
+    expect(plan(without).problems).toContain(
+      "PARAM_TYPES names CreateFile, which Distilled no longer has",
+    );
+  });
+
+  it("reports a PARAM_TYPES member its operation no longer takes", () => {
+    const stale = operations.map((operation) =>
+      operation.name === "CreateFile"
+        ? { ...operation, members: operation.members.filter((member) => member !== "file") }
+        : operation,
+    );
+    expect(plan(stale).problems).toEqual([
+      "PARAM_TYPES retypes CreateFile's file, which is not a param of CreateFileRequest",
+    ]);
+  });
+
   it("has a module for every resource subpath the package publishes, and nothing else", () => {
     // SAFETY: the manifest carries an `exports` map.
     // oxlint-disable-next-line effect/avoid-sync-fs -- see the import

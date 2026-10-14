@@ -96,10 +96,11 @@ updates:
             "version-update:semver-minor",
             "version-update:semver-patch",
           ]
-      # The SDK's major versions change parameter and response types across
-      # every resource module; it stays a required type source until the
-      # remaining resource modules move to generated types (#81), so majors
-      # wait for that.
+      # The SDK is only an optional peer now: its types serve the SDK-based
+      # `./Webhook` verifier (`constructEvent*`), and no module loads it
+      # (#146). A major changes that verifier's `Stripe.Event` type and the
+      # published peer range (`catalogs.peers`, a caret range), so it moves by
+      # hand, together with that range, rather than as a dev-only bump.
       - dependency-name: "stripe"
         update-types: ["version-update:semver-major"]
       - dependency-name: "vite-plus"

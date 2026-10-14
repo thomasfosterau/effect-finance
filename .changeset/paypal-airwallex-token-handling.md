@@ -3,7 +3,7 @@
 "@thomasfosterau/effect-payments-airwallex": patch
 ---
 
-Fix a regression and close two gaps in the PayPal and Airwallex clients:
+Fix a regression and close two gaps in the PayPal and Airwallex providers:
 
 - **Regression fixed:** every request sends `Content-Type: application/json` again, body or not, as it did before the move to `HttpClient`. Without it, PayPal answers a bodyless POST such as `/v1/billing/plans/{id}/activate` (the `Prices.update` activate/deactivate path) with 415. Airwallex gets the same header for consistency.
 - The token handshake is serialised. Concurrent first requests, or requests racing a token refresh, now log in once and share the token instead of each logging in.
