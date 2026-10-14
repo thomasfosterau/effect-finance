@@ -23,6 +23,8 @@ These examples demonstrate `@thomasfosterau/effect-payments` (the vendor-neutral
    node packages/payments-stripe/examples/basic.ts
    ```
 
+Each example exports its Effect program and runs it only when executed directly, so importing one has no side effects. The unit suite (`tests/examples.test.ts`) imports every example and runs its program over a stubbed `fetch` with canned Stripe responses, so an example whose behaviour drifts fails `vp run -r test:unit`; a new example needs a suite there too.
+
 ## Available Examples
 
 ### basic.ts

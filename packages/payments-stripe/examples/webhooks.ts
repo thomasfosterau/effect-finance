@@ -17,6 +17,10 @@
  * It needs no Stripe account, API key or network: the demo at the bottom signs
  * its own deliveries with a test secret.
  *
+ * The file exports the handler and the demo `program`, and runs the demo only
+ * when executed directly (`node examples/webhooks.ts`), so importing it has no
+ * side effects (`tests/examples.test.ts` runs it and checks every status).
+ *
  * The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an
  * optional alternative; they need the `stripe` peer and an SDK client the
  * program provides as `Webhook.StripeService`.
@@ -102,7 +106,7 @@ class UndecodableEventError extends Schema.TaggedError<UndecodableEventError>()(
  * The secret is read once, when the handler is built: a missing
  * `STRIPE_WEBHOOK_SECRET` fails here with a `ConfigError`, never per request.
  */
-const makeWebhookHandler = Effect.fn("makeWebhookHandler")(function* () {
+export const makeWebhookHandler = Effect.fn("makeWebhookHandler")(function* () {
   const secret = yield* Config.Redacted(SECRET_VAR);
 
   return Effect.fn("handleStripeWebhook")(
@@ -262,7 +266,12 @@ const testSecret = ConfigProvider.layer(
   ConfigProvider.fromUnknown({ [SECRET_VAR]: "whsec_test_secret" }),
 );
 
-Effect.runPromise(demo().pipe(Effect.provide(testSecret))).catch((error) => {
-  console.error("Webhook demo failed:", error);
-  process.exit(1);
-});
+export const program = demo().pipe(Effect.provide(testSecret));
+
+// Run only when executed directly, never on import.
+if (import.meta.main) {
+  Effect.runPromise(program).catch((error) => {
+    console.error("Webhook demo failed:", error);
+    process.exit(1);
+  });
+}

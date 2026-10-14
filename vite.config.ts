@@ -279,7 +279,9 @@ export default defineConfig({
       provider: "istanbul",
       reporter: ["text-summary", "json-summary", "json"],
       reportsDirectory: "./coverage",
-      include: ["packages/*/src/**/*.ts"],
+      // `examples/`: the runnable examples a package's suite executes
+      // (payments-stripe's `tests/examples.test.ts`, #127) count too.
+      include: ["packages/*/src/**/*.ts", "packages/*/examples/**/*.ts"],
       exclude: ["**/*.d.ts", "**/generated/**"],
     },
   },
