@@ -33,8 +33,7 @@ import basilSubscription from "./fixtures/basil/subscription.json" with { type: 
 /**
  * `StripePayments` on Distilled's operations (#146): what reaches the wire,
  * and how each failure Distilled reports lands on the neutral channel. The
- * expectations are the fetch transport's (`tests/StripeHttp.test.ts`), which
- * the capability layers ran on before.
+ * expectations are `StripeHttp`'s (`tests/StripeHttp.test.ts`).
  */
 
 type Capabilities = Layer.Success<typeof StripePayments.capabilities>;

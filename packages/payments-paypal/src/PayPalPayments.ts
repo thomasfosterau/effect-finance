@@ -120,8 +120,8 @@ export interface PayPalConfig {
   /**
    * How long the token login may take, in milliseconds, before it fails with
    * `PaymentNetworkError`. Defaults to 30 000; `Infinity` disables it, and
-   * `0`, a negative number or `NaN` fails with `PaymentConfigError`. Logins are
-   * serialised, so a login that never answers would otherwise stall every
+   * `0`, a negative number or `NaN` fails with `PaymentConfigError`. Only one
+   * login is in flight at a time, so a login that never answers would otherwise stall every
    * request. Callers that arrive while a login is in flight share its
    * outcome, so each waits at most about one `loginTimeout`; the next call
    * after a failure logs in afresh (#65).
@@ -130,7 +130,7 @@ export interface PayPalConfig {
   /**
    * How long a resource request may take (response headers and body), in
    * milliseconds, before it fails with `PaymentNetworkError`. Defaults to
-   * 80 000, the Stripe transport's per-attempt timeout; `Infinity` disables it.
+   * 80 000, the Stripe client's per-attempt timeout; `Infinity` disables it.
    * It does not include acquiring a token (see `loginTimeout`). A write that
    * times out has an unknown outcome — PayPal may have applied it — so retry
    * it only with the same `idempotencyKey` (#66).

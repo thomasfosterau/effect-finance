@@ -36,7 +36,7 @@ export const BASE_URLS: Readonly<Record<PayPalEnvironment, string>> = {
 };
 /** A login that has not answered after 30 s is abandoned. */
 const DEFAULT_LOGIN_TIMEOUT_MS = 30_000;
-/** A resource request is abandoned after 80 s, the Stripe transport default. */
+/** A resource request is abandoned after 80 s, the Stripe client's default. */
 const DEFAULT_TIMEOUT_MS = 80_000;
 /** The token lifetime assumed when PayPal's response states none, in seconds. */
 const DEFAULT_TOKEN_LIFETIME_S = 1800;

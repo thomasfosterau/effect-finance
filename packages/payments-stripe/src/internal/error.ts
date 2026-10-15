@@ -1,9 +1,7 @@
 /**
- * Translation of Stripe failures into the vendor-neutral error channel, shared
- * by both transports: the fetch transport (`StripeHttp`) classifies an HTTP
- * status plus the decoded error envelope, the SDK transport (`Stripe`)
- * classifies a thrown SDK error, and both hand the result to
- * {@link toPaymentsError} — so the neutral mapping is written once.
+ * Translation of Stripe failures into the vendor-neutral error channel:
+ * `StripeHttp` classifies an HTTP status plus the decoded error envelope and
+ * hands it to {@link toPaymentsError}.
  *
  * @module
  */
@@ -24,8 +22,8 @@ import {
 export const PROVIDER = "stripe";
 
 /**
- * The SDK's error class names, which double as the classification the fetch
- * transport produces. A {@link PaymentProviderError} carries one as its
+ * The classification `StripeHttp` produces, named after the Stripe SDK's error
+ * classes. A {@link PaymentProviderError} carries one as its
  * `code` when Stripe sent no error code of its own.
  */
 type StripeErrorKind =
@@ -40,13 +38,9 @@ type StripeErrorKind =
   | "StripeConnectionError"
   | "StripeUnknownError";
 
-/** A classified Stripe failure, transport-independent. */
+/** A classified Stripe failure. */
 export interface StripeFailure {
-  /**
-   * A {@link StripeErrorKind} from the fetch transport; the SDK transport
-   * passes the thrown error's own `type`, which may name a class added after
-   * this list was written.
-   */
+  /** A {@link StripeErrorKind}. */
   readonly kind: string;
   readonly message: string;
   /** Stripe's own error code (`resource_missing`, `card_declined`, …). */

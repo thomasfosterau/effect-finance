@@ -1,6 +1,6 @@
 /**
  * `T` with every key whose type admits `undefined` made optional and
- * `undefined`-free: the shape the Stripe SDK's parameter types take under
+ * `undefined`-free: the shape Distilled's Stripe input types take under
  * `exactOptionalPropertyTypes`, which declare `key?: T`, never
  * `key?: T | undefined`.
  */
@@ -12,9 +12,9 @@ export type OmitUndefined<T> = {
 
 /**
  * Drop the keys whose value is `undefined`, so an options object assembled
- * from optional inputs type-checks against the SDK's parameter types. The SDK
- * already skips `undefined` values when it form-encodes a request, so the wire
- * format is unchanged.
+ * from optional inputs type-checks against Distilled's input types. Distilled's
+ * encoder already skips `undefined` values when it form-encodes a request, so
+ * the wire format is unchanged.
  */
 export const omitUndefined = <T extends object>(record: T): OmitUndefined<T> =>
   // SAFETY: the filter removes exactly the `undefined`-valued keys, which is
