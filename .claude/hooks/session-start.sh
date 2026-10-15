@@ -89,6 +89,24 @@ link_tool() {
   ln -sfn "$src" "$dest" 2>/dev/null || log "could not link $name"
 }
 
+# Write a generated re-exec shim (its body on stdin) to ~/.local/bin/<name>.
+# Leave a real, non-generated file alone: something deliberately installed it.
+# A stale symlink or a shim we generated earlier is fair game to regenerate —
+# the embedded fallback path can change across containers.
+write_shim() {
+  dest="$LOCAL_BIN/$1"
+  marker="$2"
+  if [ -e "$dest" ] && [ ! -L "$dest" ] \
+    && ! grep -qF "$marker" "$dest" 2>/dev/null; then
+    return 0
+  fi
+  if ! { { printf '#!/usr/bin/env bash\n%s\n' "$marker" && cat; } >"$dest.tmp" 2>/dev/null \
+    && chmod +x "$dest.tmp" 2>/dev/null && mv -f "$dest.tmp" "$dest" 2>/dev/null; }; then
+    rm -f "$dest.tmp" 2>/dev/null
+    log "could not write $1 shim"
+  fi
+}
+
 # `vp` gets a re-exec shim rather than a plain symlink. A symlink always
 # resolves to $PROJECT_DIR's node_modules/vite-plus, even when invoked with
 # cwd inside a `.claude/worktrees/*` checkout — so the CLI process loads the
@@ -101,17 +119,7 @@ link_tool() {
 # checkout's when none is found above cwd.
 VP_SHIM_MARKER="# generated-by: .claude/hooks/session-start.sh (vp re-exec shim, gardeneria issue #1663)"
 write_vp_shim() {
-  dest="$LOCAL_BIN/vp"
-  # Leave a real, non-generated file alone: something deliberately installed
-  # it. A stale symlink or a shim we generated earlier is fair game to
-  # regenerate — the embedded fallback path can change across containers.
-  if [ -e "$dest" ] && [ ! -L "$dest" ] \
-    && ! grep -qF "$VP_SHIM_MARKER" "$dest" 2>/dev/null; then
-    return 0
-  fi
-  cat >"$dest.tmp" <<SHIM
-#!/usr/bin/env bash
-$VP_SHIM_MARKER
+  write_shim vp "$VP_SHIM_MARKER" <<SHIM
 dir="\$PWD"
 while [ -n "\$dir" ]; do
   if [ -x "\$dir/node_modules/vite-plus/bin/vp" ]; then
@@ -122,15 +130,54 @@ while [ -n "\$dir" ]; do
 done
 exec "$PROJECT_DIR/node_modules/vite-plus/bin/vp" "\$@"
 SHIM
-  chmod +x "$dest.tmp" 2>/dev/null && mv -f "$dest.tmp" "$dest" 2>/dev/null \
-    || { rm -f "$dest.tmp" 2>/dev/null; log "could not write vp shim"; }
+}
+
+# `fallow` gets a re-exec shim too (#177). A symlink always runs $PROJECT_DIR's
+# install, so the fallow gate, which `cd`s into the audited tree before it runs
+# the `fallow` on PATH, audited a `.claude/worktrees/*` checkout with whatever
+# version the primary checkout happened to have installed rather than the one
+# the worktree pins. The shim runs the install of the tree it is invoked in,
+# but unlike the `vp` walk it never leaves this project, so another
+# repository's `node_modules` is never executed (#176): with $PWD inside a
+# `.claude/worktrees/<name>` that is registered as a worktree of $PROJECT_DIR
+# and has its own install, it runs that install; anywhere else (the primary
+# checkout, a foreign repository nested in it, or outside the project) it runs
+# $PROJECT_DIR's. It only reads paths and asks the project's own git for its
+# worktree list, so it never runs git inside a foreign checkout either.
+FALLOW_SHIM_MARKER="# generated-by: .claude/hooks/session-start.sh (fallow re-exec shim, issue #177)"
+write_fallow_shim() {
+  project_q="$(printf '%q' "$PROJECT_DIR")"
+  write_shim fallow "$FALLOW_SHIM_MARKER" <<SHIM
+project=$project_q
+bin=node_modules/.bin/fallow
+root="\$(cd "\$project" 2>/dev/null && pwd -P)" || root=""
+here="\$(pwd -P 2>/dev/null)" || here=""
+if [ -n "\$root" ] && [ -n "\$here" ]; then
+  case "\$here/" in
+    "\$root/.claude/worktrees/"?*/*)
+      rest="\${here#"\$root/.claude/worktrees/"}"
+      tree="\$root/.claude/worktrees/\${rest%%/*}"
+      if [ -x "\$tree/\$bin" ] \\
+        && git -C "\$root" worktree list --porcelain 2>/dev/null | grep -qxF "worktree \$tree"; then
+        exec "\$tree/\$bin" "\$@"
+      fi
+      ;;
+  esac
+fi
+if [ -x "\$project/\$bin" ]; then
+  exec "\$project/\$bin" "\$@"
+fi
+printf 'fallow: no install at %s; run pnpm install --frozen-lockfile in %s\\n' "\$project/\$bin" "\$project" >&2
+exit 127
+SHIM
 }
 
 # ── 1. Repo binaries the documented workflows invoke directly ─────────────────
 # AGENTS.md's fallow gate runs `fallow audit …` before every commit; it resolves
 # only from node_modules/.bin. `vp` is included for the remote/web runner,
-# where the global launcher does not exist.
-link_tool "$PROJECT_DIR/node_modules/.bin/fallow"
+# where the global launcher does not exist. Both are shims (above), written
+# even before the install: they resolve the binary when they run.
+write_fallow_shim
 write_vp_shim
 
 # ── 2. Bare `node` (gardeneria #1462) ─────────────────────────────────────────
@@ -165,9 +212,6 @@ if [ -f "$PROJECT_DIR/pnpm-lock.yaml" ]; then
     || (cd "$PROJECT_DIR" && pnpm install --frozen-lockfile >/dev/null 2>&1) \
     || (cd "$PROJECT_DIR" && corepack pnpm install --frozen-lockfile >/dev/null 2>&1) \
     || log "dependency install failed; continuing"
-  # node_modules/.bin only exists after the install, so re-link what it provides.
-  link_tool "$PROJECT_DIR/node_modules/.bin/fallow"
-  write_vp_shim
 fi
 
 exit 0
