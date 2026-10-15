@@ -42,8 +42,10 @@ export const jsonResponse = (
 
 /**
  * A stubbed `fetch` answering with `handler`, served through
- * `FetchHttpClient.layer`. `handler` may throw (or return a rejected
- * promise) to simulate a connection failure.
+ * `FetchHttpClient.layer` (`http`), and as the bare implementation (`fetch`)
+ * for a program that brings its own `FetchHttpClient.layer`, to provide as
+ * `FetchHttpClient.Fetch`. `handler` may throw (or return a rejected promise)
+ * to simulate a connection failure.
  */
 export const stubFetch = (
   handler: (request: CapturedRequest, attempt: number) => Response | Promise<Response>,
@@ -64,7 +66,7 @@ export const stubFetch = (
   const http = FetchHttpClient.layer.pipe(
     Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
   );
-  return { http, calls };
+  return { http, calls, fetch: fetchImpl };
 };
 
 /** Let pending promises (the stubbed `fetch`) settle. */
@@ -128,7 +130,8 @@ export const formOf = (params: Readonly<Record<string, unknown>>): Record<string
  * body (served as a 200) or a whole `Response`, and may throw to simulate a
  * connection failure. `layer` is what the capability layers require:
  * Distilled's `Credentials` (holding {@link TEST_KEY}) and the stubbed
- * `HttpClient`.
+ * `HttpClient`; `fetch` is the stub alone, for a program that builds its own
+ * client and credentials.
  */
 export const stubStripe = (answer: (call: StripeCall, attempt: number) => unknown) => {
   const calls: Array<StripeCall> = [];
@@ -151,7 +154,12 @@ export const stubStripe = (answer: (call: StripeCall, attempt: number) => unknow
     Credentials,
     Effect.succeed({ apiKey: Redacted.make(TEST_KEY), apiBaseUrl: "https://api.stripe.com" }),
   );
-  return { calls, requests: stub.calls, layer: Layer.merge(stub.http, credentials) };
+  return {
+    calls,
+    requests: stub.calls,
+    fetch: stub.fetch,
+    layer: Layer.merge(stub.http, credentials),
+  };
 };
 
 /** `stubStripe` answering from a table keyed by `METHOD /path`; a miss is a 404. */

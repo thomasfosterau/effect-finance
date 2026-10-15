@@ -13,9 +13,13 @@ import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePa
  * 2. Create a product
  * 3. Create a recurring price for the product
  * 4. Create a subscription for the customer
+ *
+ * The file exports the program and the layer, and runs them only when executed
+ * directly (`node examples/subscription.ts`), so importing it has no side
+ * effects (`tests/examples.test.ts` runs it over a stubbed `fetch`).
  */
 
-const program = Effect.gen(function* () {
+export const program = Effect.gen(function* () {
   yield* Console.log("Creating customer...");
   const customer = yield* Customer.create({
     email: "subscriber@example.com",
@@ -52,17 +56,20 @@ const program = Effect.gen(function* () {
 
 // The key comes from STRIPE_API_KEY, read through `Config` as a `Redacted`;
 // the capabilities need an `HttpClient`.
-const layer = StripePayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
+export const layer = StripePayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 
-Effect.runPromise(program.pipe(Effect.provide(layer)))
-  .then((result) => {
-    console.log("\nSubscription created successfully!");
-    console.log("Customer:", result.customer.id);
-    console.log("Product:", result.product.id);
-    console.log("Price:", result.price.id);
-    console.log("Subscription:", result.subscription.id);
-  })
-  .catch((error) => {
-    console.error("\nFailed:", error);
-    process.exit(1);
-  });
+// Run only when executed directly, never on import.
+if (import.meta.main) {
+  Effect.runPromise(program.pipe(Effect.provide(layer)))
+    .then((result) => {
+      console.log("\nSubscription created successfully!");
+      console.log("Customer:", result.customer.id);
+      console.log("Product:", result.product.id);
+      console.log("Price:", result.price.id);
+      console.log("Subscription:", result.subscription.id);
+    })
+    .catch((error) => {
+      console.error("\nFailed:", error);
+      process.exit(1);
+    });
+}

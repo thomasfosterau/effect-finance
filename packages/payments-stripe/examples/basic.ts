@@ -10,9 +10,13 @@ import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePa
  * Notice that the program below imports only from `@thomasfosterau/effect-payments`
  * — it never mentions Stripe. The provider is chosen at the edge, by the layer we
  * provide. Swapping providers means swapping the layer, not the program.
+ *
+ * The file exports the program and the layer, and runs them only when executed
+ * directly (`node examples/basic.ts`), so importing it has no side effects
+ * (`tests/examples.test.ts` runs it over a stubbed `fetch`).
  */
 
-const program = Effect.gen(function* () {
+export const program = Effect.gen(function* () {
   yield* Console.log("Creating customer...");
 
   const customer = yield* Customer.create({
@@ -52,17 +56,20 @@ const program = Effect.gen(function* () {
 // `StripePayments.layerFromEnv()`.
 // The capabilities run on `effect/http`'s `HttpClient`: provide
 // `FetchHttpClient.layer` (Node, Workers, browsers). The key is a `Redacted`.
-const layer = StripePayments.layer({
+export const layer = StripePayments.layer({
   apiKey: Redacted.make(process.env.STRIPE_API_KEY || "sk_test_..."),
 }).pipe(Layer.provide(FetchHttpClient.layer));
 
-Effect.runPromise(program.pipe(Effect.provide(layer)))
-  .then((result) => {
-    console.log("\nSuccess!");
-    console.log("Customer ID:", result.customer.id);
-    console.log("Payment Intent ID:", result.paymentIntent.id);
-  })
-  .catch((error) => {
-    console.error("\nFailed:", error);
-    process.exit(1);
-  });
+// Run only when executed directly, never on import.
+if (import.meta.main) {
+  Effect.runPromise(program.pipe(Effect.provide(layer)))
+    .then((result) => {
+      console.log("\nSuccess!");
+      console.log("Customer ID:", result.customer.id);
+      console.log("Payment Intent ID:", result.paymentIntent.id);
+    })
+    .catch((error) => {
+      console.error("\nFailed:", error);
+      process.exit(1);
+    });
+}

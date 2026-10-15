@@ -143,7 +143,9 @@ export const packageConfig = ({ url }: PackageConfigOptions) => {
         // .fallowrc.json); without it every function scores as uncovered.
         reporter: ["text-summary", "json-summary", "json"],
         reportsDirectory: "./coverage",
-        include: ["src/**/*.ts"],
+        // `examples/`: the runnable examples a package's suite executes
+        // (payments-stripe's `tests/examples.test.ts`, #127) count too.
+        include: ["src/**/*.ts", "examples/**/*.ts"],
         // `generated/`: machine-written schemas, exercised through the
         // resource modules that decode with them, not line by line.
         exclude: ["**/*.d.ts", "**/generated/**"],
