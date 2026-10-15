@@ -45,7 +45,7 @@
  * field moved in a new API version). A fix that ships after the retries stop
  * needs the event resent from the Dashboard. The handler below is a sketch;
  * `packages/payments-stripe/examples/webhooks.ts` in the repository
- * (https://github.com/thomasfosterau/effect-payments) is the full version.
+ * (https://github.com/thomasfosterau/effect-finance) is the full version.
  *
  * @example
  * ```typescript

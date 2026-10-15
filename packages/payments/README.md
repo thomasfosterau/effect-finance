@@ -128,8 +128,8 @@ The rules:
   | PayPal Catalog Products (`Product.create`) | not stated | 72 hours | [`catalogs_products_v1.json`](https://raw.githubusercontent.com/paypal/paypal-rest-api-specifications/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/catalogs_products_v1.json) |
   | PayPal Subscriptions (`Price.create`, `Subscription.create`) | not stated | 72 hours | [`billing_subscriptions_v1.json`](https://raw.githubusercontent.com/paypal/paypal-rest-api-specifications/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/billing_subscriptions_v1.json) |
   | PayPal Payments (`Refund.create`) | 1 to 10 000 characters | not stated | [`payments_payment_v2.json`](https://raw.githubusercontent.com/paypal/paypal-rest-api-specifications/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/payments_payment_v2.json) |
-  | Stripe | 255 characters | at least 24 hours | unverified ([#93](https://github.com/thomasfosterau/effect-payments/issues/93)) |
-  | Airwallex | about 64 characters | unknown | unverified ([#93](https://github.com/thomasfosterau/effect-payments/issues/93)) |
+  | Stripe | 255 characters | at least 24 hours | unverified ([#93](https://github.com/thomasfosterau/effect-finance/issues/93)) |
+  | Airwallex | about 64 characters | unknown | unverified ([#93](https://github.com/thomasfosterau/effect-finance/issues/93)) |
 
   The 1 to 64 character shape fits PayPal's Orders (1 to 108) and Payments (refunds, 1 to 10 000) limits; PayPal states no limit for Catalog Products and Subscriptions. It stays within the unverified Stripe and Airwallex figures.
 

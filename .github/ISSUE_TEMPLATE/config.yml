@@ -4,8 +4,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Report a vulnerability privately
-    url: https://github.com/thomasfosterau/effect-payments/security/advisories/new
+    url: https://github.com/thomasfosterau/effect-finance/security/advisories/new
     about: Security issues go through a private advisory, never a public issue — see SECURITY.md.
   - name: How this repo is built
-    url: https://github.com/thomasfosterau/effect-payments/blob/trunk/CONTRIBUTING.md
+    url: https://github.com/thomasfosterau/effect-finance/blob/trunk/CONTRIBUTING.md
     about: Branch model, pre-PR checklist and CI expectations.

@@ -67,7 +67,7 @@ CI runs 1–5 plus `pnpm audit --audit-level high`. (The generated Stripe resour
 - Agent work uses git worktrees under `.claude/worktrees/`, one per branch, named `issue-<n>-<slug>` for issue-linked work. Start every command that targets a worktree with an explicit `cd` and confirm with `git log -1` before committing. The linked `vp` at `~/.local/bin/vp` re-execs the nearest project-local `node_modules/vite-plus/bin/vp`, so a worktree needs its own `pnpm install` first.
 - Every change to a published package's behaviour carries a changeset (`pnpm changeset`); docs-, CI- and tooling-only changes need none. Never publish or version by hand: the Release workflow opens the "Version Packages" PR and the owner merges it ([PUBLISHING.md](PUBLISHING.md)).
 - These are standing approvals: open a PR once a branch has a pushed commit, watch it to merge or close (investigate CI failures and review comments; rebase when it goes conflicting), and keep the PR body current with what the branch does.
-- GitHub writes go to `thomasfosterau/effect-payments` only; pass `-R thomasfosterau/effect-payments` whenever the cwd might be another checkout. Use the `gh` CLI for GitHub operations, even when GitHub MCP tools are available. If another repository needs something, say so in the PR body.
+- GitHub writes go to `thomasfosterau/effect-finance` only; pass `-R thomasfosterau/effect-finance` whenever the cwd might be another checkout. Use the `gh` CLI for GitHub operations, even when GitHub MCP tools are available. If another repository needs something, say so in the PR body.
 
 ## Work tracker
 

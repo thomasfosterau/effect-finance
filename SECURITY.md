@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report security vulnerabilities privately via GitHub's [**Report a vulnerability**](https://github.com/thomasfosterau/effect-payments/security/advisories/new) button (Security → Advisories), **not** through public issues.
+Please report security vulnerabilities privately via GitHub's [**Report a vulnerability**](https://github.com/thomasfosterau/effect-finance/security/advisories/new) button (Security → Advisories), **not** through public issues.
 
 You can expect an initial response within a few days. Please include a description, reproduction steps, and the affected package and version.
 

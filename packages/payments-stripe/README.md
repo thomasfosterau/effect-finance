@@ -208,7 +208,7 @@ const handle = Effect.fn("handleStripeWebhook")(
 );
 ```
 
-[`examples/webhooks.ts`](https://github.com/thomasfosterau/effect-payments/blob/trunk/packages/payments-stripe/examples/webhooks.ts) is the full version: the secret read through `Config`, an exhaustive `Match` over the handled types, and a demo that signs its own test deliveries with `Webhook.signatureHeader`.
+[`examples/webhooks.ts`](https://github.com/thomasfosterau/effect-finance/blob/trunk/packages/payments-stripe/examples/webhooks.ts) is the full version: the secret read through `Config`, an exhaustive `Match` over the handled types, and a demo that signs its own test deliveries with `Webhook.signatureHeader`.
 
 The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an optional alternative; they run on an SDK client you provide, `Layer.succeed(Webhook.StripeService, new Stripe(key))` (the verifier uses only the endpoint secret, never the key).
 
