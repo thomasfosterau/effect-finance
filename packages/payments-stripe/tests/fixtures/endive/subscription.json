@@ -21,6 +21,7 @@
   "cancellation_details": {
     "comment": null,
     "feedback": null,
+    "feedback_option": null,
     "reason": null
   },
   "collection_method": "charge_automatically",
@@ -105,7 +106,8 @@
           "transform_usage": null,
           "trial_period_days": null,
           "usage_type": "licensed"
-        }
+        },
+        "current_trial": null
       }
     ],
     "has_more": false,
@@ -136,7 +138,8 @@
   "trial_end": null,
   "trial_settings": {
     "end_behavior": {
-      "missing_payment_method": "create_invoice"
+      "missing_payment_method": "create_invoice",
+      "billing_cycle_anchor": null
     }
   },
   "trial_start": null,

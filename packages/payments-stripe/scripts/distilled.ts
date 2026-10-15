@@ -27,7 +27,7 @@ export interface Installed {
   readonly module: Readonly<Record<string, unknown>>;
   /** `lib/services/stripe.d.ts`, the declarations of that module. */
   readonly declarations: string;
-  /** The package version (`1.0.0-rc.13`). */
+  /** The package version (`1.0.0-rc.15`). */
   readonly version: string;
 }
 

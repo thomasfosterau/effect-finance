@@ -171,6 +171,37 @@ describe("Webhook", () => {
     });
   });
 
+  // `0` means DEFAULT_TOLERANCE (300 s) on both SDK-based paths, though the
+  // SDK itself reads `0` as "no timestamp check"; a negative tolerance goes to
+  // the SDK as given and skips the check.
+  describe.each([
+    { name: "constructEvent", construct: Webhook.constructEvent },
+    { name: "constructEventAsync", construct: Webhook.constructEventAsync },
+  ])("$name tolerance", ({ construct }) => {
+    const payload = JSON.stringify({ id: "evt_test", type: "payment_intent.succeeded" });
+    const secret = "whsec_test_secret";
+    const hourOld = (tolerance: number) =>
+      Effect.gen(function* () {
+        const signature = yield* Webhook.generateTestHeaderString(
+          payload,
+          secret,
+          Math.floor(Date.now() / 1000) - 3600,
+        );
+        return yield* construct(payload, signature, secret, tolerance);
+      }).pipe(Effect.provide(testLayer));
+
+    it("reads a tolerance of 0 as the default 300 s, refusing an hour-old signature", async () => {
+      const error = await Effect.runPromise(Effect.flip(hourOld(0)));
+      expect(error).toBeInstanceOf(SignatureVerificationError);
+      expect(error.message).toContain("Timestamp outside the tolerance zone");
+    });
+
+    it("skips the timestamp check on a negative tolerance", async () => {
+      const event = await Effect.runPromise(hourOld(-1));
+      expect(event.type).toBe("payment_intent.succeeded");
+    });
+  });
+
   describe("generateTestHeaderString", () => {
     it("should generate valid test header", async () => {
       const payload = JSON.stringify({

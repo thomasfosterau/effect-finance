@@ -106,7 +106,7 @@ import {
 /**
  * The Stripe API version every capability layer pins in `Stripe-Version`
  * unless configured: the one the pinned `@distilled.cloud/stripe` release's
- * schemas are generated from (`2026-07-29.dahlia` for `1.0.0-rc.13`). It moves
+ * schemas are generated from (`2026-09-30.endive` for `1.0.0-rc.15`). It moves
  * whenever this package moves its Distilled pin, so create the webhook
  * endpoints whose events a program reads beside the capabilities at this
  * version. The resource modules and `StripeHttp` pin the same one.
@@ -115,7 +115,8 @@ export { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
 
 /**
  * The requirements of a capability layer: Distilled's `Credentials` (the key
- * and API origin, e.g. `Credentials.credentials({ apiKey })` from
+ * and API origin, e.g. `Credentials.credentials({ apiKey })`, with `apiKey` a
+ * `Redacted<string>`, from
  * `@distilled.cloud/stripe/Credentials`) and an `HttpClient`.
  */
 type Requirements = Credentials | HttpClient.HttpClient;

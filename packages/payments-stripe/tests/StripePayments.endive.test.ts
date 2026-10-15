@@ -8,14 +8,18 @@ import * as StripeSubscription from "../src/Subscription.ts";
 import * as StripeHttp from "../src/StripeHttp.ts";
 import * as StripePayments from "../src/StripePayments.ts";
 import { jsonResponse, stubFetch, TEST_KEY } from "./support.ts";
-import dahliaCheckoutSession from "./fixtures/dahlia/checkout-session.json" with { type: "json" };
-import dahliaSubscription from "./fixtures/dahlia/subscription.json" with { type: "json" };
+import endiveCheckoutSession from "./fixtures/endive/checkout-session.json" with { type: "json" };
+import endiveSubscription from "./fixtures/endive/subscription.json" with { type: "json" };
 import basilSubscription from "./fixtures/basil/subscription.json" with { type: "json" };
 
 /**
  * Responses at the API version every request now pins
- * (`DISTILLED_API_VERSION`, `2026-07-29.dahlia`, #146): the fixtures under
- * `fixtures/dahlia/` are the basil ones with the members dahlia adds, and
+ * (`DISTILLED_API_VERSION`, `2026-09-30.endive`, #146): the fixtures under
+ * `fixtures/endive/` are the basil ones with the members endive's schemas
+ * require added (among them the subscription's
+ * `cancellation_details.feedback_option`, `items.data[].current_trial` and
+ * `trial_settings.end_behavior.billing_cycle_anchor`, and the checkout
+ * session's `allowed_payment_method_types`, all nullable), and
  * Distilled's own schemas decode them strictly, so they are the shape Stripe
  * answers the default layer with. The capability layers decode them, and a
  * resource module returns them as sent.
@@ -45,13 +49,13 @@ const strictly = (schema: Schema.Schema<unknown>, body: unknown): unknown =>
   // suspensions over `effect/Schema` built-ins, which need no services.
   Schema.decodeUnknownSync(schema as unknown as Schema.Codec<unknown, unknown>)(body);
 
-describe("dahlia fixtures", () => {
-  it("the subscription is dahlia-shaped: Distilled's schema decodes it strictly", () => {
-    expect(() => strictly(Distilled.Subscription, dahliaSubscription)).not.toThrow();
+describe("endive fixtures", () => {
+  it("the subscription is endive-shaped: Distilled's schema decodes it strictly", () => {
+    expect(() => strictly(Distilled.Subscription, endiveSubscription)).not.toThrow();
   });
 
-  it("the checkout session is dahlia-shaped: Distilled's schema decodes it strictly", () => {
-    expect(() => strictly(Distilled.CheckoutSession, dahliaCheckoutSession)).not.toThrow();
+  it("the checkout session is endive-shaped: Distilled's schema decodes it strictly", () => {
+    expect(() => strictly(Distilled.CheckoutSession, endiveCheckoutSession)).not.toThrow();
   });
 
   it("the basil subscription is not: the check would catch a stale fixture", () => {
@@ -59,28 +63,28 @@ describe("dahlia fixtures", () => {
   });
 });
 
-describe("the default layer decodes dahlia responses", () => {
-  it("maps a dahlia subscription", async () => {
+describe("the default layer decodes endive responses", () => {
+  it("maps an endive subscription", async () => {
     const { result, calls } = onDefaultLayer(
-      Subscription.retrieve(dahliaSubscription.id),
-      dahliaSubscription,
+      Subscription.retrieve(endiveSubscription.id),
+      endiveSubscription,
     );
     const subscription = await result;
     expect(subscription).toBeInstanceOf(Subscription.Subscription);
     expect(subscription).toMatchObject({
-      id: dahliaSubscription.id,
-      customerId: dahliaSubscription.customer,
+      id: endiveSubscription.id,
+      customerId: endiveSubscription.customer,
       status: "active",
       cancelAtPeriodEnd: false,
-      currentPeriodEnd: dahliaSubscription.items.data[0]?.current_period_end,
+      currentPeriodEnd: endiveSubscription.items.data[0]?.current_period_end,
     });
     expect(subscription.items.map((item) => item.priceId)).toEqual([
-      dahliaSubscription.items.data[0]?.price.id,
+      endiveSubscription.items.data[0]?.price.id,
     ]);
     expect(calls[0]?.headers.get("stripe-version")).toBe(StripePayments.DISTILLED_API_VERSION);
   });
 
-  it("maps a dahlia checkout session", async () => {
+  it("maps an endive checkout session", async () => {
     const { result, calls } = onDefaultLayer(
       CheckoutSession.create({
         mode: "subscription",
@@ -89,23 +93,23 @@ describe("the default layer decodes dahlia responses", () => {
         successUrl: "https://example.test/success",
         cancelUrl: "https://example.test/cancel",
       }),
-      dahliaCheckoutSession,
+      endiveCheckoutSession,
     );
     const session = await result;
     expect(session).toBeInstanceOf(CheckoutSession.CheckoutSession);
-    expect(session).toMatchObject({ id: dahliaCheckoutSession.id, url: dahliaCheckoutSession.url });
+    expect(session).toMatchObject({ id: endiveCheckoutSession.id, url: endiveCheckoutSession.url });
     expect(calls[0]?.headers.get("stripe-version")).toBe(StripePayments.DISTILLED_API_VERSION);
   });
 
-  it("returns a dahlia subscription from the resource module as sent, under strict validation too", async () => {
-    const { http } = stubFetch(() => jsonResponse(200, dahliaSubscription));
+  it("returns an endive subscription from the resource module as sent, under strict validation too", async () => {
+    const { http } = stubFetch(() => jsonResponse(200, endiveSubscription));
     const subscription = await Effect.runPromise(
-      StripeSubscription.retrieve(dahliaSubscription.id).pipe(
+      StripeSubscription.retrieve(endiveSubscription.id).pipe(
         Effect.provide(StripeHttp.layer(config)),
         Effect.provide(http),
         Effect.provide(strictValidation),
       ),
     );
-    expect(subscription).toEqual(dahliaSubscription);
+    expect(subscription).toEqual(endiveSubscription);
   });
 });
