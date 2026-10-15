@@ -1,93 +1,22 @@
 /**
- * Test doubles shared by the Stripe suites: a stubbed `fetch` served as
- * `effect/http`'s `HttpClient`, and {@link stubStripe}, the same stub decoded
- * into Stripe calls for the capability layers and resource modules (which run
- * on Distilled's operations). No test reaches `api.stripe.com`.
+ * Test doubles shared by the Stripe suites: {@link stubStripe}, a stubbed
+ * `fetch` decoded into Stripe calls for the capability layers and resource
+ * modules (which run on Distilled's operations), beside the vendor-neutral
+ * doubles every provider suite shares (`tests/stubs.ts` at the
+ * repository root, re-exported here). No test reaches `api.stripe.com`.
  */
 
-import { Effect, Fiber, Layer, Predicate, Redacted } from "effect";
-import { FetchHttpClient } from "effect/http";
-import { TestClock } from "effect/testing";
+import { Effect, Layer, Predicate, Redacted } from "effect";
 import { Credentials } from "@distilled.cloud/stripe/Credentials";
+import { jsonResponse, stubApi } from "../../../tests/stubs.ts";
 
-/** A request as the stubbed `fetch` saw it. */
-export interface CapturedRequest {
-  readonly url: URL;
-  readonly method: string;
-  readonly headers: Headers;
-  readonly init: RequestInit | undefined;
-  /** A text or bytes body, decoded; `undefined` for none or for multipart. */
-  readonly body: string | undefined;
-  /** A multipart body, as sent. */
-  readonly form: FormData | undefined;
-}
-
-const textOf = (raw: BodyInit | null | undefined): string | undefined =>
-  typeof raw === "string"
-    ? raw
-    : raw instanceof Uint8Array
-      ? new TextDecoder().decode(raw)
-      : undefined;
-
-/** A JSON response with `status`, plus any extra headers. */
-export const jsonResponse = (
-  status: number,
-  body: unknown,
-  headers: Record<string, string> = {},
-): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json", ...headers },
-  });
-
-/**
- * A stubbed `fetch` answering with `handler`, served through
- * `FetchHttpClient.layer` (`http`), and as the bare implementation (`fetch`)
- * for a program that brings its own `FetchHttpClient.layer`, to provide as
- * `FetchHttpClient.Fetch`. `handler` may throw (or return a rejected promise)
- * to simulate a connection failure.
- */
-export const stubFetch = (
-  handler: (request: CapturedRequest, attempt: number) => Response | Promise<Response>,
-) => {
-  const calls: Array<CapturedRequest> = [];
-  const fetchImpl: typeof globalThis.fetch = async (input, init) => {
-    const captured: CapturedRequest = {
-      url: new URL(String(input)),
-      method: init?.method ?? "GET",
-      headers: new Headers(init?.headers),
-      init,
-      body: textOf(init?.body),
-      form: init?.body instanceof FormData ? init.body : undefined,
-    };
-    calls.push(captured);
-    return handler(captured, calls.length);
-  };
-  const http = FetchHttpClient.layer.pipe(
-    Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
-  );
-  return { http, calls, fetch: fetchImpl };
-};
-
-/** Let pending promises (the stubbed `fetch`) settle. */
-const macrotask = Effect.callback<void>((resume) => {
-  const timer = setTimeout(() => resume(Effect.void), 0);
-  return Effect.sync(() => clearTimeout(timer));
-});
-
-/**
- * Run `effect` under a `TestClock`, advancing it until the effect completes,
- * so retry backoff and timeouts elapse instantly and deterministically.
- */
-export const withTestClock = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> =>
-  Effect.gen(function* () {
-    const fiber = yield* Effect.forkChild(effect);
-    for (let step = 0; step < 1000 && fiber.pollUnsafe() === undefined; step++) {
-      yield* macrotask;
-      yield* TestClock.adjust("1 second");
-    }
-    return yield* Fiber.join(fiber);
-  }).pipe(Effect.provide(TestClock.layer()));
+export {
+  type CapturedRequest,
+  jsonResponse,
+  reachableFrom,
+  stubFetch,
+  withTestClock,
+} from "../../../tests/stubs.ts";
 
 /** The secret key {@link stubStripe} authenticates with. */
 export const TEST_KEY = "sk_test_not_a_real_key_4242";
@@ -134,9 +63,8 @@ export const formOf = (params: Readonly<Record<string, unknown>>): Record<string
  * client and credentials.
  */
 export const stubStripe = (answer: (call: StripeCall, attempt: number) => unknown) => {
-  const calls: Array<StripeCall> = [];
-  const stub = stubFetch((request, attempt) => {
-    const call: StripeCall = {
+  const stub = stubApi(
+    (request): StripeCall => ({
       method: request.method,
       path: request.url.pathname,
       params: Object.fromEntries(
@@ -145,18 +73,16 @@ export const stubStripe = (answer: (call: StripeCall, attempt: number) => unknow
           : request.url.searchParams,
       ),
       headers: request.headers,
-    };
-    calls.push(call);
-    const body = answer(call, attempt);
-    return body instanceof Response ? body : jsonResponse(200, body);
-  });
+    }),
+    answer,
+  );
   const credentials = Layer.succeed(
     Credentials,
     Effect.succeed({ apiKey: Redacted.make(TEST_KEY), apiBaseUrl: "https://api.stripe.com" }),
   );
   return {
-    calls,
-    requests: stub.calls,
+    calls: stub.calls,
+    requests: stub.requests,
     fetch: stub.fetch,
     layer: Layer.merge(stub.http, credentials),
   };

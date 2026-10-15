@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { ConfigProvider, Duration, Effect, Layer, Predicate, Redacted } from "effect";
+import { ConfigProvider, Duration, Effect, Layer, Redacted } from "effect";
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { TestClock } from "effect/testing";
 import { strict as strictValidation } from "@distilled.cloud/core/response-validation";
@@ -31,6 +31,7 @@ import {
   callOf,
   capabilitiesOver,
   jsonResponse,
+  reachableFrom,
   stubFetch,
   stubPayPal,
   TEST_TOKEN,
@@ -771,43 +772,3 @@ describe("PayPalPayments errors", () => {
     }
   });
 });
-
-/**
- * The values an object holds directly: its `Map` / `Set` entries, its own
- * keys and its own data properties' values. None for a primitive.
- */
-const childrenOf = (value: unknown): Array<unknown> => {
-  if (!Predicate.isObjectKeyword(value)) return [];
-  const entries = Predicate.isMap(value)
-    ? [...value.keys(), ...value.values()]
-    : Predicate.isSet(value)
-      ? [...value.values()]
-      : [];
-  const own = Reflect.ownKeys(value).flatMap((key) => {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    return descriptor !== undefined && "value" in descriptor ? [key, descriptor.value] : [key];
-  });
-  return [...entries, ...own];
-};
-
-/**
- * Every string and object reachable from `root` through {@link childrenOf}
- * (string- and symbol-keyed properties, enumerable or not, getters left
- * unread), each object once.
- */
-const reachableFrom = (root: unknown) => {
-  const strings: Array<string> = [];
-  const objects: Array<object> = [];
-  const seen = new Set<object>();
-  const pending: Array<unknown> = [root];
-  while (pending.length > 0) {
-    const value = pending.pop();
-    if (Predicate.isString(value)) strings.push(value);
-    if (Predicate.isObjectKeyword(value) && !seen.has(value)) {
-      seen.add(value);
-      objects.push(value);
-      pending.push(...childrenOf(value));
-    }
-  }
-  return { strings, objects };
-};

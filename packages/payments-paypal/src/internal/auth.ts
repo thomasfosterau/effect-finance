@@ -11,21 +11,25 @@
  * @module
  */
 
-import { Clock, Config, Duration, Effect, Option, Redacted, Ref, Schema } from "effect";
+import { Clock, Config, type Duration, Effect, Option, Redacted, Schema } from "effect";
 import { Base64 } from "effect/encoding";
-import {
-  HttpClient,
-  type HttpClientError,
-  HttpClientRequest,
-  type HttpClientResponse,
-} from "effect/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
 import {
   PaymentConfigError,
-  PaymentNetworkError,
+  type PaymentNetworkError,
   PaymentProviderError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
-import { shareLogin } from "@thomasfosterau/effect-payments/internal";
+import {
+  isAbsoluteHttpUrl,
+  isOk,
+  type Reply,
+  send as sendWithin,
+  shareLogin,
+  timedOut as timedOutAfter,
+  timeoutOf,
+  tokenCache,
+} from "@thomasfosterau/effect-payments/internal";
 import type { PayPalConfig, PayPalEnvironment } from "../PayPalPayments.js";
 import { errorBodyOf, handlePayPalError, PROVIDER } from "./error.js";
 
@@ -40,8 +44,8 @@ const DEFAULT_LOGIN_TIMEOUT_MS = 30_000;
 const DEFAULT_TIMEOUT_MS = 80_000;
 /** The token lifetime assumed when PayPal's response states none, in seconds. */
 const DEFAULT_TOKEN_LIFETIME_S = 1800;
-/** A token is refreshed this long before it expires, to avoid using one mid-rotation. */
-const REFRESH_MARGIN_MS = 60_000;
+/** The provider's name in configuration and timeout messages. */
+const NAME = "PayPal";
 
 /** A configured client's authentication and request policy. */
 export interface Session {
@@ -64,40 +68,9 @@ export interface Session {
   readonly forget: (token: string) => Effect.Effect<void>;
 }
 
-/** A response reduced to its status and JSON body. */
-export interface Reply {
-  readonly status: number;
-  readonly json: unknown;
-}
-
-interface TokenState {
-  readonly token: string;
-  readonly expiresAt: number;
-}
-
-/** Whether `status` is a 2xx. */
-export const isOk = (status: number): boolean => status >= 200 && status < 300;
-
-/** The response body as JSON, or `{}` when it is empty or not JSON. */
-const readJson = (response: HttpClientResponse.HttpClientResponse): Effect.Effect<unknown> =>
-  response.json.pipe(Effect.orElseSucceed(() => ({})));
-
-/**
- * The underlying failure of an `HttpClientError`, without the request it
- * carries, whose headers hold the credentials.
- */
-export const causeOf = (error: HttpClientError.HttpClientError): unknown =>
-  "cause" in error.reason ? error.reason.cause : undefined;
-
-/** An `HttpClientError` as a {@link PaymentNetworkError}, keeping only its message and cause. */
-export const networkError = (error: HttpClientError.HttpClientError): PaymentNetworkError =>
-  new PaymentNetworkError({ message: error.message, cause: causeOf(error) });
-
-/** The failure of a request still unanswered after `limit`. */
+/** The failure of a PayPal exchange (`what`) still unanswered after `limit`. */
 export const timedOut = (what: string, limit: Duration.Duration): PaymentNetworkError =>
-  new PaymentNetworkError({
-    message: `PayPal ${what} timed out after ${Duration.toMillis(limit)} ms`,
-  });
+  timedOutAfter(NAME, what, limit);
 
 /**
  * Send `request` and read its JSON body, all within `limit`. A request that
@@ -110,54 +83,13 @@ export const send = (
   limit: Duration.Duration,
   what: string,
 ): Effect.Effect<Reply, PaymentNetworkError> =>
-  http.execute(request).pipe(
-    Effect.flatMap((response) =>
-      Effect.map(readJson(response), (json): Reply => ({ status: response.status, json })),
-    ),
-    // The error's request carries the credentials in its headers: keep only
-    // the underlying failure.
-    Effect.mapError(networkError),
-    Effect.timeoutOption(limit),
-    Effect.flatMap(
-      Option.match({
-        onSome: Effect.succeed,
-        onNone: () => Effect.fail(timedOut(what, limit)),
-      }),
-    ),
-  );
+  sendWithin(http, request, { provider: NAME, what, limit });
 
 /** The OAuth token response, decoded rather than trusted. */
 const TokenResponse = Schema.Struct({
   access_token: Schema.String,
   expires_in: Schema.optional(Schema.Number),
 });
-
-/**
- * A configured timeout as a `Duration`: a positive, finite number of
- * milliseconds, or `Infinity` for no timeout. Anything else (`0`, a negative
- * number, `NaN`) fails with {@link PaymentConfigError}.
- */
-const timeoutOf = (
-  name: string,
-  millis: number,
-): Effect.Effect<Duration.Duration, PaymentConfigError> =>
-  millis === Number.POSITIVE_INFINITY || (Number.isFinite(millis) && millis > 0)
-    ? Effect.succeed(Duration.millis(millis))
-    : Effect.fail(
-        new PaymentConfigError({
-          message: `PayPal ${name} must be a positive number of milliseconds, or Infinity for none (got ${millis})`,
-        }),
-      );
-
-/** Whether `value` parses as an absolute `http:` or `https:` URL (an empty string does not). */
-const isAbsoluteHttpUrl = (value: string): boolean => {
-  try {
-    const { protocol } = new URL(value);
-    return protocol === "https:" || protocol === "http:";
-  } catch {
-    return false;
-  }
-};
 
 /**
  * Build a session from configuration. Fails with {@link PaymentConfigError}
@@ -187,13 +119,14 @@ export const sessionOf = (
     const basicAuth = Redacted.make(
       Base64.encode(`${config.clientId}:${Redacted.value(config.clientSecret)}`),
     );
-    const tokenRef = yield* Ref.make(Option.none<TokenState>());
+    const cache = yield* tokenCache;
 
     const loginTimeout = yield* timeoutOf(
+      NAME,
       "loginTimeout",
       config.loginTimeout ?? DEFAULT_LOGIN_TIMEOUT_MS,
     );
-    const timeout = yield* timeoutOf("timeout", config.timeout ?? DEFAULT_TIMEOUT_MS);
+    const timeout = yield* timeoutOf(NAME, "timeout", config.timeout ?? DEFAULT_TIMEOUT_MS);
 
     const login: Effect.Effect<string, PaymentsError> = Effect.gen(function* () {
       const reply = yield* send(
@@ -224,29 +157,16 @@ export const sessionOf = (
       );
       const now = yield* Clock.currentTimeMillis;
       const expiresAt = now + (body.expires_in ?? DEFAULT_TOKEN_LIFETIME_S) * 1000;
-      yield* Ref.set(tokenRef, Option.some({ token: body.access_token, expiresAt }));
+      yield* cache.store(body.access_token, expiresAt);
       return body.access_token;
     });
 
-    const cachedToken: Effect.Effect<Option.Option<string>> = Effect.gen(function* () {
-      const current = yield* Ref.get(tokenRef);
-      const now = yield* Clock.currentTimeMillis;
-      return Option.filter(current, (stored) => stored.expiresAt - REFRESH_MARGIN_MS > now).pipe(
-        Option.map((stored) => stored.token),
-      );
-    });
     // One login at a time, and its outcome is shared: concurrent first calls
     // (or calls racing an expiry) await the in-flight login and reuse its
     // token, or all fail with its error, after which the next call retries.
-    const token = yield* shareLogin(cachedToken, login);
+    const token = yield* shareLogin(cache.cached, login);
 
-    const forget = (used: string): Effect.Effect<void> =>
-      Ref.update(
-        tokenRef,
-        Option.filter((stored) => stored.token !== used),
-      );
-
-    return { baseUrl, timeout, token, forget };
+    return { baseUrl, timeout, token, forget: cache.forget };
   });
 
 /**

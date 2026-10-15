@@ -108,7 +108,7 @@
 import { Clock, Context, Effect, Option, Redacted, Schema } from "effect";
 import type Stripe from "stripe";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
-import { omitUndefined } from "./internal/omitUndefined.js";
+import { omitUndefined } from "@thomasfosterau/effect-payments/internal";
 import {
   anyMatches,
   parseSignatureHeader,

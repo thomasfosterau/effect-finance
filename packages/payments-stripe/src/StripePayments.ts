@@ -19,7 +19,7 @@
  * @module
  */
 
-import { type Context, Effect, Layer, Predicate } from "effect";
+import { type Context, Effect, Layer } from "effect";
 import type { HttpClient } from "effect/http";
 import type { Credentials } from "@distilled.cloud/stripe/Credentials";
 import {
@@ -68,11 +68,8 @@ import * as PriceNS from "@thomasfosterau/effect-payments/Price";
 import * as ProductNS from "@thomasfosterau/effect-payments/Product";
 import * as RefundNS from "@thomasfosterau/effect-payments/Refund";
 import * as SubscriptionNS from "@thomasfosterau/effect-payments/Subscription";
-import {
-  type PaymentConfigError,
-  PaymentInvalidRequestError,
-  type PaymentsError,
-} from "@thomasfosterau/effect-payments";
+import type { PaymentConfigError, PaymentsError } from "@thomasfosterau/effect-payments";
+import { checkId, omitUndefined } from "@thomasfosterau/effect-payments/internal";
 import {
   decodeBillingPortalSession,
   decodeCheckoutSession,
@@ -90,7 +87,6 @@ import {
   decodeSubscription,
   decodeSubscriptionPage,
 } from "./internal/mapping.js";
-import { omitUndefined } from "./internal/omitUndefined.js";
 import {
   layer as clientLayer,
   layerConfig as clientLayerConfig,
@@ -120,21 +116,6 @@ export { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
  * `@distilled.cloud/stripe/Credentials`) and an `HttpClient`.
  */
 type Requirements = Credentials | HttpClient.HttpClient;
-
-/**
- * Refuse an id that is not a non-empty string before anything is sent:
- * Distilled would splice `""` into the path (`/v1/customers/` is the list),
- * and an `undefined` from untyped code would leave the label in it.
- */
-const checkId = (resource: string, id: string): Effect.Effect<void, PaymentInvalidRequestError> =>
-  Predicate.isString(id) && id !== ""
-    ? Effect.void
-    : Effect.fail(
-        new PaymentInvalidRequestError({
-          message: `The ${resource} id must be a non-empty string`,
-          param: "id",
-        }),
-      );
 
 /**
  * One call through the client, its response decoded by `decode`. `id`, when

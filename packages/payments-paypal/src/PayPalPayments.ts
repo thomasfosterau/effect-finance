@@ -29,7 +29,7 @@
  * @module
  */
 
-import { type Context, Effect, Layer, Predicate, type Redacted } from "effect";
+import { type Context, Effect, Layer, type Redacted } from "effect";
 import type { HttpClient } from "effect/http";
 import type { Credentials } from "@distilled.cloud/paypal/Credentials";
 import {
@@ -68,7 +68,7 @@ import {
   PaymentInvalidRequestError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
-import { checkMinorUnits } from "@thomasfosterau/effect-payments/internal";
+import { checkId, checkMinorUnits, omitUndefined } from "@thomasfosterau/effect-payments/internal";
 import {
   DistilledClient,
   layer as clientLayer,
@@ -88,7 +88,6 @@ import {
   decodeSubscription,
 } from "./internal/mapping.js";
 import { toMajorString } from "./internal/money.js";
-import { omitUndefined } from "./internal/omitUndefined.js";
 
 /**
  * Which PayPal environment the capabilities talk to: `live` (real money) or
@@ -153,21 +152,6 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
       message: `PayPal does not support ${operation}`,
     }),
   );
-
-/**
- * Refuse an id that is not a non-empty string before anything is sent:
- * Distilled would splice `""` into the path (`/v1/catalogs/products/` is the
- * list), and an `undefined` from untyped code would leave the label in it.
- */
-const checkId = (resource: string, id: string): Effect.Effect<void, PaymentInvalidRequestError> =>
-  Predicate.isString(id) && id !== ""
-    ? Effect.void
-    : Effect.fail(
-        new PaymentInvalidRequestError({
-          message: `The ${resource} id must be a non-empty string`,
-          param: "id",
-        }),
-      );
 
 /**
  * One call through the client, its response decoded by `decode`. `id`, when

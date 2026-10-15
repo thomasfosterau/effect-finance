@@ -8,7 +8,7 @@
  * change or disappear in any release, minor and patch included. Do not import
  * it from application code.
  *
- * It holds two vendor-neutral pieces:
+ * It holds these vendor-neutral pieces:
  *
  * - {@link shareLogin}: one in-flight token login shared by every caller that
  *   needs a token while it runs.
@@ -16,12 +16,44 @@
  *   {@link decimalText}, {@link formatDecimal} and {@link checkMinorUnits}.
  *   Everything is parameterised by a fraction-digit count, so the per-currency
  *   exponent tables and the wire adapters stay in each provider.
+ * - The token-login plumbing of an OAuth-style provider: {@link tokenCache},
+ *   {@link send} (with {@link networkError} and {@link timedOut}),
+ *   {@link timeoutOf}, {@link isAbsoluteHttpUrl} and {@link isOk}. Each takes
+ *   the provider's name for its messages; the login request, its response
+ *   schema and the vendor error mapping stay in each provider.
+ * - The request helpers of a provider built over a generated operation
+ *   client: {@link omitUndefined}, {@link checkId}, {@link stringField},
+ *   {@link observeResponses} and {@link rejectedError}. None names a vendor or
+ *   a client library: each provider keeps its own client wiring, retry and
+ *   validation policy, and error classification.
  *
  * @module
  */
 
-import { Deferred, Effect, Exit, Fiber, Option, Ref } from "effect";
-import { PaymentInvalidRequestError } from "./PaymentsError.js";
+import {
+  Clock,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Option,
+  Predicate,
+  Ref,
+  Schema,
+} from "effect";
+import {
+  HttpClient,
+  type HttpClientError,
+  type HttpClientRequest,
+  type HttpClientResponse,
+} from "effect/http";
+import {
+  PaymentConfigError,
+  PaymentInvalidRequestError,
+  PaymentNetworkError,
+  PaymentProviderError,
+} from "./PaymentsError.js";
 
 /**
  * What a leader publishes: the login's exit, or `None` when the leader was
@@ -233,3 +265,314 @@ export const checkMinorUnits = (
           param,
         }),
       );
+
+// ---------------------------------------------------------------------------
+// Token-login plumbing
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether `status` is a 2xx.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const isOk = (status: number): boolean => status >= 200 && status < 300;
+
+/**
+ * Whether `value` parses as an absolute `http:` or `https:` URL (an empty
+ * string does not): what a configured `baseUrl` must be.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const isAbsoluteHttpUrl = (value: string): boolean => {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * A configured timeout as a `Duration`: a positive, finite number of
+ * milliseconds, or `Infinity` for no timeout. Anything else (`0`, a negative
+ * number, `NaN`) fails with {@link PaymentConfigError}, naming `provider` and
+ * the option `name`.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const timeoutOf = (
+  provider: string,
+  name: string,
+  millis: number,
+): Effect.Effect<Duration.Duration, PaymentConfigError> =>
+  millis === Number.POSITIVE_INFINITY || (Number.isFinite(millis) && millis > 0)
+    ? Effect.succeed(Duration.millis(millis))
+    : Effect.fail(
+        new PaymentConfigError({
+          message: `${provider} ${name} must be a positive number of milliseconds, or Infinity for none (got ${millis})`,
+        }),
+      );
+
+/**
+ * The underlying failure of an `HttpClientError`, without the request it
+ * carries, whose headers hold the credentials.
+ */
+const causeOf = (error: HttpClientError.HttpClientError): unknown =>
+  "cause" in error.reason ? error.reason.cause : undefined;
+
+/**
+ * An `HttpClientError` as a {@link PaymentNetworkError}, keeping only its
+ * message and underlying cause: never the request, whose headers carry the
+ * credentials.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const networkError = (error: HttpClientError.HttpClientError): PaymentNetworkError =>
+  new PaymentNetworkError({ message: error.message, cause: causeOf(error) });
+
+/**
+ * The failure of a `provider` exchange (`what`: `"login"`, `"request"`)
+ * still unanswered after `limit`.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const timedOut = (
+  provider: string,
+  what: string,
+  limit: Duration.Duration,
+): PaymentNetworkError =>
+  new PaymentNetworkError({
+    message: `${provider} ${what} timed out after ${Duration.toMillis(limit)} ms`,
+  });
+
+/**
+ * A response reduced to its status and JSON body.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export interface Reply {
+  readonly status: number;
+  /** The JSON body, or `{}` when it is empty or not JSON. */
+  readonly json: unknown;
+}
+
+/** The response body as JSON, or `{}` when it is empty or not JSON. */
+const readJson = (response: HttpClientResponse.HttpClientResponse): Effect.Effect<unknown> =>
+  response.json.pipe(Effect.orElseSucceed(() => ({})));
+
+/**
+ * Send `request` through `http` and read its JSON body, all within `limit`.
+ * A request that has not finished by then is interrupted (which aborts the
+ * fetch) and fails with {@link timedOut}; a connection failure fails with
+ * {@link networkError}. Any status is a {@link Reply}: classifying it is the
+ * provider's.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const send = (
+  http: HttpClient.HttpClient,
+  request: HttpClientRequest.HttpClientRequest,
+  options: {
+    /** The provider's name, for the timeout message. */
+    readonly provider: string;
+    /** What the request is, for the timeout message: `"login"`, `"request"`. */
+    readonly what: string;
+    readonly limit: Duration.Duration;
+  },
+): Effect.Effect<Reply, PaymentNetworkError> =>
+  http.execute(request).pipe(
+    Effect.flatMap((response) =>
+      Effect.map(readJson(response), (json): Reply => ({ status: response.status, json })),
+    ),
+    // The error's request carries the credentials in its headers: keep only
+    // the underlying failure.
+    Effect.mapError(networkError),
+    Effect.timeoutOption(options.limit),
+    Effect.flatMap(
+      Option.match({
+        onSome: Effect.succeed,
+        onNone: () => Effect.fail(timedOut(options.provider, options.what, options.limit)),
+      }),
+    ),
+  );
+
+/** A token is treated as expired this long before it expires, to avoid using one mid-rotation. */
+const REFRESH_MARGIN_MS = 60_000;
+
+/**
+ * A provider's access-token cache: what a login stores, what {@link shareLogin}
+ * reads as `cached`, and what a 401 forgets.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export interface TokenCache {
+  /** The stored token while it is fresh: a minute short of its expiry. */
+  readonly cached: Effect.Effect<Option.Option<string>>;
+  /** Store `token`, which expires at `expiresAt` (epoch milliseconds). */
+  readonly store: (token: string, expiresAt: number) => Effect.Effect<void>;
+  /**
+   * Forget `token` after the provider refused it (a 401), so the next call
+   * logs in again instead of replaying it until it expires, but only while it
+   * is still the stored token: a late 401 for a token another caller has
+   * already replaced must not clear the new one.
+   */
+  readonly forget: (token: string) => Effect.Effect<void>;
+}
+
+/**
+ * An empty {@link TokenCache}. Freshness is read from the `Clock`.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const tokenCache: Effect.Effect<TokenCache> = /* @__PURE__ */ Effect.map(
+  /* @__PURE__ */ Ref.make(Option.none<{ readonly token: string; readonly expiresAt: number }>()),
+  (ref): TokenCache => ({
+    cached: Effect.gen(function* () {
+      const current = yield* Ref.get(ref);
+      const now = yield* Clock.currentTimeMillis;
+      return Option.filter(current, (stored) => stored.expiresAt - REFRESH_MARGIN_MS > now).pipe(
+        Option.map((stored) => stored.token),
+      );
+    }),
+    store: (token, expiresAt) => Ref.set(ref, Option.some({ token, expiresAt })),
+    forget: (used) =>
+      Ref.update(
+        ref,
+        Option.filter((stored) => stored.token !== used),
+      ),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Request helpers of a provider over a generated operation client
+// ---------------------------------------------------------------------------
+
+/**
+ * `T` with every key whose type admits `undefined` made optional and
+ * `undefined`-free: the shape a generated operation input takes when it
+ * declares optional members `key?: T`, never `key?: T | undefined`, under
+ * `exactOptionalPropertyTypes`.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export type OmitUndefined<T> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
+};
+
+/**
+ * Drop the keys whose value is `undefined`, so an input assembled from
+ * optional neutral parameters type-checks against an input type that
+ * declares bare `key?: T` members. A client whose encoder already skips
+ * `undefined` members sends the same request either way.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const omitUndefined = <T extends object>(record: T): OmitUndefined<T> =>
+  // SAFETY: the filter removes exactly the `undefined`-valued keys, which is
+  // what `OmitUndefined<T>` describes.
+  Object.fromEntries(
+    Object.entries(record).filter(([, value]) => value !== undefined),
+  ) as OmitUndefined<T>;
+
+/**
+ * Refuse a path id that is not a non-empty string before anything is sent,
+ * with {@link PaymentInvalidRequestError} naming the `resource` (`param:
+ * "id"`): a client would splice `""` into the path (where the collection's
+ * own path often lists it), and an `undefined` from untyped code would leave
+ * the label in it.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const checkId = (
+  resource: string,
+  id: string,
+): Effect.Effect<void, PaymentInvalidRequestError> =>
+  Predicate.isString(id) && id !== ""
+    ? Effect.void
+    : Effect.fail(
+        new PaymentInvalidRequestError({
+          message: `The ${resource} id must be a non-empty string`,
+          param: "id",
+        }),
+      );
+
+/**
+ * A string field of an unknown value, if it has one.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const stringField = (value: unknown, field: string): string | undefined =>
+  Predicate.hasProperty(value, field) && Predicate.isString(value[field])
+    ? value[field]
+    : undefined;
+
+/**
+ * What a client saw of a response before anything else read it.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export interface ObservedResponse {
+  readonly status: number;
+  readonly headers: Readonly<Record<string, string | undefined>>;
+  /** The JSON body, or `None` for an empty body or one that is not JSON. */
+  readonly body: Option.Option<unknown>;
+}
+
+const decodeJson = /* @__PURE__ */ Schema.decodeUnknownOption(
+  /* @__PURE__ */ Schema.fromJsonString(Schema.Unknown),
+);
+
+/**
+ * `http`, watched: the returned `client` records the status, headers and
+ * JSON body of every response it receives (the last one wins) before handing
+ * it on, and `last` reads that record. A generated client that keeps neither
+ * the status nor the whole vendor body on its errors runs over `client`, and
+ * the provider classifies the failure from `last` instead.
+ *
+ * The body is read first; the response caches it, so the generated client
+ * reads it again unchanged. Build one per call: the record is shared by every
+ * request sent through `client`.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const observeResponses = (
+  http: HttpClient.HttpClient,
+): Effect.Effect<{
+  readonly client: HttpClient.HttpClient;
+  readonly last: Effect.Effect<Option.Option<ObservedResponse>>;
+}> =>
+  Effect.map(Ref.make(Option.none<ObservedResponse>()), (observed) => ({
+    client: HttpClient.transform(http, (response) =>
+      Effect.tap(response, (seen) =>
+        Effect.flatMap(seen.text, (text) =>
+          Ref.set(
+            observed,
+            Option.some({ status: seen.status, headers: seen.headers, body: decodeJson(text) }),
+          ),
+        ),
+      ),
+    ),
+    last: Ref.get(observed),
+  }));
+
+/**
+ * A client failure with no response behind it (neither a connection failure
+ * nor a vendor's error response), as a {@link PaymentProviderError} named by
+ * its `_tag` and carrying its `message`, or `fallback`'s when it has none.
+ * The failure is kept as the `cause`.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const rejectedError = (
+  error: unknown,
+  provider: string,
+  fallback: { readonly message: string; readonly code: string },
+): PaymentProviderError =>
+  new PaymentProviderError({
+    message: stringField(error, "message") ?? fallback.message,
+    provider,
+    code: stringField(error, "_tag") ?? fallback.code,
+    cause: error,
+  });

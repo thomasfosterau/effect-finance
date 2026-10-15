@@ -57,11 +57,8 @@ import {
   Effect,
   Layer,
   Option,
-  Predicate,
   Random,
   Redacted,
-  Ref,
-  Schema,
 } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientError } from "effect/http";
 import { ResponseValidation } from "@distilled.cloud/core/response-validation";
@@ -70,10 +67,16 @@ import { type StripeRequestOptions, withRequestOptions } from "@distilled.cloud/
 import { Retry } from "@distilled.cloud/stripe/Retry";
 import {
   PaymentConfigError,
-  PaymentProviderError,
   type PaymentsError,
   PaymentsUnavailable,
 } from "@thomasfosterau/effect-payments";
+import {
+  isOk,
+  type ObservedResponse,
+  observeResponses,
+  rejectedError,
+  stringField,
+} from "@thomasfosterau/effect-payments/internal";
 import { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
 import { classifyResponse, PROVIDER, retryAfterOf, toPaymentsError } from "./internal/error.js";
 import { deleteParamsToQuery } from "./internal/deleteQuery.js";
@@ -183,12 +186,7 @@ export class StripeHttp extends Context.Service<
 >()("@effect-payments-stripe/StripeHttp") {}
 
 /** What one attempt saw of the response, read before Distilled reads it. */
-interface Observed {
-  readonly status: number;
-  readonly headers: Readonly<Record<string, string | undefined>>;
-  /** The JSON body, or `None` for a body that is not JSON. */
-  readonly body: Option.Option<unknown>;
-}
+type Observed = ObservedResponse;
 
 /** One attempt's outcome, before it is judged. */
 type Outcome = Data.TaggedEnum<{
@@ -202,12 +200,6 @@ type Outcome = Data.TaggedEnum<{
   Rejected: { readonly error: unknown };
 }>;
 const Outcome = /* @__PURE__ */ Data.taggedEnum<Outcome>();
-
-const decodeJson = /* @__PURE__ */ Schema.decodeUnknownOption(
-  /* @__PURE__ */ Schema.fromJsonString(Schema.Unknown),
-);
-
-const isOk = (status: number): boolean => status >= 200 && status < 300;
 
 /** Distilled's retries, switched off: this client retries on its own policy. */
 const NO_RETRY = { while: () => false };
@@ -249,12 +241,6 @@ const backoff = (retries: number, retryAfter: number | undefined): Effect.Effect
         : jittered;
     return Effect.sleep(Duration.millis(seconds * 1000));
   });
-
-/** A string field of an unknown value, if it has one. */
-const stringField = (value: unknown, field: string): string | undefined =>
-  Predicate.hasProperty(value, field) && Predicate.isString(value[field])
-    ? value[field]
-    : undefined;
 
 /**
  * A Distilled failure as an outcome. An `HttpClientError` means no response
@@ -298,14 +284,12 @@ const responseError = ({ status, headers, body }: Observed): PaymentsError =>
         classifyResponse(status, headers["retry-after"], Option.getOrUndefined(body)),
       );
 
-/** A Distilled failure with no response behind it, as a neutral error named by its tag. */
-const rejectedError = ({ error }: { readonly error: unknown }): PaymentsError =>
-  new PaymentProviderError({
-    message: stringField(error, "message") ?? "The Stripe request failed",
-    provider: PROVIDER,
-    code: stringField(error, "_tag") ?? "StripeUnknownError",
-    cause: error,
-  });
+/**
+ * The message and code of a Distilled failure with no response behind it
+ * that carries neither, mapped by `rejectedError` to a neutral error named by
+ * its tag.
+ */
+const REJECTED = { message: "The Stripe request failed", code: "StripeUnknownError" };
 
 /** Judge a final outcome, after `retries` retries: the JSON of a 2xx, or a neutral error. */
 const settle = (outcome: Outcome, retries: number): Effect.Effect<unknown, PaymentsError> =>
@@ -322,7 +306,7 @@ const settle = (outcome: Outcome, retries: number): Effect.Effect<unknown, Payme
           raw: cause,
         }),
       ),
-    Rejected: (rejected) => Effect.fail(rejectedError(rejected)),
+    Rejected: ({ error }) => Effect.fail(rejectedError(error, PROVIDER, REJECTED)),
   });
 
 /** The client's credentials and request policy. */
@@ -353,25 +337,9 @@ const makeWith = (
       credentials: StripeCredentials,
     ): Effect.Effect<Outcome> =>
       Effect.gen(function* () {
-        const observed = yield* Ref.make(Option.none<Observed>());
-        // Read the body first (the response caches it, so Distilled reads it
-        // again), and keep what the classification needs.
-        const watched = HttpClient.transform(
-          HttpClient.mapRequest(http, deleteParamsToQuery),
-          (response) =>
-            Effect.tap(response, (seen) =>
-              Effect.flatMap(seen.text, (text) =>
-                Ref.set(
-                  observed,
-                  Option.some({
-                    status: seen.status,
-                    headers: seen.headers,
-                    body: decodeJson(text),
-                  }),
-                ),
-              ),
-            ),
-        );
+        // Keep what the classification needs of the response, read before
+        // Distilled reads it.
+        const watched = yield* observeResponses(HttpClient.mapRequest(http, deleteParamsToQuery));
         const init = yield* Effect.serviceOption(FetchHttpClient.RequestInit);
         const outcome = yield* operation(input).pipe(
           // Every typed failure becomes an outcome to judge; defects stay defects.
@@ -381,7 +349,7 @@ const makeWith = (
           }),
           withRequestOptions(requestOptions),
           Effect.provideService(Credentials, Effect.succeed(credentials)),
-          Effect.provideService(HttpClient.HttpClient, watched),
+          Effect.provideService(HttpClient.HttpClient, watched.client),
           Effect.provideService(Retry, NO_RETRY),
           Effect.provideService(ResponseValidation, "lenient"),
           Effect.provideService(FetchHttpClient.RequestInit, {
@@ -391,7 +359,7 @@ const makeWith = (
           Effect.timeoutOption(timeout),
           Effect.map(Option.getOrElse(() => timedOut)),
         );
-        return judge(outcome, yield* Ref.get(observed));
+        return judge(outcome, yield* watched.last);
       });
 
     const run = (
