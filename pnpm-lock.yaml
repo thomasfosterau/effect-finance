@@ -13,8 +13,8 @@ catalogs:
       specifier: ^3.0.3
       version: 3.0.3
     '@distilled.cloud/core':
-      specifier: 1.0.0-rc.13
-      version: 1.0.0-rc.13
+      specifier: 1.0.0-rc.15
+      version: 1.0.0-rc.15
     '@distilled.cloud/paypal':
       specifier: 1.0.0-rc.13
       version: 1.0.0-rc.13
@@ -175,7 +175,7 @@ importers:
     dependencies:
       '@distilled.cloud/core':
         specifier: 'catalog:'
-        version: 1.0.0-rc.13(effect@4.0.4)
+        version: 1.0.0-rc.15(effect@4.0.4)
       '@distilled.cloud/paypal':
         specifier: 'catalog:'
         version: 1.0.0-rc.13(effect@4.0.4)
@@ -200,7 +200,7 @@ importers:
     dependencies:
       '@distilled.cloud/core':
         specifier: 'catalog:'
-        version: 1.0.0-rc.13(effect@4.0.4)
+        version: 1.0.0-rc.15(effect@4.0.4)
       '@distilled.cloud/stripe':
         specifier: 'catalog:'
         version: 1.0.0-rc.13(effect@4.0.4)
@@ -409,6 +409,11 @@ packages:
 
   '@distilled.cloud/core@1.0.0-rc.13':
     resolution: {integrity: sha512-RYyrxW+F5zrTuu1UWV/JoycholBCIkXIusYJdDniDwCdmbjdKGl07KlkkeeY774uBawNGf+pt1ESNGeLVnNHsg==}
+    peerDependencies:
+      effect: 4.0.4
+
+  '@distilled.cloud/core@1.0.0-rc.15':
+    resolution: {integrity: sha512-TPXxuwcxQ85Pvm0g7ZQSLTQkPc1Wmcb6p6KOk+Be2fP14Xpj5a+7HOSUyPNwbqOP+vPK5Sj0ZLN7M6spKnO2LA==}
     peerDependencies:
       effect: 4.0.4
 
@@ -2601,6 +2606,10 @@ snapshots:
     dependencies:
       effect: 4.0.4
       graphql: 16.11.0
+
+  '@distilled.cloud/core@1.0.0-rc.15(effect@4.0.4)':
+    dependencies:
+      effect: 4.0.4
 
   '@distilled.cloud/paypal@1.0.0-rc.13(effect@4.0.4)':
     dependencies:
