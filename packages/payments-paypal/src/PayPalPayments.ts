@@ -130,7 +130,7 @@ export interface PayPalConfig {
   /**
    * How long a resource request may take (response headers and body), in
    * milliseconds, before it fails with `PaymentNetworkError`. Defaults to
-   * 80 000, the Stripe transport's per-attempt timeout; `Infinity` disables it.
+   * 80 000, the Stripe client's per-attempt timeout; `Infinity` disables it.
    * It does not include acquiring a token (see `loginTimeout`). A write that
    * times out has an unknown outcome — PayPal may have applied it — so retry
    * it only with the same `idempotencyKey` (#66).

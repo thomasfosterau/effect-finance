@@ -55,7 +55,7 @@ const BASE_URLS: Readonly<Record<AirwallexEnvironment, string>> = {
 };
 /** A login that has not answered after 30 s is abandoned. */
 const DEFAULT_LOGIN_TIMEOUT_MS = 30_000;
-/** A resource request is abandoned after 80 s, the Stripe transport default. */
+/** A resource request is abandoned after 80 s, the Stripe client's default. */
 const DEFAULT_TIMEOUT_MS = 80_000;
 
 /** Configuration for the Airwallex client. */
@@ -91,7 +91,7 @@ export interface AirwallexConfig {
   /**
    * How long a resource request may take (response headers and body), in
    * milliseconds, before it fails with `PaymentNetworkError`. Defaults to
-   * 80 000, the Stripe transport's per-attempt timeout; `Infinity` disables it.
+   * 80 000, the Stripe client's per-attempt timeout; `Infinity` disables it.
    * It does not include acquiring a token (see `loginTimeout`). A non-GET that
    * times out has an unknown outcome — the vendor may have applied it — so do
    * not blindly retry a write (#66).

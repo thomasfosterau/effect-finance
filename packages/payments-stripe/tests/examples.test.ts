@@ -16,12 +16,21 @@ import * as subscription from "../examples/subscription.ts";
 import * as webhooks from "../examples/webhooks.ts";
 import { formOf, jsonResponse, stubStripeTable, TEST_KEY } from "./support.ts";
 
+// The examples are imported statically below, before any test can spy on
+// `fetch`: an example that ran on import would reach the live API (with
+// whatever key the environment holds). Hoisted above those imports, this
+// stub refuses instead. The suites run over `FetchHttpClient.Fetch`, never
+// the global.
+vi.hoisted(() => {
+  globalThis.fetch = () => Promise.reject(new Error("an example called fetch on import"));
+});
+
 const EXAMPLES = new URL("../examples/", import.meta.url);
 
 /** Every runnable example on disk. */
 // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
 const exampleFiles = readdirSync(EXAMPLES)
-  .filter((name) => name.endsWith(".ts"))
+  .filter((name) => /\.(m|c)?tsx?$/.test(name))
   .sort();
 
 /**
@@ -282,6 +291,10 @@ const suites = {
         "Checkout session cs_test_123 completed (customer cus_test_123, subscription sub_test_123)",
       );
       expect(lines).toContain("Acknowledged unhandled event type charge.succeeded");
+      // The undecodable delivery's error log goes through the captured console.
+      expect(lines.some((line) => line.includes("Handled Stripe event failed to decode"))).toBe(
+        true,
+      );
     });
 
     it("fails to build the handler with a ConfigError when STRIPE_WEBHOOK_SECRET is unset", async () => {
@@ -308,12 +321,21 @@ describe("examples", () => {
   });
 
   it.each(exampleFiles)("importing %s runs nothing", async (file) => {
-    const fetch = vi.spyOn(globalThis, "fetch");
-    const log = vi.spyOn(globalThis.console, "log");
-    const error = vi.spyOn(globalThis.console, "error");
+    // Mocked, never spied through: an example that ran on import would
+    // otherwise reach the live API (with whatever key the environment holds)
+    // and print into the test output.
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("an example called fetch on import"));
+    const log = vi.spyOn(globalThis.console, "log").mockImplementation(() => {});
+    const error = vi.spyOn(globalThis.console, "error").mockImplementation(() => {});
     vi.resetModules();
 
     await import(new URL(file, EXAMPLES).href);
+    // A top-level `Effect.runPromise(program)` starts its fiber on import but
+    // reaches `fetch` or the console only after a few turns of the event loop;
+    // waiting a little gives it the time to do so, so it cannot slip past the
+    // assertions below.
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(fetch).not.toHaveBeenCalled();
