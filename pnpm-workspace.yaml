@@ -44,7 +44,7 @@ catalog:
   # reason, and moved together with the Stripe client and core. Its access
   # token comes from the wrapper's own OAuth login, never from Distilled's
   # `CredentialsFromEnv` (which reads `process.env`).
-  "@distilled.cloud/paypal": 1.0.0-rc.13
+  "@distilled.cloud/paypal": 1.0.0-rc.15
   # Distilled's shared runtime, a direct dependency too: each wrapper pins its
   # `ResponseValidation` reference to lenient. MUST equal the version
   # @distilled.cloud/stripe and @distilled.cloud/paypal depend on (each pins
