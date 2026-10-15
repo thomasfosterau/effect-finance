@@ -484,6 +484,14 @@ export interface WebhookConfig {
 }
 
 /**
+ * The tolerance `constructEvent` / `constructEventAsync` hand the SDK: `0`
+ * means {@link DEFAULT_TOLERANCE}; a negative value (which skips the
+ * timestamp check) and `undefined` (the SDK's own default) go as given.
+ */
+const sdkTolerance = (tolerance: number | undefined): number | undefined =>
+  tolerance === 0 ? DEFAULT_TOLERANCE : tolerance;
+
+/**
  * Construct an Event from a webhook payload and signature with the SDK's
  * verifier — the optional alternative to {@link verify}, needing
  * {@link StripeService} (an SDK client you build) and the `stripe` peer.
@@ -495,9 +503,8 @@ export interface WebhookConfig {
  * @param signature - The Stripe-Signature header value
  * @param secret - The webhook endpoint secret (starts with `whsec_`)
  * @param tolerance - Tolerance in seconds for timestamp verification (default: 300).
- *   Passed to the SDK as given: from stripe 23, `0` skips the timestamp check
- *   altogether (22.x read it as 300), unlike {@link verify}, which refuses any
- *   timestamp but the current second.
+ *   `0` means the default 300 s; a negative tolerance skips the timestamp
+ *   check. (For {@link verify}, `0` means the current second only.)
  * @returns Effect that resolves to the verified Event object
  *
  * @example
@@ -527,13 +534,14 @@ export const constructEvent = (
   payload: string | Buffer,
   signature: string,
   secret: string,
-  tolerance: number = DEFAULT_TOLERANCE,
+  tolerance?: number | undefined,
 ): Effect.Effect<Stripe.Event, SignatureVerificationError, StripeService> =>
   Effect.gen(function* () {
     const stripe = yield* StripeService;
 
     return yield* Effect.try({
-      try: () => stripe.webhooks.constructEvent(payload, signature, secret, tolerance),
+      try: () =>
+        stripe.webhooks.constructEvent(payload, signature, secret, sdkTolerance(tolerance)),
       catch: (error) => {
         const message = error instanceof Error ? error.message : String(error);
         const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
@@ -557,9 +565,8 @@ export const constructEvent = (
  * @param signature - The Stripe-Signature header value
  * @param secret - The webhook endpoint secret (starts with `whsec_`)
  * @param tolerance - Tolerance in seconds for timestamp verification (default: 300).
- *   Passed to the SDK as given: from stripe 23, `0` skips the timestamp check
- *   altogether (22.x read it as 300), unlike {@link verify}, which refuses any
- *   timestamp but the current second.
+ *   `0` means the default 300 s; a negative tolerance skips the timestamp
+ *   check. (For {@link verify}, `0` means the current second only.)
  * @param cryptoProvider - Optional custom crypto provider
  * @returns Effect that resolves to the verified Event object
  *
@@ -590,7 +597,7 @@ export const constructEventAsync = (
   payload: string | Buffer,
   signature: string,
   secret: string,
-  tolerance: number = DEFAULT_TOLERANCE,
+  tolerance?: number | undefined,
   cryptoProvider?: Stripe.CryptoProvider,
 ): Effect.Effect<Stripe.Event, SignatureVerificationError, StripeService> =>
   Effect.gen(function* () {
@@ -598,7 +605,13 @@ export const constructEventAsync = (
 
     return yield* Effect.tryPromise({
       try: () =>
-        stripe.webhooks.constructEventAsync(payload, signature, secret, tolerance, cryptoProvider),
+        stripe.webhooks.constructEventAsync(
+          payload,
+          signature,
+          secret,
+          sdkTolerance(tolerance),
+          cryptoProvider,
+        ),
       catch: (error) => {
         const message = error instanceof Error ? error.message : String(error);
         const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
@@ -744,6 +757,7 @@ export const generateTestHeaderStringAsync = (
  * (either side) — Stripe's own default — for {@link verify} and the SDK-based
  * verifier alike. The two differ on a tolerance of `0`: {@link verify} reads
  * it as "the same second", {@link constructEvent} / {@link constructEventAsync}
- * (the SDK) as "no timestamp check at all".
+ * as this default; for the latter, a negative tolerance skips the timestamp
+ * check.
  */
 export const DEFAULT_TOLERANCE: number = 300;
