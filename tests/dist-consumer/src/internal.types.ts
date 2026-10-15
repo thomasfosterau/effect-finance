@@ -5,16 +5,38 @@
  * contract, not a consumer-facing promise. Never executed; type-checked only.
  */
 
-import type { Effect, Option } from "effect";
-import type { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
+import type { Duration, Effect, Option } from "effect";
+import type { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
+import type {
+  PaymentConfigError,
+  PaymentInvalidRequestError,
+  PaymentNetworkError,
+  PaymentProviderError,
+} from "@thomasfosterau/effect-payments";
 import {
+  checkId,
   checkMinorUnits,
   decimalText,
   exponentFrom,
   formatDecimal,
+  isAbsoluteHttpUrl,
+  isOk,
+  networkError,
+  observeResponses,
+  omitUndefined,
   parseDecimal,
+  rejectedError,
   scaleToMinor,
+  send,
   shareLogin,
+  stringField,
+  timedOut,
+  timeoutOf,
+  tokenCache,
+  type ObservedResponse,
+  type OmitUndefined,
+  type Reply,
+  type TokenCache,
 } from "@thomasfosterau/effect-payments/internal";
 
 declare const cached: Effect.Effect<Option.Option<string>>;
@@ -36,3 +58,56 @@ export const exponent: (currency: string) => 0 | 2 | 3 = exponentFrom(
   new Set(["jpy"]),
   new Set(["kwd"]),
 );
+
+declare const http: HttpClient.HttpClient;
+declare const request: HttpClientRequest.HttpClientRequest;
+declare const httpError: HttpClientError.HttpClientError;
+declare const limit: Duration.Duration;
+
+/** The token-login plumbing's declared shapes. */
+export const ok: boolean = isOk(200);
+export const absolute: boolean = isAbsoluteHttpUrl("https://example.com");
+export const timeout: Effect.Effect<Duration.Duration, PaymentConfigError> = timeoutOf(
+  "Provider",
+  "timeout",
+  1000,
+);
+export const network: PaymentNetworkError = networkError(httpError);
+export const late: PaymentNetworkError = timedOut("Provider", "login", limit);
+export const reply: Effect.Effect<Reply, PaymentNetworkError> = send(http, request, {
+  provider: "Provider",
+  what: "login",
+  limit,
+});
+declare const answered: Reply;
+export const replyStatus: number = answered.status;
+export const replyJson: unknown = answered.json;
+export const cache: Effect.Effect<TokenCache> = tokenCache;
+declare const cacheValue: TokenCache;
+export const cachedToken: Effect.Effect<Option.Option<string>> = cacheValue.cached;
+export const store: (token: string, expiresAt: number) => Effect.Effect<void> = cacheValue.store;
+export const forget: (token: string) => Effect.Effect<void> = cacheValue.forget;
+
+/** `omitUndefined` keeps the defined keys required and makes the others bare optionals. */
+declare const optionals: { readonly id: string; readonly name: string | undefined };
+export const omitted: OmitUndefined<typeof optionals> = omitUndefined(optionals);
+export const omittedId: string = omitted.id;
+export const omittedOptional: string | undefined = omitted.name;
+// @ts-expect-error -- `name` is a bare optional: an explicit `undefined` is refused.
+export const omittedName: OmitUndefined<typeof optionals> = { id: "c", name: undefined };
+
+/** The Distilled-wrapper request helpers' declared shapes. */
+export const idChecked: Effect.Effect<void, PaymentInvalidRequestError> = checkId("customer", "c");
+export const field: string | undefined = stringField({ message: "m" }, "message");
+export const observed: Effect.Effect<{
+  readonly client: HttpClient.HttpClient;
+  readonly last: Effect.Effect<Option.Option<ObservedResponse>>;
+}> = observeResponses(http);
+declare const response: ObservedResponse;
+export const responseStatus: number = response.status;
+export const responseHeaders: Readonly<Record<string, string | undefined>> = response.headers;
+export const responseBody: Option.Option<unknown> = response.body;
+export const rejected: PaymentProviderError = rejectedError(new Error("boom"), "Provider", {
+  message: "fallback",
+  code: "Unknown",
+});

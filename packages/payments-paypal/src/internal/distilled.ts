@@ -37,30 +37,22 @@
  * @module
  */
 
-import {
-  Context,
-  Data,
-  Duration,
-  Effect,
-  Layer,
-  Option,
-  Predicate,
-  Redacted,
-  Ref,
-  Schema,
-} from "effect";
+import { Context, Data, Duration, Effect, Layer, Option, Redacted } from "effect";
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { ResponseValidation } from "@distilled.cloud/core/response-validation";
 import { Credentials, type Config as PayPalCredentials } from "@distilled.cloud/paypal/Credentials";
 import type { PaypalOpContext } from "@distilled.cloud/paypal/Protocol";
 import { Retry } from "@distilled.cloud/paypal/Retry";
+import type { PaymentConfigError, PaymentsError } from "@thomasfosterau/effect-payments";
 import {
-  type PaymentConfigError,
-  PaymentProviderError,
-  type PaymentsError,
-} from "@thomasfosterau/effect-payments";
+  isOk,
+  networkError,
+  type ObservedResponse,
+  observeResponses,
+  rejectedError,
+} from "@thomasfosterau/effect-payments/internal";
 import type { PayPalConfig } from "../PayPalPayments.js";
-import { configFromEnv, isOk, sessionOf, networkError, type Session, timedOut } from "./auth.js";
+import { configFromEnv, sessionOf, type Session, timedOut } from "./auth.js";
 import { errorBodyOf, handlePayPalError, PROVIDER } from "./error.js";
 
 /** A request is abandoned after 80 s unless configured. */
@@ -86,11 +78,7 @@ export class DistilledClient extends Context.Service<
 >()("@effect-payments-paypal/internal/DistilledClient") {}
 
 /** What one call saw of a response, read before Distilled reads it. */
-interface Observed {
-  readonly status: number;
-  /** The JSON body, or `None` for an empty body or one that is not JSON. */
-  readonly body: Option.Option<unknown>;
-}
+type Observed = ObservedResponse;
 
 /** One call's outcome, before it is judged. */
 type Outcome = Data.TaggedEnum<{
@@ -107,18 +95,8 @@ type Outcome = Data.TaggedEnum<{
 }>;
 const Outcome = /* @__PURE__ */ Data.taggedEnum<Outcome>();
 
-const decodeJson = /* @__PURE__ */ Schema.decodeUnknownOption(
-  /* @__PURE__ */ Schema.fromJsonString(Schema.Unknown),
-);
-
 /** Distilled's retries, switched off: a request is never repeated by this client. */
 const NO_RETRY = { while: () => false };
-
-/** A string field of an unknown value, if it has one. */
-const stringField = (value: unknown, field: string): string | undefined =>
-  Predicate.hasProperty(value, field) && Predicate.isString(value[field])
-    ? value[field]
-    : undefined;
 
 /**
  * A Distilled failure as an outcome. An `HttpClientError` means no response
@@ -139,14 +117,12 @@ const judge = (outcome: Outcome, observed: Option.Option<Observed>): Outcome =>
     onSome: (response) => (isOk(response.status) ? outcome : Outcome.Response(response)),
   });
 
-/** A Distilled failure with no response behind it, as a neutral error named by its tag. */
-const rejectedError = ({ error }: { readonly error: unknown }): PaymentsError =>
-  new PaymentProviderError({
-    message: stringField(error, "message") ?? "The PayPal request failed",
-    provider: PROVIDER,
-    code: stringField(error, "_tag") ?? "UnknownPaypalError",
-    cause: error,
-  });
+/**
+ * The message and code of a Distilled failure with no response behind it
+ * that carries neither, mapped by `rejectedError` to a neutral error named by
+ * its tag.
+ */
+const REJECTED = { message: "The PayPal request failed", code: "UnknownPaypalError" };
 
 /** Judge a final outcome: the body of a 2xx, or a neutral error. */
 const settle = (outcome: Outcome): Effect.Effect<unknown, PaymentsError> =>
@@ -156,7 +132,7 @@ const settle = (outcome: Outcome): Effect.Effect<unknown, PaymentsError> =>
       Effect.fail(handlePayPalError(status, errorBodyOf(Option.getOrUndefined(body)))),
     Transport: ({ error }) => Effect.fail(networkError(error)),
     TimedOut: ({ after }) => Effect.fail(timedOut("request", after)),
-    Rejected: (rejected) => Effect.fail(rejectedError(rejected)),
+    Rejected: ({ error }) => Effect.fail(rejectedError(error, PROVIDER, REJECTED)),
   });
 
 /**
@@ -202,18 +178,9 @@ const make = (
       credentials: Effect.Effect<PayPalCredentials>,
     ): Effect.Effect<readonly [Outcome, Option.Option<Observed>]> =>
       Effect.gen(function* () {
-        const observed = yield* Ref.make(Option.none<Observed>());
-        // Read the body first (the response caches it, so Distilled reads it
-        // again), and keep what the classification needs.
-        const watched = HttpClient.mapRequest(http, withJsonHeaders).pipe(
-          HttpClient.transform((response) =>
-            Effect.tap(response, (seen) =>
-              Effect.flatMap(seen.text, (text) =>
-                Ref.set(observed, Option.some({ status: seen.status, body: decodeJson(text) })),
-              ),
-            ),
-          ),
-        );
+        // Keep what the classification needs of the response, read before
+        // Distilled reads it.
+        const watched = yield* observeResponses(HttpClient.mapRequest(http, withJsonHeaders));
         const outcome = yield* operation(input).pipe(
           // Every typed failure becomes an outcome to judge; defects stay defects.
           Effect.match({
@@ -221,13 +188,13 @@ const make = (
             onFailure: failureOf,
           }),
           Effect.provideService(Credentials, credentials),
-          Effect.provideService(HttpClient.HttpClient, watched),
+          Effect.provideService(HttpClient.HttpClient, watched.client),
           Effect.provideService(Retry, NO_RETRY),
           Effect.provideService(ResponseValidation, "lenient"),
           Effect.timeoutOption(timeout),
           Effect.map(Option.getOrElse(() => Outcome.TimedOut({ after: timeout }))),
         );
-        const seen = yield* Ref.get(observed);
+        const seen = yield* watched.last;
         return [judge(outcome, seen), seen] as const;
       });
 

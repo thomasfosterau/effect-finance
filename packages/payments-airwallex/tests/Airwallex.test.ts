@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
 import { Cause, ConfigProvider, Effect, Fiber, Layer, Predicate, Redacted } from "effect";
 import { TestClock } from "effect/testing";
-import { FetchHttpClient, type HttpClient } from "effect/http";
 import {
   PaymentAuthenticationError,
   PaymentConfigError,
@@ -9,6 +8,12 @@ import {
   PaymentNetworkError,
 } from "@thomasfosterau/effect-payments";
 import { AirwallexClient, layerFromEnv, make, type AirwallexConfig } from "../src/Airwallex.ts";
+import {
+  type CapturedRequest,
+  jsonResponse,
+  macrotask,
+  stubFetch as stubSharedFetch,
+} from "../../../tests/stubs.ts";
 
 const LOGIN_PATH = "/api/v1/authentication/login";
 const LOGIN_RESPONSE = () =>
@@ -18,54 +23,14 @@ const LOGIN_RESPONSE = () =>
   });
 
 /**
- * A request as the stubbed `fetch` saw it: the URL, the headers, and the body
- * decoded to text (`FetchHttpClient` sends a text body as bytes).
- */
-interface CapturedRequest {
-  readonly url: string;
-  readonly method: string;
-  readonly headers: Headers;
-  readonly body: string | undefined;
-}
-
-const textOf = (raw: BodyInit | null | undefined): string | undefined =>
-  typeof raw === "string"
-    ? raw
-    : raw instanceof Uint8Array
-      ? new TextDecoder().decode(raw)
-      : undefined;
-
-const jsonResponse = (status: number, body: unknown): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-
-/**
  * A stub `fetch` that answers the LOGIN_PATH handshake then delegates to
- * `handler`, served to the client as `effect/http`'s `HttpClient`
- * through `FetchHttpClient.layer`. No test here reaches the vendor.
+ * `handler`, served to the client as `effect/http`'s `HttpClient`. No test
+ * here reaches the vendor.
  */
-const stubFetch = (handler: (request: CapturedRequest) => Response) => {
-  const calls: Array<CapturedRequest> = [];
-  const fetchImpl: typeof globalThis.fetch = async (input, init) => {
-    const captured: CapturedRequest = {
-      url: String(input),
-      method: init?.method ?? "GET",
-      headers: new Headers(init?.headers),
-      body: textOf(init?.body),
-    };
-    calls.push(captured);
-    if (captured.url.endsWith(LOGIN_PATH)) {
-      return LOGIN_RESPONSE();
-    }
-    return handler(captured);
-  };
-  const http: Layer.Layer<HttpClient.HttpClient> = FetchHttpClient.layer.pipe(
-    Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
+const stubFetch = (handler: (request: CapturedRequest) => Response) =>
+  stubSharedFetch((request) =>
+    request.url.href.endsWith(LOGIN_PATH) ? LOGIN_RESPONSE() : handler(request),
   );
-  return { http, calls };
-};
 
 const config = (over: Partial<AirwallexConfig>): AirwallexConfig => ({
   clientId: "client_1",
@@ -107,9 +72,9 @@ describe("Airwallex client", () => {
     expect(result.first).toMatchObject({ id: "cus_1" });
 
     // One login + two resource requests, and the token only fetched once.
-    const logins = calls.filter((c) => c.url.endsWith(LOGIN_PATH));
+    const logins = calls.filter((c) => c.url.href.endsWith(LOGIN_PATH));
     expect(logins).toHaveLength(1);
-    const resourceCall = calls.find((c) => c.url.includes("/pa/customers"))!;
+    const resourceCall = calls.find((c) => c.url.href.includes("/pa/customers"))!;
     expect(resourceCall.headers.get("authorization")).toBe("Bearer tok_123");
   });
 
@@ -123,7 +88,7 @@ describe("Airwallex client", () => {
       }).pipe(Effect.provide(http)),
     );
 
-    const login = calls.find((c) => c.url.endsWith(LOGIN_PATH))!;
+    const login = calls.find((c) => c.url.href.endsWith(LOGIN_PATH))!;
     expect(login.method).toBe("POST");
     expect(login.headers.get("x-client-id")).toBe("client_1");
     expect(login.headers.get("x-api-key")).toBe("key_1");
@@ -168,7 +133,7 @@ describe("Airwallex client", () => {
       }).pipe(Effect.provide(http)),
     );
 
-    const post = calls.find((c) => c.url.endsWith("/api/v1/pa/payment_intents/int_1/cancel"))!;
+    const post = calls.find((c) => c.url.href.endsWith("/api/v1/pa/payment_intents/int_1/cancel"))!;
     expect(post.method).toBe("POST");
     expect(post.body).toBeUndefined();
     expect(post.headers.get("content-type")).toBe("application/json");
@@ -189,8 +154,8 @@ describe("Airwallex client", () => {
       }).pipe(Effect.provide(http)),
     );
 
-    expect(calls.filter((c) => c.url.endsWith(LOGIN_PATH))).toHaveLength(1);
-    expect(calls.filter((c) => c.url.endsWith("/api/v1/pa/customers/cus_1"))).toHaveLength(5);
+    expect(calls.filter((c) => c.url.href.endsWith(LOGIN_PATH))).toHaveLength(1);
+    expect(calls.filter((c) => c.url.href.endsWith("/api/v1/pa/customers/cus_1"))).toHaveLength(5);
   });
 
   it("forgets the cached token after a 401 and logs in again on the next call", async () => {
@@ -217,7 +182,7 @@ describe("Airwallex client", () => {
     );
 
     expect(second).toMatchObject({ id: "x" });
-    expect(calls.filter((c) => c.url.endsWith(LOGIN_PATH))).toHaveLength(2);
+    expect(calls.filter((c) => c.url.href.endsWith(LOGIN_PATH))).toHaveLength(2);
   });
   it("keeps a newer token when a request made with the old one gets a late 401", async () => {
     // Login 1 hands out a token that is already inside the refresh window, so
@@ -233,9 +198,9 @@ describe("Airwallex client", () => {
       markSlowStarted = resolve;
     });
     const seen: Array<{ url: string; authorization: string | null }> = [];
-    const fetchImpl: typeof globalThis.fetch = async (input, init) => {
-      const url = String(input);
-      const authorization = new Headers(init?.headers).get("authorization");
+    const { http } = stubSharedFetch(async (request) => {
+      const url = request.url.href;
+      const authorization = request.headers.get("authorization");
       seen.push({ url, authorization });
       if (url.endsWith("/api/v1/authentication/login")) {
         logins += 1;
@@ -255,10 +220,7 @@ describe("Airwallex client", () => {
         return jsonResponse(401, { message: "token revoked" });
       }
       return jsonResponse(200, { id: "x" });
-    };
-    const http = FetchHttpClient.layer.pipe(
-      Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
-    );
+    });
 
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -286,12 +248,6 @@ describe("Airwallex client", () => {
   });
 });
 
-/** Let pending promises (the stubbed `fetch`) settle. */
-const macrotask = Effect.callback<void>((resume) => {
-  const timer = setTimeout(() => resume(Effect.void), 0);
-  return Effect.sync(() => clearTimeout(timer));
-});
-
 /**
  * A stub `fetch` whose Nth login (1-based, listed in `hung`) never answers
  * until the client aborts it; every other call answers normally. `aborted`
@@ -311,8 +267,8 @@ const hangingFetch = (hung: {
         reject(new Error("aborted"));
       });
     });
-  const fetchImpl: typeof globalThis.fetch = async (input, init) => {
-    if (String(input).endsWith(LOGIN_PATH)) {
+  const { http } = stubSharedFetch(async ({ url, init }) => {
+    if (url.href.endsWith(LOGIN_PATH)) {
       state.logins += 1;
       if (hung.refused?.includes(state.logins)) {
         // Answered on a later macrotask, so concurrent callers queue behind it.
@@ -323,10 +279,7 @@ const hangingFetch = (hung: {
     }
     state.resources.push(new Headers(init?.headers).get("authorization"));
     return hung.resources ? hang(init) : jsonResponse(200, { id: "x" });
-  };
-  const http: Layer.Layer<HttpClient.HttpClient> = FetchHttpClient.layer.pipe(
-    Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
-  );
+  });
   return { http, state };
 };
 
@@ -539,7 +492,7 @@ describe("Airwallex client secrets", () => {
         ),
       ),
     );
-    const login = calls.find((c) => c.url.endsWith(LOGIN_PATH))!;
+    const login = calls.find((c) => c.url.href.endsWith(LOGIN_PATH))!;
     expect(login.headers.get("x-client-id")).toBe("client_env");
     expect(login.headers.get("x-api-key")).toBe("secret_env");
   });
@@ -581,10 +534,7 @@ describe("Airwallex client secrets", () => {
       () => jsonResponse(201, { token: "tok_leak", expires_at: 5 }),
     ];
     for (const answer of answers) {
-      const fetchImpl: typeof globalThis.fetch = async () => answer();
-      const http = FetchHttpClient.layer.pipe(
-        Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchImpl)),
-      );
+      const { http } = stubSharedFetch(answer);
       const error = await Effect.runPromise(
         Effect.flatMap(make(config({})), (client) => Effect.flip(client.request(get))).pipe(
           Effect.provide(http),
@@ -618,7 +568,7 @@ describe("Airwallex client requestId (request_id)", () => {
         client.request({ ...create, requestId: "signup-7" }),
       ).pipe(Effect.provide(http)),
     );
-    const post = calls.find((c) => c.url.endsWith("/customers/create"))!;
+    const post = calls.find((c) => c.url.href.endsWith("/customers/create"))!;
     expect(bodyOf(post)).toEqual({ request_id: "signup-7", email: "a@b.com" });
   });
 
@@ -633,7 +583,9 @@ describe("Airwallex client requestId (request_id)", () => {
         }),
       ).pipe(Effect.provide(http)),
     );
-    expect(bodyOf(calls.find((c) => c.url.endsWith("/cancel")))).toEqual({ request_id: "c-1" });
+    expect(bodyOf(calls.find((c) => c.url.href.endsWith("/cancel")))).toEqual({
+      request_id: "c-1",
+    });
   });
 
   it("leaves the body as it was without a requestId", async () => {
@@ -643,7 +595,9 @@ describe("Airwallex client requestId (request_id)", () => {
         Effect.provide(http),
       ),
     );
-    expect(bodyOf(calls.find((c) => c.url.endsWith("/customers/create")))).toEqual(create.body);
+    expect(bodyOf(calls.find((c) => c.url.href.endsWith("/customers/create")))).toEqual(
+      create.body,
+    );
   });
 
   it("sends the same request_id when the caller retries a write that failed in flight", async () => {
@@ -664,7 +618,7 @@ describe("Airwallex client requestId (request_id)", () => {
     );
     expect(outcome.first).toBeInstanceOf(PaymentNetworkError);
     expect(outcome.second).toMatchObject({ id: "cus_1" });
-    const posts = calls.filter((c) => c.url.endsWith("/customers/create"));
+    const posts = calls.filter((c) => c.url.href.endsWith("/customers/create"));
     expect(posts.map((c) => bodyOf(c).request_id)).toEqual(["signup-8", "signup-8"]);
   });
 
@@ -732,7 +686,7 @@ describe("Airwallex layerFromEnv and empty variables", () => {
       AIRWALLEX_BASE_URL: "",
     });
     await Effect.runPromise(program);
-    expect(calls[0]?.url).toBe(`https://api.airwallex.com${LOGIN_PATH}`);
+    expect(calls[0]?.url.href).toBe(`https://api.airwallex.com${LOGIN_PATH}`);
   });
 
   it("still honours a non-empty AIRWALLEX_BASE_URL", async () => {
@@ -742,7 +696,7 @@ describe("Airwallex layerFromEnv and empty variables", () => {
       AIRWALLEX_BASE_URL: "https://sandbox.example.test",
     });
     await Effect.runPromise(program);
-    expect(calls[0]?.url).toBe(`https://sandbox.example.test${LOGIN_PATH}`);
+    expect(calls[0]?.url.href).toBe(`https://sandbox.example.test${LOGIN_PATH}`);
   });
 
   it("fails loudly with PaymentConfigError, not the live default, when a preserving provider keeps a blank AIRWALLEX_BASE_URL", async () => {
@@ -783,7 +737,7 @@ describe("Airwallex AIRWALLEX_ENV", () => {
   ] as const)("sends %s requests to %s", async (environment, host) => {
     const { program, calls } = build({ ...CREDENTIALS, AIRWALLEX_ENV: environment });
     await Effect.runPromise(program);
-    expect(calls.map((call) => call.url)).toEqual([`${host}${LOGIN_PATH}`, `${host}/probe`]);
+    expect(calls.map((call) => call.url.href)).toEqual([`${host}${LOGIN_PATH}`, `${host}/probe`]);
   });
 
   it.each([
@@ -812,7 +766,7 @@ describe("Airwallex AIRWALLEX_ENV", () => {
       AIRWALLEX_BASE_URL: "https://proxy.example.test",
     });
     await Effect.runPromise(program);
-    expect(calls[0]?.url).toBe(`https://proxy.example.test${LOGIN_PATH}`);
+    expect(calls[0]?.url.href).toBe(`https://proxy.example.test${LOGIN_PATH}`);
   });
 
   it("maps make's environment option, live by default, with baseUrl winning", async () => {
@@ -824,7 +778,7 @@ describe("Airwallex AIRWALLEX_ENV", () => {
           Effect.provide(http),
         ),
       );
-      return calls[0]?.url;
+      return calls[0]?.url.href;
     };
     expect(await loginUrl({})).toBe(`https://api.airwallex.com${LOGIN_PATH}`);
     expect(await loginUrl({ environment: "live" })).toBe(`https://api.airwallex.com${LOGIN_PATH}`);

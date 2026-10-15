@@ -17,29 +17,29 @@ import {
   Clock,
   Config,
   Context,
-  Duration,
+  type Duration,
   DateTime,
   Effect,
   Layer,
   Option,
   Redacted,
-  Ref,
   Schema,
 } from "effect";
-import {
-  HttpClient,
-  type HttpClientError,
-  HttpClientRequest,
-  type HttpClientResponse,
-} from "effect/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
 import {
   PaymentConfigError,
   PaymentInvalidRequestError,
-  PaymentNetworkError,
   PaymentProviderError,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
-import { shareLogin } from "@thomasfosterau/effect-payments/internal";
+import {
+  isAbsoluteHttpUrl,
+  isOk,
+  send as sendWithin,
+  shareLogin,
+  timeoutOf,
+  tokenCache,
+} from "@thomasfosterau/effect-payments/internal";
 import { AirwallexErrorBody, handleAirwallexError, PROVIDER } from "./internal/error.js";
 
 /**
@@ -57,6 +57,8 @@ const BASE_URLS: Readonly<Record<AirwallexEnvironment, string>> = {
 const DEFAULT_LOGIN_TIMEOUT_MS = 30_000;
 /** A resource request is abandoned after 80 s, the Stripe client's default. */
 const DEFAULT_TIMEOUT_MS = 80_000;
+/** The provider's name in configuration and timeout messages. */
+const NAME = "Airwallex";
 
 /** Configuration for the Airwallex client. */
 export interface AirwallexConfig {
@@ -137,11 +139,6 @@ export class AirwallexClient extends Context.Service<
   }
 >()("@effect-payments-airwallex/AirwallexClient") {}
 
-interface TokenState {
-  readonly token: string;
-  readonly expiresAt: number;
-}
-
 const buildUrl = (baseUrl: string, path: string, query: AirwallexRequest["query"]): string => {
   const url = new URL(path, baseUrl);
   if (query) {
@@ -151,25 +148,6 @@ const buildUrl = (baseUrl: string, path: string, query: AirwallexRequest["query"
   }
   return url.toString();
 };
-
-/** The response body as JSON, or `{}` when it is empty or not JSON. */
-const readJson = (response: HttpClientResponse.HttpClientResponse): Effect.Effect<unknown> =>
-  response.json.pipe(Effect.orElseSucceed(() => ({})));
-
-/** A response reduced to its status and JSON body. */
-interface Reply {
-  readonly status: number;
-  readonly json: unknown;
-}
-
-/**
- * The underlying failure of an `HttpClientError`, without the request it
- * carries — whose headers hold the credentials.
- */
-const causeOf = (error: HttpClientError.HttpClientError): unknown =>
-  "cause" in error.reason ? error.reason.cause : undefined;
-
-const isOk = (status: number): boolean => status >= 200 && status < 300;
 
 /** The login response, decoded rather than trusted. */
 const LoginResponse = Schema.Struct({
@@ -183,23 +161,6 @@ const errorBodyOf = (json: unknown): AirwallexErrorBody | undefined =>
 
 /** Tokens without a parseable `expires_at` are assumed to last 25 minutes. */
 const DEFAULT_TOKEN_LIFETIME_MS = 25 * 60 * 1000;
-
-/**
- * A configured timeout as a `Duration`: a positive, finite number of
- * milliseconds, or `Infinity` for no timeout. Anything else — `0`, a negative
- * number, `NaN` — fails with {@link PaymentConfigError}.
- */
-const timeoutOf = (
-  name: string,
-  millis: number,
-): Effect.Effect<Duration.Duration, PaymentConfigError> =>
-  millis === Number.POSITIVE_INFINITY || (Number.isFinite(millis) && millis > 0)
-    ? Effect.succeed(Duration.millis(millis))
-    : Effect.fail(
-        new PaymentConfigError({
-          message: `Airwallex ${name} must be a positive number of milliseconds, or Infinity for none (got ${millis})`,
-        }),
-      );
 
 /**
  * The request body with the caller's `requestId` written into it as
@@ -233,16 +194,6 @@ const withRequestId = (
   return Effect.succeed({ ...req.body, request_id: req.requestId });
 };
 
-/** Whether `value` parses as an absolute `http:` or `https:` URL (an empty string does not). */
-const isAbsoluteHttpUrl = (value: string): boolean => {
-  try {
-    const { protocol } = new URL(value);
-    return protocol === "https:" || protocol === "http:";
-  } catch {
-    return false;
-  }
-};
-
 /**
  * Build an Airwallex client from configuration.
  */
@@ -265,46 +216,25 @@ export const make = (
 
     const http = yield* HttpClient.HttpClient;
     const baseUrl = config.baseUrl ?? BASE_URLS[config.environment ?? "live"];
-    const tokenRef = yield* Ref.make(Option.none<TokenState>());
+    const cache = yield* tokenCache;
 
     const loginTimeout = yield* timeoutOf(
+      NAME,
       "loginTimeout",
       config.loginTimeout ?? DEFAULT_LOGIN_TIMEOUT_MS,
     );
-    const timeout = yield* timeoutOf("timeout", config.timeout ?? DEFAULT_TIMEOUT_MS);
+    const timeout = yield* timeoutOf(NAME, "timeout", config.timeout ?? DEFAULT_TIMEOUT_MS);
 
     /**
      * Send `request` and read its JSON body, all within `limit`. A request that
      * has not finished by then is interrupted (which aborts the fetch) and
-     * fails with {@link PaymentNetworkError}.
+     * fails with `PaymentNetworkError`.
      */
     const send = (
       request: HttpClientRequest.HttpClientRequest,
       limit: Duration.Duration,
       what: string,
-    ): Effect.Effect<Reply, PaymentNetworkError> =>
-      http.execute(request).pipe(
-        Effect.flatMap((response) =>
-          Effect.map(readJson(response), (json): Reply => ({ status: response.status, json })),
-        ),
-        Effect.mapError(
-          // The error's request carries the credentials in its headers:
-          // keep only the underlying failure.
-          (error) => new PaymentNetworkError({ message: error.message, cause: causeOf(error) }),
-        ),
-        Effect.timeoutOption(limit),
-        Effect.flatMap(
-          Option.match({
-            onSome: Effect.succeed,
-            onNone: () =>
-              Effect.fail(
-                new PaymentNetworkError({
-                  message: `Airwallex ${what} timed out after ${Duration.toMillis(limit)} ms`,
-                }),
-              ),
-          }),
-        ),
-      );
+    ) => sendWithin(http, request, { provider: NAME, what, limit });
 
     const login: Effect.Effect<string, PaymentsError> = Effect.gen(function* () {
       const reply = yield* send(
@@ -338,22 +268,16 @@ export const make = (
         Option.map(DateTime.toEpochMillis),
         Option.getOrElse(() => now + DEFAULT_TOKEN_LIFETIME_MS),
       );
-      yield* Ref.set(tokenRef, Option.some({ token: body.token, expiresAt }));
+      yield* cache.store(body.token, expiresAt);
       return body.token;
     });
 
-    // Refresh a minute before expiry to avoid using a token mid-rotation.
-    const cachedToken: Effect.Effect<Option.Option<string>> = Effect.gen(function* () {
-      const current = yield* Ref.get(tokenRef);
-      const now = yield* Clock.currentTimeMillis;
-      return Option.filter(current, (stored) => stored.expiresAt - 60_000 > now).pipe(
-        Option.map((stored) => stored.token),
-      );
-    });
-    // One login at a time, and its outcome is shared: concurrent first calls
-    // (or calls racing an expiry) await the in-flight login and reuse its
-    // token — or all fail with its error, after which the next call retries.
-    const getToken = yield* shareLogin(cachedToken, login);
+    // The cache refreshes a minute before expiry, to avoid using a token
+    // mid-rotation. One login at a time, and its outcome is shared: concurrent
+    // first calls (or calls racing an expiry) await the in-flight login and
+    // reuse its token — or all fail with its error, after which the next call
+    // retries.
+    const getToken = yield* shareLogin(cache.cached, login);
 
     const request = (req: AirwallexRequest): Effect.Effect<unknown, PaymentsError> =>
       Effect.gen(function* () {
@@ -377,10 +301,7 @@ export const make = (
           // again instead of replaying the rejected token until it expires —
           // but only if it is still the stored one. A late 401 for a token
           // another caller has already replaced must not clear the new one.
-          yield* Ref.update(
-            tokenRef,
-            Option.filter((stored) => stored.token !== token),
-          );
+          yield* cache.forget(token);
         }
         if (!isOk(reply.status)) {
           return yield* handleAirwallexError(reply.status, errorBodyOf(reply.json));

@@ -1,15 +1,35 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Cause, Deferred, Effect, Exit, Fiber, Option, Ref, Schema } from "effect";
-import { PaymentInvalidRequestError } from "../src/PaymentsError.ts";
+import { Cause, Deferred, Duration, Effect, Exit, Fiber, Option, Ref, Schema } from "effect";
+import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
+import { TestClock } from "effect/testing";
 import {
+  PaymentConfigError,
+  PaymentInvalidRequestError,
+  PaymentNetworkError,
+  PaymentProviderError,
+} from "../src/PaymentsError.ts";
+import {
+  checkId,
   checkMinorUnits,
   decimalText,
   exponentFrom,
   formatDecimal,
+  isAbsoluteHttpUrl,
+  isOk,
+  networkError,
+  observeResponses,
+  omitUndefined,
   parseDecimal,
+  rejectedError,
   scaleToMinor,
+  send,
   shareLogin,
+  stringField,
+  timedOut,
+  timeoutOf,
+  tokenCache,
 } from "../src/internal.ts";
+import { jsonResponse, reachableFrom, stubFetch, withTestClock } from "../../../tests/stubs.ts";
 
 class LoginFailed extends Schema.TaggedError<LoginFailed>()("LoginFailed", {
   attempt: Schema.Number,
@@ -274,5 +294,253 @@ describe("exponentFrom", () => {
     expect(exponent("KWD")).toBe(3);
     expect(exponent("usd")).toBe(2);
     expect(exponent("")).toBe(2);
+  });
+});
+
+describe("isOk and isAbsoluteHttpUrl", () => {
+  it("accepts exactly the 2xx statuses", () => {
+    expect([199, 200, 204, 299, 300, 401].map(isOk)).toEqual([
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  it("accepts only an absolute http(s) URL", () => {
+    expect(isAbsoluteHttpUrl("https://api.example.com")).toBe(true);
+    expect(isAbsoluteHttpUrl("http://localhost:12111")).toBe(true);
+    for (const value of ["", "/v1", "api.example.com", "ftp://example.com"]) {
+      expect(isAbsoluteHttpUrl(value)).toBe(false);
+    }
+  });
+});
+
+describe("timeoutOf", () => {
+  it("accepts a positive finite number of milliseconds, or Infinity", async () => {
+    expect(Duration.toMillis(await Effect.runPromise(timeoutOf("Acme", "timeout", 250)))).toBe(250);
+    expect(Duration.isFinite(await Effect.runPromise(timeoutOf("Acme", "timeout", Infinity)))).toBe(
+      false,
+    );
+  });
+
+  it("refuses anything else with PaymentConfigError naming the provider and option", async () => {
+    for (const millis of [0, -1, Number.NaN, -Infinity]) {
+      const error = await Effect.runPromise(Effect.flip(timeoutOf("Acme", "loginTimeout", millis)));
+      expect(error).toBeInstanceOf(PaymentConfigError);
+      expect(error.message).toBe(
+        `Acme loginTimeout must be a positive number of milliseconds, or Infinity for none (got ${millis})`,
+      );
+    }
+  });
+});
+
+describe("send", () => {
+  const SECRET = "Bearer not_a_real_secret";
+  const request = HttpClientRequest.get("https://api.example.com/v1/things").pipe(
+    HttpClientRequest.setHeader("Authorization", SECRET),
+  );
+  const run = <A, E>(
+    effect: (http: HttpClient.HttpClient) => Effect.Effect<A, E>,
+    fetch: () => Response | Promise<Response>,
+  ) =>
+    Effect.runPromise(
+      Effect.flatMap(HttpClient.HttpClient, effect).pipe(Effect.provide(stubFetch(fetch).http)),
+    );
+  const options = { provider: "Acme", what: "request", limit: Duration.seconds(5) };
+
+  it("reads any status with its JSON body, or {} for a body that is not JSON", async () => {
+    expect(
+      await run(
+        (http) => send(http, request, options),
+        () => jsonResponse(402, { a: 1 }),
+      ),
+    ).toEqual({
+      status: 402,
+      json: { a: 1 },
+    });
+    expect(
+      await run(
+        (http) => send(http, request, options),
+        () => new Response("<html>", { status: 502 }),
+      ),
+    ).toEqual({ status: 502, json: {} });
+  });
+
+  it("fails a connection failure with PaymentNetworkError, never carrying the request", async () => {
+    const boom = new TypeError("fetch failed");
+    const error = await run(
+      (http) => Effect.flip(send(http, request, options)),
+      () => {
+        throw boom;
+      },
+    );
+    expect(error).toBeInstanceOf(PaymentNetworkError);
+    expect(error.cause).toBe(boom);
+    expect(reachableFrom(error).strings.filter((value) => value.includes(SECRET))).toEqual([]);
+    expect(reachableFrom(error).objects.filter(HttpClientRequest.isHttpClientRequest)).toEqual([]);
+  });
+
+  it("fails a request unanswered after the limit with the provider's timeout error", async () => {
+    const error = await run(
+      (http) => withTestClock(Effect.flip(send(http, request, options))),
+      () => new Promise<Response>(() => {}),
+    );
+    expect(error).toBeInstanceOf(PaymentNetworkError);
+    expect(error.message).toBe("Acme request timed out after 5000 ms");
+    expect(error.message).toBe(timedOut("Acme", "request", Duration.seconds(5)).message);
+  });
+
+  it("maps an HttpClientError onto PaymentNetworkError by its message and cause", () => {
+    const cause = new Error("socket hang up");
+    const error = networkError(
+      new HttpClientError.HttpClientError({
+        reason: new HttpClientError.TransportError({ request, cause }),
+      }),
+    );
+    expect(error.cause).toBe(cause);
+    expect(reachableFrom(error).objects.filter(HttpClientRequest.isHttpClientRequest)).toEqual([]);
+  });
+});
+
+describe("tokenCache", () => {
+  it("serves a stored token until a minute before it expires", async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const cache = yield* tokenCache;
+        const empty = yield* cache.cached;
+        yield* cache.store("tok_1", 120_000);
+        const fresh = yield* cache.cached;
+        yield* TestClock.adjust("59 seconds");
+        const stillFresh = yield* cache.cached;
+        yield* TestClock.adjust("1 second");
+        const stale = yield* cache.cached;
+        return { empty, fresh, stillFresh, stale };
+      }).pipe(Effect.provide(TestClock.layer())),
+    );
+    expect(result).toEqual({
+      empty: Option.none(),
+      fresh: Option.some("tok_1"),
+      stillFresh: Option.some("tok_1"),
+      stale: Option.none(),
+    });
+  });
+
+  it("forgets a refused token only while it is still the stored one", async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const cache = yield* tokenCache;
+        yield* cache.store("tok_2", Number.MAX_SAFE_INTEGER);
+        yield* cache.forget("tok_1");
+        const kept = yield* cache.cached;
+        yield* cache.forget("tok_2");
+        const forgotten = yield* cache.cached;
+        return { kept, forgotten };
+      }),
+    );
+    expect(result).toEqual({ kept: Option.some("tok_2"), forgotten: Option.none() });
+  });
+
+  it("gives every build its own cache", async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const first = yield* tokenCache;
+        const second = yield* tokenCache;
+        yield* first.store("tok_1", Number.MAX_SAFE_INTEGER);
+        return yield* second.cached;
+      }),
+    );
+    expect(result).toEqual(Option.none());
+  });
+});
+
+describe("omitUndefined", () => {
+  it("drops exactly the undefined-valued keys", () => {
+    const input = { a: 1, b: undefined, c: null, d: "", e: false, f: 0 };
+    const output = omitUndefined(input);
+    expect(output).toEqual({ a: 1, c: null, d: "", e: false, f: 0 });
+    expect(Object.keys(output)).not.toContain("b");
+  });
+});
+
+describe("checkId", () => {
+  it("passes a non-empty string id", async () => {
+    await Effect.runPromise(checkId("customer", "cus_1"));
+  });
+
+  it("refuses an empty or non-string id before anything is sent", async () => {
+    for (const id of ["", undefined, 42]) {
+      // SAFETY: untyped callers can pass anything; that is what is under test.
+      const error = await Effect.runPromise(Effect.flip(checkId("customer", id as string)));
+      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+      expect(error.message).toBe("The customer id must be a non-empty string");
+      expect(error.param).toBe("id");
+    }
+  });
+});
+
+describe("stringField", () => {
+  it("reads a string field, and nothing else", () => {
+    expect(stringField({ message: "boom" }, "message")).toBe("boom");
+    expect(stringField({ message: 42 }, "message")).toBeUndefined();
+    expect(stringField({}, "message")).toBeUndefined();
+    expect(stringField(null, "message")).toBeUndefined();
+    expect(stringField("message", "length")).toBeUndefined();
+  });
+});
+
+describe("observeResponses", () => {
+  const observe = (fetch: () => Response) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const watched = yield* observeResponses(yield* HttpClient.HttpClient);
+        const before = yield* watched.last;
+        const response = yield* watched.client.get("https://api.example.com/v1/things");
+        // The body is still readable after the observer read it.
+        const text = yield* response.text;
+        return { before, text, after: yield* watched.last };
+      }).pipe(Effect.provide(stubFetch(fetch).http)),
+    );
+
+  it("records the status, headers and JSON body, and hands the response on unread", async () => {
+    const { before, text, after } = await observe(() =>
+      jsonResponse(409, { error: "conflict" }, { "retry-after": "2" }),
+    );
+    expect(before).toEqual(Option.none());
+    expect(text).toBe(JSON.stringify({ error: "conflict" }));
+    const seen = Option.getOrThrow(after);
+    expect(seen.status).toBe(409);
+    expect(seen.headers["retry-after"]).toBe("2");
+    expect(seen.body).toEqual(Option.some({ error: "conflict" }));
+  });
+
+  it("records an empty body or one that is not JSON as None", async () => {
+    for (const body of ["", "<html>"]) {
+      const { text, after } = await observe(() => new Response(body, { status: 200 }));
+      expect(text).toBe(body);
+      expect(Option.getOrThrow(after).body).toEqual(Option.none());
+    }
+  });
+});
+
+describe("rejectedError", () => {
+  const fallback = { message: "The Acme request failed", code: "UnknownAcmeError" };
+
+  it("names the failure by its tag and message, keeping it as the cause", () => {
+    const failure = { _tag: "ConfigError", message: "missing credentials" };
+    const error = rejectedError(failure, "acme", fallback);
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error.provider).toBe("acme");
+    expect(error.code).toBe("ConfigError");
+    expect(error.message).toBe("missing credentials");
+    expect(error.cause).toBe(failure);
+  });
+
+  it("falls back on a failure without a tag or message", () => {
+    const error = rejectedError(42, "acme", fallback);
+    expect(error.code).toBe("UnknownAcmeError");
+    expect(error.message).toBe("The Acme request failed");
   });
 });
