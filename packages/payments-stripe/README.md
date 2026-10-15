@@ -66,18 +66,18 @@ Stripe delivers a webhook event at the receiving endpoint's API version (or the 
 For finer control, `StripePayments.capabilities` provides every capability over Distilled's `Credentials` and an `HttpClient` in context, at the default policy, and the individual layers (`customersLayer`, `productsLayer`, …, `checkoutSessionsLayer`, `billingPortalSessionsLayer`) are exported too:
 
 ```typescript
-import { Layer } from "effect";
+import { Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 import * as Credentials from "@distilled.cloud/stripe/Credentials";
 import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
 
 const customers = StripePayments.customersLayer.pipe(
-  Layer.provide(Credentials.credentials({ apiKey: "sk_test_..." })),
+  Layer.provide(Credentials.credentials({ apiKey: Redacted.make("sk_test_...") })),
   Layer.provide(FetchHttpClient.layer),
 );
 ```
 
-Importing `@distilled.cloud/stripe/Credentials` yourself means adding `@distilled.cloud/stripe` as your own dependency, at **exactly** the version in this package's `dependencies`, and moving it in step whenever you upgrade this package. Only at that version is its `Credentials` guaranteed to be the service the layers require: Distilled is pre-1.0 and may change it in any release, and another version installs a second copy of Distilled beside this package's. `layer` / `layerFromEnv` / `layerConfig` need no Distilled import.
+Importing `@distilled.cloud/stripe/Credentials` yourself means adding `@distilled.cloud/stripe` as your own dependency, at **exactly** the version in this package's `dependencies`, and moving it in step whenever you upgrade this package. Only at that version is its `Credentials` guaranteed to be the service the layers require: Distilled is pre-1.0 and may change it in any release (`1.0.0-rc.14` made `credentials`'s `apiKey` a `Redacted<string>`), and another version installs a second copy of Distilled beside this package's. `layer` / `layerFromEnv` / `layerConfig` need no Distilled import.
 
 ### Runtime: a `process` global
 

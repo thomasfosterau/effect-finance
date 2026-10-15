@@ -115,7 +115,8 @@ export { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
 
 /**
  * The requirements of a capability layer: Distilled's `Credentials` (the key
- * and API origin, e.g. `Credentials.credentials({ apiKey })` from
+ * and API origin, e.g. `Credentials.credentials({ apiKey })`, with `apiKey` a
+ * `Redacted<string>`, from
  * `@distilled.cloud/stripe/Credentials`) and an `HttpClient`.
  */
 type Requirements = Credentials | HttpClient.HttpClient;

@@ -42,7 +42,7 @@ const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 `PayPalPayments.layer` / `layerFromEnv` need only an `HttpClient`: they log in with the client credentials. The individual capability layers (`productsLayer` … `refundsLayer`) and `capabilities` need Distilled's `Credentials` and an `HttpClient` instead, and send the credentials' access token as it is, with no login and no refresh:
 
 ```typescript
-import { Layer } from "effect";
+import { Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { fromApiKey } from "@distilled.cloud/paypal/Credentials";
 import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
@@ -50,17 +50,22 @@ import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPa
 // An access token you obtained yourself; depend on `@distilled.cloud/paypal`
 // at exactly this package's version of it to import `fromApiKey`.
 const products = PayPalPayments.productsLayer.pipe(
-  Layer.provide(fromApiKey({ apiKey: "A21AA…", apiBaseUrl: "https://api-m.sandbox.paypal.com" })),
+  Layer.provide(
+    fromApiKey({
+      apiKey: Redacted.make("A21AA…"),
+      apiBaseUrl: "https://api-m.sandbox.paypal.com",
+    }),
+  ),
   Layer.provide(FetchHttpClient.layer),
 );
 ```
 
 ### Calls of your own
 
-This package publishes no PayPal REST client of its own: `./PayPal` (`PayPalClient`, `PayPal.layer` / `layerFromEnv` / `make`, `PayPalRequest`) was removed once the capabilities ran on Distilled. For an endpoint the capabilities do not cover, call `@distilled.cloud/paypal`'s operations directly, with an access token you obtained yourself (this package's OAuth login is internal to `layer` / `layerFromEnv`). Depend on `@distilled.cloud/paypal` at exactly this package's version of it (`1.0.0-rc.13` today; check this package's `dependencies` after an upgrade):
+This package publishes no PayPal REST client of its own: `./PayPal` (`PayPalClient`, `PayPal.layer` / `layerFromEnv` / `make`, `PayPalRequest`) was removed once the capabilities ran on Distilled. For an endpoint the capabilities do not cover, call `@distilled.cloud/paypal`'s operations directly, with an access token you obtained yourself (this package's OAuth login is internal to `layer` / `layerFromEnv`). Depend on `@distilled.cloud/paypal` at exactly this package's version of it (`1.0.0-rc.15` today; check this package's `dependencies` after an upgrade):
 
 ```typescript
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { fromApiKey, SANDBOX_API_BASE_URL } from "@distilled.cloud/paypal/Credentials";
 import { getOrder } from "@distilled.cloud/paypal/checkout_orders_v2";
@@ -68,7 +73,7 @@ import { getOrder } from "@distilled.cloud/paypal/checkout_orders_v2";
 const order = getOrder({ id: "5O190127TN364715T" }).pipe(
   Effect.provide(
     Layer.merge(
-      fromApiKey({ apiKey: "A21AA…", apiBaseUrl: SANDBOX_API_BASE_URL }),
+      fromApiKey({ apiKey: Redacted.make("A21AA…"), apiBaseUrl: SANDBOX_API_BASE_URL }),
       FetchHttpClient.layer,
     ),
   ),
