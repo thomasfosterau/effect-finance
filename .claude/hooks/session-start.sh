@@ -24,9 +24,9 @@
 # commit) is in `node_modules/.bin`, which is on nobody's PATH.
 #
 # Rather than fight PATH — which this script cannot export into its caller —
-# it links the tools into `~/.local/bin`, a directory already on PATH in the
-# devcontainer image and writable by the session user. A symlink survives
-# where an `export` cannot.
+# it writes small re-exec shims for the tools into `~/.local/bin`, a directory
+# already on PATH in the devcontainer image and writable by the session user.
+# A file there survives where an `export` cannot.
 #
 # ## Node, and why this repairs rather than clobbers
 #
@@ -71,7 +71,10 @@ set -uo pipefail
 
 log() { printf '[session-start] %s\n' "$1" >&2; }
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# The shims bake this path in, so resolve it to an absolute physical path: a
+# relative or symlinked CLAUDE_PROJECT_DIR would otherwise be baked in as is.
+PROJECT_DIR="$(CDPATH='' cd -- "${CLAUDE_PROJECT_DIR:-$(dirname "${BASH_SOURCE[0]}")/../..}" 2>/dev/null && pwd -P)" \
+  || PROJECT_DIR=""
 LOCAL_BIN="${HOME:-/home/vp}/.local/bin"
 
 mkdir -p "$LOCAL_BIN" 2>/dev/null || log "cannot create $LOCAL_BIN; continuing"
@@ -100,9 +103,15 @@ write_shim() {
     && ! grep -qF "$marker" "$dest" 2>/dev/null; then
     return 0
   fi
-  if ! { { printf '#!/usr/bin/env bash\n%s\n' "$marker" && cat; } >"$dest.tmp" 2>/dev/null \
-    && chmod +x "$dest.tmp" 2>/dev/null && mv -f "$dest.tmp" "$dest" 2>/dev/null; }; then
-    rm -f "$dest.tmp" 2>/dev/null
+  # A fresh temporary file (mktemp creates it, O_EXCL), so a symlink planted
+  # at a predictable path is never written through.
+  if ! tmp="$(mktemp "$LOCAL_BIN/.$1.XXXXXX" 2>/dev/null)"; then
+    log "could not write $1 shim"
+    return 0
+  fi
+  if ! { { printf '#!/usr/bin/env bash\n%s\n' "$marker" && cat; } >"$tmp" 2>/dev/null \
+    && chmod 755 "$tmp" 2>/dev/null && mv -f "$tmp" "$dest" 2>/dev/null; }; then
+    rm -f "$tmp" 2>/dev/null
     log "could not write $1 shim"
   fi
 }
@@ -139,11 +148,16 @@ SHIM
 # the worktree pins. The shim runs the install of the tree it is invoked in,
 # but unlike the `vp` walk it never leaves this project, so another
 # repository's `node_modules` is never executed (#176): with $PWD inside a
-# `.claude/worktrees/<name>` that is registered as a worktree of $PROJECT_DIR
-# and has its own install, it runs that install; anywhere else (the primary
-# checkout, a foreign repository nested in it, or outside the project) it runs
-# $PROJECT_DIR's. It only reads paths and asks the project's own git for its
-# worktree list, so it never runs git inside a foreign checkout either.
+# `.claude/worktrees/<name>` that is a live worktree of $PROJECT_DIR and has
+# its own install, it runs that install; anywhere else (the primary checkout,
+# a foreign repository nested in it, or outside the project) it runs
+# $PROJECT_DIR's. "Live" means both directions agree: the project's
+# `git worktree list --porcelain -z` names the directory exactly (NUL-split,
+# so a newline in a directory name cannot forge a match), and the directory's
+# `.git` file still points into $PROJECT_DIR/.git/worktrees/ (so a registered
+# worktree whose directory was replaced by another repository does not count).
+# It only reads paths and asks the project's own git for its worktree list, so
+# it never runs git inside a foreign checkout either.
 FALLOW_SHIM_MARKER="# generated-by: .claude/hooks/session-start.sh (fallow re-exec shim, issue #177)"
 write_fallow_shim() {
   project_q="$(printf '%q' "$PROJECT_DIR")"
@@ -152,13 +166,32 @@ project=$project_q
 bin=node_modules/.bin/fallow
 root="\$(cd "\$project" 2>/dev/null && pwd -P)" || root=""
 here="\$(pwd -P 2>/dev/null)" || here=""
+# Is \$1 a live worktree of \$root? The project's git must list it exactly, and
+# its .git file must still point into \$root/.git/worktrees/.
+live_worktree() {
+  listed=""
+  while IFS= read -r -d '' entry; do
+    [ "\$entry" = "worktree \$1" ] && listed=1
+  done < <(git -C "\$root" worktree list --porcelain -z 2>/dev/null)
+  [ -n "\$listed" ] && [ -f "\$1/.git" ] || return 1
+  # Read the whole file: the path it names may itself contain a newline.
+  line=""
+  IFS= read -r -d '' line <"\$1/.git"
+  line="\${line%\$'\\n'}"
+  gitdir="\${line#gitdir: }"
+  [ "\$gitdir" != "\$line" ] || return 1
+  case "\$gitdir" in /*) ;; *) gitdir="\$1/\$gitdir" ;; esac
+  gitdir="\$(cd "\$gitdir" 2>/dev/null && pwd -P)" || return 1
+  case "\${gitdir#"\$root/.git/worktrees/"}" in
+    "\$gitdir" | "" | */*) return 1 ;;
+  esac
+}
 if [ -n "\$root" ] && [ -n "\$here" ]; then
   case "\$here/" in
     "\$root/.claude/worktrees/"?*/*)
       rest="\${here#"\$root/.claude/worktrees/"}"
       tree="\$root/.claude/worktrees/\${rest%%/*}"
-      if [ -x "\$tree/\$bin" ] \\
-        && git -C "\$root" worktree list --porcelain 2>/dev/null | grep -qxF "worktree \$tree"; then
+      if [ -x "\$tree/\$bin" ] && live_worktree "\$tree"; then
         exec "\$tree/\$bin" "\$@"
       fi
       ;;
@@ -177,8 +210,12 @@ SHIM
 # only from node_modules/.bin. `vp` is included for the remote/web runner,
 # where the global launcher does not exist. Both are shims (above), written
 # even before the install: they resolve the binary when they run.
-write_fallow_shim
-write_vp_shim
+if [ -n "$PROJECT_DIR" ]; then
+  write_fallow_shim
+  write_vp_shim
+else
+  log "cannot resolve the project directory; not writing the fallow and vp shims"
+fi
 
 # ── 2. Bare `node` (gardeneria #1462) ─────────────────────────────────────────
 # Only repair a shim that is already failing — see the header for why this is
