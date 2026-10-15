@@ -1,6 +1,6 @@
 # @thomasfosterau/effect-payments
 
-The vendor-neutral core. Peer: `effect` only. No HTTP code, no vendor SDK, no provider vocabulary.
+The vendor-neutral core. Peer: `effect` only. No HTTP code outside `./internal`'s `effect/http` helpers shared by the providers; no vendor SDK, no provider vocabulary.
 
 ## Boundary
 

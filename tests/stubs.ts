@@ -4,8 +4,9 @@
  * driver, and the walk the wire suites use to prove no secret is reachable
  * from an error.
  *
- * Not a package and never published: each provider's `tests/support.ts`
- * re-exports what its suites need from here, beside its own vendor stub.
+ * Not a package and never published: a provider's suites import what they
+ * need from here, through its `tests/support.ts` when it has its own vendor
+ * stub to add.
  * Nothing here names a vendor; no test reaches a live API.
  */
 
@@ -94,7 +95,7 @@ export const stubApi = <Call>(
 };
 
 /** Let pending promises (the stubbed `fetch`) settle. */
-const macrotask = Effect.callback<void>((resume) => {
+export const macrotask = Effect.callback<void>((resume) => {
   const timer = setTimeout(() => resume(Effect.void), 0);
   return Effect.sync(() => clearTimeout(timer));
 });

@@ -1,6 +1,5 @@
 /**
- * Helpers shared by the provider packages (`effect-payments-paypal`,
- * `effect-payments-airwallex`, and any later OAuth-style provider).
+ * Helpers shared by the provider packages in this repository.
  *
  * **Internal, and exempt from semver.** This subpath exists only so the
  * providers in this repository can share code, since a provider may import
@@ -425,7 +424,9 @@ export interface TokenCache {
  * Internal, and exempt from semver: see the module documentation.
  */
 export const tokenCache: Effect.Effect<TokenCache> = /* @__PURE__ */ Effect.map(
-  /* @__PURE__ */ Ref.make(Option.none<{ readonly token: string; readonly expiresAt: number }>()),
+  /* @__PURE__ */ Ref.make(
+    /* @__PURE__ */ Option.none<{ readonly token: string; readonly expiresAt: number }>(),
+  ),
   (ref): TokenCache => ({
     cached: Effect.gen(function* () {
       const current = yield* Ref.get(ref);
@@ -520,9 +521,11 @@ export interface ObservedResponse {
   readonly body: Option.Option<unknown>;
 }
 
-const decodeJson = /* @__PURE__ */ Schema.decodeUnknownOption(
-  /* @__PURE__ */ Schema.fromJsonString(Schema.Unknown),
-);
+// A pure IIFE rather than annotated calls: `Schema.Unknown`, a property read
+// on an import, would keep the whole expression in a bundle that never
+// imports `observeResponses`.
+const decodeJson = /* @__PURE__ */ (() =>
+  Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown)))();
 
 /**
  * `http`, watched: the returned `client` records the status, headers and
