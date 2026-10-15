@@ -172,7 +172,8 @@ describe("the resource plan", () => {
       const exported = (planned.modules.get(subpath) ?? []).map((operation) => operation.exported);
       expect(exported, subpath).toEqual(expect.arrayContaining([...names]));
     }
-    expect(Object.keys(KEPT).sort()).toEqual(RESOURCES.map((resource) => resource.subpath).sort());
+    const subpaths = RESOURCES.map((resource) => resource.subpath);
+    expect(Object.keys(KEPT).filter((subpath) => !subpaths.includes(subpath))).toEqual([]);
   });
 
   it("exposes the Invoice and Subscription actions (#142)", () => {
@@ -200,14 +201,47 @@ describe("the resource plan", () => {
     expect(subpaths.filter((subpath, index) => subpaths.indexOf(subpath) !== index)).toEqual([]);
   });
 
-  it("lists only paths no module holds as unexposed", () => {
+  it("lists only paths no module holds as unexposed, each with its reason", () => {
     const held = RESOURCES.flatMap((resource) => resource.paths);
     expect(
-      UNEXPOSED.filter((path) =>
+      UNEXPOSED.filter(({ path }) =>
         held.some((prefix) => prefix.startsWith(`${path}/`) || prefix === path),
       ),
     ).toEqual([]);
+    expect(UNEXPOSED.filter(({ reason }) => reason.trim() === "")).toEqual([]);
     expect(Object.keys(OVERRIDES).length).toBeGreaterThan(0);
+  });
+
+  it("leaves unexposed only the operations StripeHttp cannot run (#154)", () => {
+    expect([...planned.unexposed].sort()).toEqual(["CreateBillingMeterEventStream", "GetQuotePdf"]);
+  });
+
+  it("lets a longer unexposed path win over a resource's", () => {
+    const quote = (planned.modules.get("Quote") ?? []).map((operation) => operation.name);
+    expect(quote).toContain("GetQuoteLineItems");
+    expect(quote).not.toContain("GetQuotePdf");
+  });
+
+  it("reads a /v2 page as a list", () => {
+    const names = (subpath: string) =>
+      (planned.modules.get(subpath) ?? []).map((operation) => operation.exported);
+    expect(names("V2.Core.Account")).toEqual(
+      expect.arrayContaining(["create", "retrieve", "update", "list", "close"]),
+    );
+    expect(names("V2.Core.Event")).toEqual(["list", "retrieve"]);
+  });
+
+  it("re-exports every resource module from the root, or from the Treasury barrel", () => {
+    // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
+    const read = (file: string) => readFileSync(new URL(`src/${file}`, PACKAGE), "utf8");
+    const reexported = (source: string) =>
+      [...source.matchAll(/^export \* as \w+ from "\.\/(?<module>[\w.]+)\.js";$/gm)].map(
+        (match) => match.groups?.["module"] ?? "",
+      );
+    const reached = [...reexported(read("index.ts")), ...reexported(read("Treasury.ts"))];
+    expect(
+      RESOURCES.map((resource) => resource.subpath).filter((subpath) => !reached.includes(subpath)),
+    ).toEqual([]);
   });
 });
 
