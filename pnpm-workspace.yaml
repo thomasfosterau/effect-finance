@@ -71,7 +71,7 @@ catalog:
   # `components` table in node_modules/@effect/tsgo/dist/effect-tsgo.cjs
   # before bumping any of the three.
   "@effect/tsgo": 0.47.2
-  "@mpsuesser/oxlint-plugin-effect": ^0.5.0
+  "@mpsuesser/oxlint-plugin-effect": ^0.6.0
   "@types/node": ^26.6.4
   "@vitest/coverage-istanbul": 4.1.11
   effect: 4.0.0
@@ -140,19 +140,10 @@ overrides:
   # `effect` MUST be a singleton (see the header): force every resolution to
   # the catalog version so a hoisting reshuffle cannot introduce a second copy.
   effect: "catalog:"
-  # `@mpsuesser/oxlint-plugin-effect` (the lint plugin loaded by vite.config.ts)
-  # is still built on effect beta.100 and calls `Schema.isIncludes`, which rc.118
-  # renamed to `isIncluding`; the catch-all `effect` override above would force
-  # it onto rc.118 and `vite.config.ts` would fail to load. Scope it to its own
-  # private copy. Remove this override once the plugin ships an rc.118 build
-  # (owner decision: thomasfosterau/website#2015, issuecomment-5923689409). The
-  # private copy pulls in `msgpackr-extract`, already allowed in `allowBuilds`.
-  "@mpsuesser/oxlint-plugin-effect>effect": 4.0.0-beta.100
 nodeLinker: hoisted
 allowBuilds:
   esbuild: true
   fallow: true
-  msgpackr-extract: true
 peerDependencyRules:
   allowAny:
     - vite
