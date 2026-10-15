@@ -98,11 +98,12 @@ updates:
           ]
       # The SDK is only an optional peer now: its types serve the SDK-based
       # `./Webhook` verifier (`constructEvent*`), and no module loads it
-      # (#146). A major changes that verifier's `Stripe.Event` type and the
-      # published peer range (`catalogs.peers`, a caret range), so it moves by
-      # hand, together with that range, rather than as a dev-only bump.
+      # (#146). Its dev pin follows DISTILLED_API_VERSION (#160): a stripe-node
+      # minor can move the SDK's API version, and a major also moves the published
+      # peer range (`catalogs.peers`), so it moves by hand on a Distilled bump
+      # (`tests/distilledApiVersion.test.ts` fails otherwise), never on its own.
       - dependency-name: "stripe"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "vite-plus"
         update-types:
           [

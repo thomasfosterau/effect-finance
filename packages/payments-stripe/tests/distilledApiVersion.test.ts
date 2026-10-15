@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { Schema } from "effect";
 import type { CreateWebhookEndpointRequestApiVersion } from "@distilled.cloud/stripe/stripe";
+import Stripe from "stripe";
 import { DISTILLED_API_VERSION } from "../src/StripePayments.ts";
 
 /**
@@ -54,5 +55,15 @@ describe("DISTILLED_API_VERSION", () => {
 
   it("is a version Distilled's own types know", () => {
     expectTypeOf<typeof DISTILLED_API_VERSION>().toExtend<CreateWebhookEndpointRequestApiVersion>();
+  });
+
+  // The optional `stripe` peer types `Webhook.constructEvent*`'s `Stripe.Event`
+  // at the SDK's own API version, so the dev pin (`catalog:` in
+  // pnpm-workspace.yaml) follows DISTILLED_API_VERSION too (#160): on a
+  // Distilled bump, move it, and the `catalogs.peers` range, to the stripe-node
+  // release for the new version.
+  it("is the API version of the installed stripe SDK", () => {
+    expect(Stripe.API_VERSION).toBe(DISTILLED_API_VERSION);
+    expectTypeOf<typeof Stripe.API_VERSION>().toEqualTypeOf<typeof DISTILLED_API_VERSION>();
   });
 });
