@@ -8,7 +8,7 @@
 
 // oxlint-disable-next-line effect/use-filesystem-service -- a test listing the examples on disk, outside any Effect runtime
 import { readdirSync } from "node:fs";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterAll, afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { ConfigProvider, Console, Effect, Exit, Layer, Option } from "effect";
 import { FetchHttpClient } from "effect/http";
 import * as basic from "../examples/basic.ts";
@@ -19,10 +19,15 @@ import { formOf, jsonResponse, stubStripeTable, TEST_KEY } from "./support.ts";
 // The examples are imported statically below, before any test can spy on
 // `fetch`: an example that ran on import would reach the live API (with
 // whatever key the environment holds). Hoisted above those imports, this
-// stub refuses instead. The suites run over `FetchHttpClient.Fetch`, never
-// the global.
+// stub refuses instead. `vi.stubGlobal` (undone in `afterAll`) keeps the stub
+// from leaking into other files sharing this worker under `isolate: false`.
+// The suites run over `FetchHttpClient.Fetch`, never the global.
 vi.hoisted(() => {
-  globalThis.fetch = () => Promise.reject(new Error("an example called fetch on import"));
+  vi.stubGlobal("fetch", () => Promise.reject(new Error("an example called fetch on import")));
+});
+
+afterAll(() => {
+  vi.unstubAllGlobals();
 });
 
 const EXAMPLES = new URL("../examples/", import.meta.url);

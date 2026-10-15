@@ -3,8 +3,8 @@
 "@thomasfosterau/effect-payments-airwallex": patch
 ---
 
-Fix a regression and close two gaps in the PayPal and Airwallex providers:
+Token and header handling in the PayPal and Airwallex providers:
 
-- **Regression fixed:** every request sends `Content-Type: application/json` again, body or not, as it did before the move to `HttpClient`. Without it, PayPal answers a bodyless POST such as `/v1/billing/plans/{id}/activate` (the `Prices.update` activate/deactivate path) with 415. Airwallex gets the same header for consistency.
-- Concurrent first requests, or requests racing a token refresh, now share one in-flight login and its token instead of each logging in.
+- Every request sends `Content-Type: application/json`, body or not. PayPal answers a bodyless POST without it, such as `/v1/billing/plans/{id}/activate` (the `Prices.update` activate/deactivate path), with 415; Airwallex gets the same header for consistency.
+- Only one login is in flight at a time. Concurrent first requests, and requests racing a token refresh, await that login and get its token, or all fail with its very error (for example the `PaymentNetworkError` of a login timeout) after one `loginTimeout`. A failure is not cached: the next call after it starts a fresh login. If the caller running the login is interrupted, the login is aborted, and the waiting callers try again.
 - A 401 from the vendor clears the cached token, but only if it is still the token that request used, so the next request logs in again. A late 401 for a token another request has already replaced leaves the new token in place.
