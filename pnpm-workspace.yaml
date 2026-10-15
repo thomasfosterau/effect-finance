@@ -84,8 +84,14 @@ catalog:
   # (`catalogs.peers`). Its types serve only the SDK-based `./Webhook`
   # verifier (`constructEvent*`), and its client is built only by the tests
   # and doc `@example`s that run that verifier; no module loads it at runtime
-  # (#146).
-  stripe: ^18.5.0
+  # (#146). Pinned EXACTLY to a release whose API version is
+  # DISTILLED_API_VERSION (22.4.0 and 22.5.0 ship `2026-07-29.dahlia`; 22.6
+  # moved to `2026-08-26.dahlia`), so the tests and examples type the events
+  # Distilled's `Stripe-Version` produces (#160). It moves with
+  # DISTILLED_API_VERSION on a Distilled bump, never on its own:
+  # `tests/distilledApiVersion.test.ts` fails when the SDK's API_VERSION
+  # differs.
+  stripe: 22.5.0
   # TypeScript 6/7 side-by-side: TS7 (the native Go compiler) ships no JS API
   # until 7.1, so JS-API consumers (@effect/language-service, tsdown's
   # declaration bundler, @effect/docgen's peer) stay on TS6 while native `tsc`
@@ -122,7 +128,10 @@ catalogs:
     # `./Webhook` verifier (`constructEvent*`, which runs on an SDK client the
     # program builds) name it; no module loads it (#146). Caret, not `>=`:
     # the verifier's `Stripe.Event` is the SDK's type at its API version.
-    stripe: ^18.5.0
+    # The floor is the first stripe-node release for DISTILLED_API_VERSION
+    # (22.4.0, `2026-07-29.dahlia`); the caret admits the later monthly dahlia
+    # releases of the same major, and moves with the next major (#160).
+    stripe: ^22.4.0
   # The `effect` peer range of a package that depends on Distilled
   # (@thomasfosterau/effect-payments-stripe and -paypal, #146).
   # @distilled.cloud/stripe, @distilled.cloud/paypal and @distilled.cloud/core

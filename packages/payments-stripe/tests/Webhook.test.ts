@@ -4,10 +4,11 @@ import * as Webhook from "../src/Webhook.ts";
 import { StripeService } from "../src/Webhook.ts";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
 import Stripe from "stripe";
+import { DISTILLED_API_VERSION } from "../src/StripePayments.ts";
 
 describe("Webhook", () => {
   const mockStripe = new Stripe("sk_test_mock", {
-    apiVersion: "2025-08-27.basil",
+    apiVersion: DISTILLED_API_VERSION,
   });
 
   const testLayer = Layer.succeed(StripeService, mockStripe);
