@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Redacted, Schema } from "effect";
+import { Effect, Redacted, Schema, type SchemaAST } from "effect";
 import { strict as strictValidation } from "@distilled.cloud/core/response-validation";
 import * as Distilled from "@distilled.cloud/stripe/stripe";
 import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
@@ -19,18 +19,18 @@ import basilSubscription from "./fixtures/basil/subscription.json" with { type: 
 
 /**
  * Responses at the API version every request now pins
- * (`DISTILLED_API_VERSION`, `2026-09-30.endive`, #146): the fixtures under
+ * (`DISTILLED_API_VERSION`, `2026-09-30.endive`, #146). The fixtures under
  * `fixtures/endive/` are the basil ones with the members endive's schemas
  * require added (among them the subscription's
  * `cancellation_details.feedback_option`, `items.data[].current_trial` and
  * `trial_settings.end_behavior.billing_cycle_anchor`, and the checkout
  * session's `allowed_payment_method_types`, all nullable; the product's
- * `tax_details`), or, for the payment intent, which has no basil fixture,
- * an endive response with every member Distilled's schema requires
- * (`allowed_payment_method_types` and `payment_record` among them), and
- * Distilled's own schemas decode them strictly, so they are the shape Stripe
- * answers the default layer with. The capability layers decode them, and a
- * resource module returns them as sent.
+ * `tax_details`). The payment intent has no basil fixture: its fixture is an
+ * endive response with every member Distilled's schema requires
+ * (`allowed_payment_method_types` and `payment_record` among them).
+ * Distilled's own schemas decode them all strictly, so they are the shape
+ * Stripe answers the default layer with. The capability layers decode them,
+ * and a resource module returns them as sent.
  */
 
 const config = { apiKey: Redacted.make(TEST_KEY) };
@@ -55,14 +55,36 @@ const onDefaultLayer = <A, E>(
 };
 
 /**
- * Decode `body` with one of Distilled's schemas, strictly. Distilled declares
- * them `Schema.Schema<T>`, which leaves the decoding services open; its
- * schemas need none.
+ * Decode `body` with one of Distilled's schemas, strictly: every member the
+ * schema requires must be present and of its declared type. Strict is not
+ * exact. An excess property is stripped, not rejected, unless `options` sets
+ * `onExcessProperty: "error"`; and Distilled types Stripe's enums and amounts
+ * as bare `String` / `Number`, so an unknown status or a fractional amount
+ * still decodes. Distilled declares its schemas `Schema.Schema<T>`, which
+ * leaves the decoding services open; they need none.
  */
-const strictly = (schema: Schema.Schema<unknown>, body: unknown): unknown =>
+const strictly = (
+  schema: Schema.Schema<unknown>,
+  body: unknown,
+  options?: SchemaAST.ParseOptions | undefined,
+): unknown =>
   // SAFETY: Distilled's generated schemas are plain structs, unions and
   // suspensions over `effect/Schema` built-ins, which need no services.
-  Schema.decodeUnknownSync(schema as unknown as Schema.Codec<unknown, unknown>)(body);
+  Schema.decodeUnknownSync(schema as unknown as Schema.Codec<unknown, unknown>, options)(body);
+
+/**
+ * Reject excess properties too. Only for the fixtures Distilled models in
+ * full: the subscription's `items.total_count` is a real Stripe member that
+ * Distilled's schema does not declare.
+ */
+const closed: SchemaAST.ParseOptions = { onExcessProperty: "error" };
+
+/** `text` with every regular-expression metacharacter escaped. */
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The whole message of a decode failure at the top-level `member`. */
+const failureAt = (issue: "Missing key" | "Expected no excess property", member: string) =>
+  new RegExp(`^${escaped(issue)}\\s+at \\["${escaped(member)}"\\]$`);
 
 /** `fixture` without its `member`: the mutation the strict check must catch. */
 const without = (fixture: Readonly<Record<string, unknown>>, member: string) =>
@@ -85,16 +107,30 @@ describe("endive fixtures", () => {
     expect(() => strictly(Distilled.Product, endiveProduct)).not.toThrow();
   });
 
+  it("the payment intent and the product carry no member Distilled's schema lacks", () => {
+    expect(() => strictly(Distilled.PaymentIntent, endivePaymentIntent, closed)).not.toThrow();
+    expect(() => strictly(Distilled.Product, endiveProduct, closed)).not.toThrow();
+  });
+
+  it("an invented member is caught by the closed decode", () => {
+    expect(() =>
+      strictly(Distilled.PaymentIntent, { ...endivePaymentIntent, invented_member: 1 }, closed),
+    ).toThrow(failureAt("Expected no excess property", "invented_member"));
+    expect(() =>
+      strictly(Distilled.Product, { ...endiveProduct, invented_member: 1 }, closed),
+    ).toThrow(failureAt("Expected no excess property", "invented_member"));
+  });
+
   it("the basil subscription is not: the check would catch a stale fixture", () => {
     expect(() => strictly(Distilled.Subscription, basilSubscription)).toThrow();
   });
 
   it("the basil product is not: it lacks endive's `tax_details`", () => {
     expect(() => strictly(Distilled.Product, basilProduct)).toThrow(
-      /Missing key[\s\S]*tax_details/,
+      failureAt("Missing key", "tax_details"),
     );
     expect(() => strictly(Distilled.Product, without(endiveProduct, "tax_details"))).toThrow(
-      /Missing key[\s\S]*tax_details/,
+      failureAt("Missing key", "tax_details"),
     );
   });
 
@@ -102,7 +138,7 @@ describe("endive fixtures", () => {
     "a payment intent without endive's `%s` is not",
     (member) => {
       expect(() => strictly(Distilled.PaymentIntent, without(endivePaymentIntent, member))).toThrow(
-        new RegExp(`Missing key[\\s\\S]*${member}`),
+        failureAt("Missing key", member),
       );
     },
   );
