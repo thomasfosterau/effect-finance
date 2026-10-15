@@ -102,6 +102,8 @@ updates:
       # minor can move the SDK's API version, and a major also moves the published
       # peer range (`catalogs.peers`), so it moves by hand on a Distilled bump
       # (`tests/distilledApiVersion.test.ts` fails otherwise), never on its own.
+      # Patches are still proposed: they are harmless, because
+      # `tests/distilledApiVersion.test.ts` catches a patch that moves the API version.
       - dependency-name: "stripe"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "vite-plus"

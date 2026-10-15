@@ -85,7 +85,11 @@ export const stripeCustomer = StripeCustomer.retrieve("cus_123");
 export const stripeCustomerAtVersion = StripeCustomer.retrieve(
   "cus_123",
   { expand: ["test_clock"] },
-  { apiVersion: "2025-08-27.basil", idempotencyKey: "key-1", stripeAccount: "acct_123" },
+  {
+    apiVersion: StripePayments.DISTILLED_API_VERSION,
+    idempotencyKey: "key-1",
+    stripeAccount: "acct_123",
+  },
 );
 /** An Invoice action the modules did not expose before they re-exported Distilled (#142). */
 export const stripeInvoicePaid = StripeInvoice.pay("in_123");
