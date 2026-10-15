@@ -76,7 +76,7 @@ catalog:
   "@vitest/coverage-istanbul": 4.1.11
   effect: 4.0.4
   effect-solutions: ^0.5.3
-  fallow: 3.31.0
+  fallow: 3.33.1
   # Runs docgen's compiled examples (a peer of @effect/docgen).
   tsx: ^4.23.15
   # The official Stripe SDK: a dev dependency of
