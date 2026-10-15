@@ -222,6 +222,34 @@ describe("the resource plan", () => {
     expect(quote).not.toContain("GetQuotePdf");
   });
 
+  it("follows stripe-node's names where the rule cannot, and lists a list", () => {
+    const names = (subpath: string) =>
+      (planned.modules.get(subpath) ?? []).map((operation) => operation.exported);
+    expect(names("Billing.CreditGrant")).toContain("voidGrant");
+    expect(names("Apps.Secret")).toContain("delWhere");
+    expect(names("Apps.Secret")).not.toContain("del");
+    expect(names("CreditNote")).toContain("listPreviewLines");
+  });
+
+  it("reports a /v2 DELETE that takes params, which would go out as a JSON body", () => {
+    const withParams = operations.map((operation) =>
+      operation.name === "DeleteCoreEventDestination"
+        ? { ...operation, members: ["reason"], params: "optional" as const }
+        : operation,
+    );
+    expect(plan(withParams).problems).toEqual([
+      "DeleteCoreEventDestination (DELETE /v2/core/event_destinations/{id}) takes params, which Distilled would send as a JSON body",
+    ]);
+  });
+
+  it("says a module includes test helpers only when it has some", () => {
+    const helpers = (subpath: string) =>
+      (planned.modules.get(subpath) ?? []).some((operation) => operation.testHelper);
+    expect(helpers("Customer")).toBe(true);
+    expect(helpers("CreditNote")).toBe(false);
+    expect(helpers("TestHelpers.TestClock")).toBe(false);
+  });
+
   it("reads a /v2 page as a list", () => {
     const names = (subpath: string) =>
       (planned.modules.get(subpath) ?? []).map((operation) => operation.exported);
@@ -231,17 +259,22 @@ describe("the resource plan", () => {
     expect(names("V2.Core.Event")).toEqual(["list", "retrieve"]);
   });
 
-  it("re-exports every resource module from the root, or from the Treasury barrel", () => {
+  it("re-exports every resource module from the root, flattened, or from the Treasury barrel", () => {
     // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
     const read = (file: string) => readFileSync(new URL(`src/${file}`, PACKAGE), "utf8");
     const reexported = (source: string) =>
-      [...source.matchAll(/^export \* as \w+ from "\.\/(?<module>[\w.]+)\.js";$/gm)].map(
-        (match) => match.groups?.["module"] ?? "",
+      [...source.matchAll(/^export \* as (?<name>\w+) from "\.\/(?<module>[\w.]+)\.js";$/gm)].map(
+        (match) => ({
+          name: match.groups?.["name"] ?? "",
+          module: match.groups?.["module"] ?? "",
+        }),
       );
-    const reached = [...reexported(read("index.ts")), ...reexported(read("Treasury.ts"))];
+    const root = reexported(read("index.ts"));
+    const reached = [...root, ...reexported(read("Treasury.ts"))].map(({ module }) => module);
     expect(
       RESOURCES.map((resource) => resource.subpath).filter((subpath) => !reached.includes(subpath)),
     ).toEqual([]);
+    expect(root.filter(({ name, module }) => name !== module.replaceAll(".", ""))).toEqual([]);
   });
 });
 

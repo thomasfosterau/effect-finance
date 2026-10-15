@@ -1,7 +1,7 @@
 /**
  * Stripe's `/v1/billing/credit_grants` API as a raw resource module, the escape hatch for
  * what the neutral capabilities do not cover: every `@distilled.cloud/stripe`
- * operation on the resource, its test helpers included.
+ * operation on the resource.
  *
  * Each operation takes the resource's path ids first, then the rest of
  * Distilled's input (`params`), then {@link RequestOptions}, and runs through
@@ -124,7 +124,7 @@ export const update: (
  * Void a credit grant (`POST /v1/billing/credit_grants/{id}/void`): Distilled's
  * `CreateBillingCreditGrantVoid`.
  */
-export const voidCreditGrant: (
+export const voidGrant: (
   id: string,
   params?: Omit<Distilled.CreateBillingCreditGrantVoidRequest, "id"> | undefined,
   options?: RequestOptions | undefined,

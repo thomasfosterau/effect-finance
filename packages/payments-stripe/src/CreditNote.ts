@@ -1,7 +1,7 @@
 /**
  * Stripe's `/v1/credit_notes` API as a raw resource module, the escape hatch for
  * what the neutral capabilities do not cover: every `@distilled.cloud/stripe`
- * operation on the resource, its test helpers included.
+ * operation on the resource.
  *
  * Each operation takes the resource's path ids first, then the rest of
  * Distilled's input (`params`), then {@link RequestOptions}, and runs through
@@ -90,6 +90,21 @@ export const listLines: (
   });
 
 /**
+ * Retrieve a credit note preview's line items (`GET /v1/credit_notes/preview/lines`): Distilled's
+ * `GetCreditNotesPreviewLines`.
+ */
+export const listPreviewLines: (
+  params: Distilled.GetCreditNotesPreviewLinesRequest,
+  options?: RequestOptions | undefined,
+) => Effect.Effect<Distilled.GetCreditNotesPreviewLinesResponse, PaymentsError, StripeHttp> =
+  /* @__PURE__ */ operation(Distilled.GetCreditNotesPreviewLines, {
+    method: "GET",
+    path: "/v1/credit_notes/preview/lines",
+    ids: [],
+    params: true,
+  });
+
+/**
  * Preview a credit note (`GET /v1/credit_notes/preview`): Distilled's
  * `GetCreditNotesPreview`.
  */
@@ -100,21 +115,6 @@ export const preview: (
   Distilled.GetCreditNotesPreview,
   { method: "GET", path: "/v1/credit_notes/preview", ids: [], params: true },
 );
-
-/**
- * Retrieve a credit note preview's line items (`GET /v1/credit_notes/preview/lines`): Distilled's
- * `GetCreditNotesPreviewLines`.
- */
-export const previewLines: (
-  params: Distilled.GetCreditNotesPreviewLinesRequest,
-  options?: RequestOptions | undefined,
-) => Effect.Effect<Distilled.GetCreditNotesPreviewLinesResponse, PaymentsError, StripeHttp> =
-  /* @__PURE__ */ operation(Distilled.GetCreditNotesPreviewLines, {
-    method: "GET",
-    path: "/v1/credit_notes/preview/lines",
-    ids: [],
-    params: true,
-  });
 
 /**
  * Retrieve a credit note (`GET /v1/credit_notes/{id}`): Distilled's

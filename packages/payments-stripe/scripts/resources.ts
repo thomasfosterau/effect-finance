@@ -254,12 +254,15 @@ export const OVERRIDES = {
   // A `POST` to a singleton's own path updates it: there is nothing to create.
   CreateBalanceSettings: { name: "update" },
   CreateTaxSettings: { name: "update" },
-  // `void` is a reserved word.
+  // `void` is a reserved word. `voidGrant` is stripe-node's name.
   CreateInvoiceVoid: { name: "voidInvoice" },
-  CreateBillingCreditGrantVoid: { name: "voidCreditGrant" },
+  CreateBillingCreditGrantVoid: { name: "voidGrant" },
   CreateCreditNoteVoid: { name: "voidCreditNote" },
-  // `POST /v1/apps/secrets/delete` deletes a secret by name; `delete` is reserved.
-  CreateAppsSecretsDelete: { name: "del" },
+  // `POST /v1/apps/secrets/delete` deletes a secret by name and scope, not by
+  // id as every `del` does: stripe-node's `deleteWhere` (`delete` is reserved).
+  CreateAppsSecretsDelete: { name: "delWhere" },
+  // `GET /v1/credit_notes/preview/lines` is a list.
+  GetCreditNotesPreviewLines: { name: "listPreviewLines" },
   // `DELETE /v1/subscriptions/{id}` cancels; the module has always called it `cancel`.
   DeleteSubscription: { name: "cancel" },
 } satisfies Overrides;
@@ -317,6 +320,8 @@ export interface DistilledOperation {
 export interface Planned extends DistilledOperation {
   /** The exported function name. */
   readonly exported: string;
+  /** Whether it is one of the resource's test helpers (under `/v1/test_helpers`). */
+  readonly testHelper: boolean;
 }
 
 /** What {@link plan} decides. */
@@ -325,7 +330,7 @@ export interface Plan {
   readonly modules: ReadonlyMap<string, ReadonlyArray<Planned>>;
   /** The operations left unexposed, by Distilled name. */
   readonly unexposed: ReadonlyArray<string>;
-  /** Every problem: an operation unassigned, a name clash, an unused table entry. */
+  /** Every problem: an operation unassigned, a name clash, an unused table entry, a params-carrying `/v2` `DELETE`. */
   readonly problems: ReadonlyArray<string>;
 }
 
@@ -572,6 +577,18 @@ const nameProblems = (
 };
 
 /**
+ * Why an operation cannot be sent as Stripe expects, if it cannot: a `/v2`
+ * `DELETE` with params, which Distilled would encode as a JSON body
+ * (`StripeHttp` moves only a form body's params to the query string).
+ */
+const wireProblems = (operation: DistilledOperation): ReadonlyArray<string> =>
+  operation.method === "DELETE" && operation.path.startsWith("/v2/") && operation.params !== "none"
+    ? [
+        `${operation.name} (DELETE ${operation.path}) takes params, which Distilled would send as a JSON body`,
+      ]
+    : [];
+
+/**
  * The table entries that name nothing Distilled has: an operation it no
  * longer exports, or a `PARAM_TYPES` member that is no longer a param of its
  * operation (whose retyping would silently add a member Distilled dropped).
@@ -625,8 +642,11 @@ export const plan = (operations: ReadonlyArray<DistilledOperation>): Plan => {
       continue;
     }
     const exported = exportedName(operation, placement, operations);
-    problems.push(...nameProblems(operation, exported, placement.subpath, module));
-    module.push({ ...operation, exported });
+    problems.push(
+      ...nameProblems(operation, exported, placement.subpath, module),
+      ...wireProblems(operation),
+    );
+    module.push({ ...operation, exported, testHelper: placement.testHelper });
   }
   for (const [subpath, planned] of modules) {
     if (planned.length === 0) problems.push(`${subpath} would export no operation`);
@@ -806,7 +826,9 @@ const renderModule = (
     "/**",
     ` * Stripe's ${pathsOf(subpath)} API as a raw resource module, the escape hatch for`,
     " * what the neutral capabilities do not cover: every `@distilled.cloud/stripe`",
-    " * operation on the resource, its test helpers included.",
+    operations.some((operation) => operation.testHelper)
+      ? " * operation on the resource, its test helpers included."
+      : " * operation on the resource.",
     " *",
     " * Each operation takes the resource's path ids first, then the rest of",
     " * Distilled's input (`params`), then {@link RequestOptions}, and runs through",

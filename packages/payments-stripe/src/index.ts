@@ -99,7 +99,7 @@ export * as Coupon from "./Coupon.js";
 export * as CheckoutSession from "./CheckoutSession.js";
 export * as BillingPortalSession from "./BillingPortal.Session.js";
 export * as SubscriptionSchedule from "./SubscriptionSchedule.js";
-// The resources published since #154: every other Distilled operation.
+// Every other resource module.
 export * as AccountSession from "./AccountSession.js";
 export * as ApplePayDomain from "./ApplePayDomain.js";
 export * as ApplicationFee from "./ApplicationFee.js";

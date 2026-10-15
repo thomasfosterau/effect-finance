@@ -1,7 +1,7 @@
 /**
  * Stripe's `/v1/climate/suppliers` API as a raw resource module, the escape hatch for
  * what the neutral capabilities do not cover: every `@distilled.cloud/stripe`
- * operation on the resource, its test helpers included.
+ * operation on the resource.
  *
  * Each operation takes the resource's path ids first, then the rest of
  * Distilled's input (`params`), then {@link RequestOptions}, and runs through
