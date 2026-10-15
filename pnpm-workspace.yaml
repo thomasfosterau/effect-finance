@@ -32,9 +32,8 @@ catalog:
   # @thomasfosterau/effect-payments-stripe, pinned EXACTLY: it is pre-1.0 and
   # ships a new rc every week or two, so a release moves only through the
   # ordinary dependency-update flow. Its schemas are generated from Stripe's
-  # 2026-09-30.endive spec (rc.14 and rc.15; rc.13 was 2026-07-29.dahlia),
-  # which the wrapper pins in `Stripe-Version` (DISTILLED_API_VERSION) on
-  # every request. A bump also regenerates the
+  # 2026-09-30.endive spec, which the wrapper pins in `Stripe-Version`
+  # (DISTILLED_API_VERSION) on every request. A bump also regenerates the
   # resource modules (`generate:resources`) and updates the followed version
   # (`tests/distilledApiVersion.test.ts` and `tests/resources.test.ts` fail
   # until both are done).
@@ -86,9 +85,9 @@ catalog:
   # verifier (`constructEvent*`), and its client is built only by the tests
   # and doc `@example`s that run that verifier; no module loads it at runtime
   # (#146). Pinned EXACTLY to a release whose API version is
-  # DISTILLED_API_VERSION (23.0.0 ships `2026-09-30.endive`; 22.4.0 and
-  # 22.5.0 shipped `2026-07-29.dahlia`, Distilled rc.13's), so the tests and
-  # examples type the events Distilled's `Stripe-Version` produces (#160). It moves with
+  # DISTILLED_API_VERSION (23.0.0 ships `2026-09-30.endive`), so the tests
+  # and examples type the events Distilled's `Stripe-Version` produces
+  # (#160). It moves with
   # DISTILLED_API_VERSION on a Distilled bump, never on its own:
   # `tests/distilledApiVersion.test.ts` fails when the SDK's API_VERSION
   # differs.

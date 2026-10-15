@@ -140,7 +140,8 @@ export interface PayPalConfig {
 
 /**
  * The requirements of a capability layer: Distilled's `Credentials` (an
- * access token and API origin, e.g. `fromApiKey({ apiKey, apiBaseUrl })` from
+ * access token, as a `Redacted<string>` `apiKey`, and API origin, e.g.
+ * `fromApiKey({ apiKey: Redacted.make(token), apiBaseUrl })` from
  * `@distilled.cloud/paypal/Credentials`) and an `HttpClient`.
  */
 type Requirements = Credentials | HttpClient.HttpClient;

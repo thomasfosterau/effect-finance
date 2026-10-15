@@ -82,7 +82,7 @@ const order = getOrder({ id: "5O190127TN364715T" }).pipe(
 
 Distilled's own request policy then applies, not this package's: its failures are Distilled's error classes, not `PaymentsError`; it retries 5xx and 429 responses by default; and a write is deduplicated only by the `payPalRequestId` you pass.
 
-Distilled's input types (`@distilled.cloud/paypal` `1.0.0-rc.15`, as in `1.0.0-rc.13`) declare optional members as bare `?: T`. Under `exactOptionalPropertyTypes`, a call that forwards an optional of its own (`createProduct({ name, type: "SERVICE", description })` with `description: string | undefined`) fails to type-check: omit an absent member rather than pass `undefined`. The capability layers are unaffected; their params take `?: T | undefined`.
+Distilled's input types (`@distilled.cloud/paypal` `1.0.0-rc.15`) declare optional members as bare `?: T`. Under `exactOptionalPropertyTypes`, a call that forwards an optional of its own (`createProduct({ name, type: "SERVICE", description })` with `description: string | undefined`) fails to type-check: omit an absent member rather than pass `undefined`. The capability layers are unaffected; their params take `?: T | undefined`.
 
 ### Runtime: a `process` global
 

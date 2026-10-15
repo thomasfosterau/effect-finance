@@ -672,7 +672,7 @@ const docText = (text: string): string => text.replaceAll("*/", "*\\/");
 
 /**
  * A type Distilled names in an operation's declaration: one of its own, or a
- * keyword (`unknown`: rc.13 to rc.15 declare `CreateTransfer` / `GetTransfer` /
+ * keyword (`unknown`: rc.15 declares `CreateTransfer` / `GetTransfer` /
  * `UpdateTransfer` so).
  */
 const KEYWORDS = new Set(["unknown"]);

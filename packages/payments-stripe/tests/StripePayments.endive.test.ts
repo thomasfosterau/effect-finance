@@ -15,11 +15,11 @@ import basilSubscription from "./fixtures/basil/subscription.json" with { type: 
 /**
  * Responses at the API version every request now pins
  * (`DISTILLED_API_VERSION`, `2026-09-30.endive`, #146): the fixtures under
- * `fixtures/endive/` are the basil ones with the members dahlia and endive
- * add (endive: the subscription's `cancellation_details.feedback_option`,
- * `items.data[].current_trial` and
- * `trial_settings.end_behavior.billing_cycle_anchor`, the checkout session's
- * `allowed_payment_method_types`, all nullable), and
+ * `fixtures/endive/` are the basil ones with the members endive's schemas
+ * require added (among them the subscription's
+ * `cancellation_details.feedback_option`, `items.data[].current_trial` and
+ * `trial_settings.end_behavior.billing_cycle_anchor`, and the checkout
+ * session's `allowed_payment_method_types`, all nullable), and
  * Distilled's own schemas decode them strictly, so they are the shape Stripe
  * answers the default layer with. The capability layers decode them, and a
  * resource module returns them as sent.
