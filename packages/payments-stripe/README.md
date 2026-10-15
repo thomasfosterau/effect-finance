@@ -141,8 +141,8 @@ Each module is a thin wrapper of **every** `@distilled.cloud/stripe` operation o
 
 Gaps in Distilled's typing that the modules inherit (`@distilled.cloud/stripe` `1.0.0-rc.13`):
 
-- **`Transfer.create` / `retrieve` / `update` resolve to `unknown`**: Distilled declares no Transfer schema. Decode the result yourself.
-- **Input types declare optional members as bare `?: T`**, as Distilled generates them. Under `exactOptionalPropertyTypes`, a caller forwarding an optional of its own must omit an absent member rather than pass `undefined`.
+- **`Transfer.create` / `retrieve` / `update` resolve to `unknown`, and `Transfer.list`'s `data` to `Array<unknown>`**: Distilled declares no Transfer schema. Decode the result yourself.
+- **Input types declare optional members as bare `?: T`**, as Distilled generates them. Under `exactOptionalPropertyTypes`, a caller forwarding an optional of its own (`Customer.create({ email })` with `email: string | undefined`) fails to type-check: omit an absent member rather than pass `undefined`. The neutral capabilities are unaffected; their params take `?: T | undefined`.
 - **`File.create`'s `file` is retyped `string | Blob`** (a `File` is a `Blob`): Distilled declares it `string`, but sends a `Blob` as the multipart file part, which is how a file is uploaded. No cast is needed.
 
 The names follow the path (`create` / `retrieve` / `update` / `del` / `list`, an action by its name, a sub-resource's operation by its singular, `testHelpers…` for a test helper), keeping every name a module had before it re-exported Distilled; `del` because `delete` is reserved, and likewise `Invoice.voidInvoice`. A raw module is also the full-fidelity alternative where a neutral capability exists: the raw `CheckoutSession` module takes every Stripe Checkout parameter where `StripePayments.checkoutSessionsLayer` takes only the neutral ones. Some raw modules share a name with a neutral core module (`Customer`, `CheckoutSession`, …), so alias one of them when a program imports both.

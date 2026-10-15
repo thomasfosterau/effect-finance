@@ -77,6 +77,8 @@ const order = getOrder({ id: "5O190127TN364715T" }).pipe(
 
 Distilled's own request policy then applies, not this package's: its failures are Distilled's error classes, not `PaymentsError`; it retries 5xx and 429 responses by default; and a write is deduplicated only by the `payPalRequestId` you pass.
 
+Distilled's input types (`@distilled.cloud/paypal` `1.0.0-rc.13`) declare optional members as bare `?: T`. Under `exactOptionalPropertyTypes`, a call that forwards an optional of its own (`createProduct({ name, type: "SERVICE", description })` with `description: string | undefined`) fails to type-check: omit an absent member rather than pass `undefined`. The capability layers are unaffected; their params take `?: T | undefined`.
+
 ### Runtime: a `process` global
 
 The capability layers need a `process` global with an `env` object. Distilled reads `process.env.DISTILLED_DEBUG_HTTP`, unguarded, each time it builds a request and each time it reads a response, so where there is no `process` global every capability call dies with a defect, not a `PaymentsError`. Node, Bun and Deno have one; on **Cloudflare Workers, enable the `nodejs_compat` compatibility flag**. Loading the package, building the layers and the OAuth login do not touch `process`. While `DISTILLED_DEBUG_HTTP` is set, Distilled writes each request's method and path template (`POST /v2/checkout/orders/{id}/capture`) and each response's status to `console.error`; it logs no header, body or id.

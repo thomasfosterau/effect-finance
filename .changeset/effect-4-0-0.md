@@ -5,4 +5,4 @@
 "@thomasfosterau/effect-payments-airwallex": patch
 ---
 
-Tested against effect 4.0.0 (the build and test pin moves from `4.0.0-rc.118`); peer floor unchanged at `>=4.0.0-rc.118`.
+Tested against effect 4.0.0 (the build and test pin moves from `4.0.0-rc.118`); the core's and the Airwallex provider's peer floor stays `>=4.0.0-rc.118` (the Stripe and PayPal providers require `^4.0.0`, the peer range of the Distilled packages they depend on).

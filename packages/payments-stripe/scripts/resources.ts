@@ -218,10 +218,10 @@ const PARAM_TYPES = {
   CreateFile: { file: "string | Blob" },
 } satisfies ParamTypes;
 
-/** The members the operation Distilled names `name` retypes, as `[member, type]` pairs. */
+/** The members `paramTypes` retypes on the operation Distilled names `name`, as `[member, type]` pairs. */
 const retypedOf = (
+  paramTypes: ParamTypes,
   name: string,
-  paramTypes: ParamTypes = PARAM_TYPES,
 ): ReadonlyArray<readonly [string, string]> => Object.entries(paramTypes[name] ?? {});
 
 /** The override of the operation Distilled names `name`, if there is one. */
@@ -240,6 +240,8 @@ export interface DistilledOperation {
   readonly path: string;
   /** The input members bound to path ids, in path order. */
   readonly ids: ReadonlyArray<string>;
+  /** The input members beyond the path ids (the params), in declaration order. */
+  readonly members: ReadonlyArray<string>;
   /** Whether the input has members beyond the path ids, and whether any is required. */
   readonly params: "none" | "optional" | "required";
   /** Whether the output is a page (`{ data, has_more }`). */
@@ -506,16 +508,28 @@ const nameProblems = (
   ];
 };
 
-/** The table entries that name nothing Distilled has. */
+/**
+ * The table entries that name nothing Distilled has: an operation it no
+ * longer exports, or a `PARAM_TYPES` member that is no longer a param of its
+ * operation (whose retyping would silently add a member Distilled dropped).
+ */
 const staleEntries = (operations: ReadonlyArray<DistilledOperation>): ReadonlyArray<string> => {
   const known = new Set(operations.map((operation) => operation.name));
   return [
     ...Object.keys(OVERRIDES)
       .filter((name) => !known.has(name))
       .map((name) => `OVERRIDES names ${name}, which Distilled no longer has`),
-    ...Object.keys(PARAM_TYPES)
-      .filter((name) => !known.has(name))
-      .map((name) => `PARAM_TYPES names ${name}, which Distilled no longer has`),
+    ...Object.entries(PARAM_TYPES).flatMap(([name, members]) => {
+      const operation = operations.find((candidate) => candidate.name === name);
+      return operation === undefined
+        ? [`PARAM_TYPES names ${name}, which Distilled no longer has`]
+        : Object.keys(members)
+            .filter((member) => !operation.members.includes(member))
+            .map(
+              (member) =>
+                `PARAM_TYPES retypes ${name}'s ${member}, which is not a param of ${operation.input}`,
+            );
+    }),
     ...UNEXPOSED.filter(
       (prefix) => !operations.some((operation) => longestMatch(operation.path, [prefix])),
     ).map((prefix) => `UNEXPOSED lists ${prefix}, which no operation is under`),
@@ -631,6 +645,7 @@ export const readOperations = (
       method: http.method,
       path: http.uri,
       ids: tokens.sort((a, b) => a.at - b.at).map((token) => token.member),
+      members: others.map((prop) => String(prop.name)),
       params:
         others.length === 0
           ? "none"
@@ -661,7 +676,7 @@ const typeOf = (name: string): string => (KEYWORDS.has(name) ? name : `Distilled
 
 const signatureOf = (operation: Planned): string => {
   const ids = operation.ids.map((id) => `${id}: string`);
-  const retyped = retypedOf(operation.name);
+  const retyped = retypedOf(PARAM_TYPES, operation.name);
   const omitted = [...operation.ids, ...retyped.map(([member]) => member)];
   const base =
     omitted.length === 0

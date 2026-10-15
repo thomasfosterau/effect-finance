@@ -63,13 +63,7 @@ import {
   Ref,
   Schema,
 } from "effect";
-import {
-  FetchHttpClient,
-  HttpBody,
-  HttpClient,
-  HttpClientError,
-  HttpClientRequest,
-} from "effect/http";
+import { FetchHttpClient, HttpClient, HttpClientError } from "effect/http";
 import { ResponseValidation } from "@distilled.cloud/core/response-validation";
 import { Credentials, type Config as StripeCredentials } from "@distilled.cloud/stripe/Credentials";
 import { type StripeRequestOptions, withRequestOptions } from "@distilled.cloud/stripe/Protocol";
@@ -82,6 +76,7 @@ import {
 } from "@thomasfosterau/effect-payments";
 import { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
 import { classifyResponse, PROVIDER, retryAfterOf, toPaymentsError } from "./internal/error.js";
+import { deleteParamsToQuery } from "./internal/deleteQuery.js";
 import { checkOptions } from "./internal/options.js";
 
 export { DISTILLED_API_VERSION };
@@ -126,7 +121,7 @@ export interface RequestOptions {
    * every retry of that write; a fresh key per attempt defeats the
    * deduplication. It is sent on whatever method you pass it to; Stripe is
    * understood to ignore it on a `GET` and `DELETE` (unverified, #93), unlike
-   * the PayPal and Airwallex clients, which refuse a key on a non-`POST`. An
+   * the Airwallex client, which refuses a key on a non-`POST`. An
    * empty key, like an empty `stripeAccount` or `apiVersion`, fails with
    * `PaymentInvalidRequestError` before anything is sent. Without one, a
    * `POST` that may be retried by the client gets a generated key shared by
@@ -216,44 +211,6 @@ const isOk = (status: number): boolean => status >= 200 && status < 300;
 
 /** Distilled's retries, switched off: this client retries on its own policy. */
 const NO_RETRY = { while: () => false };
-
-const FORM = "application/x-www-form-urlencoded";
-
-/**
- * `encodeURIComponent` plus the five characters it leaves alone that the
- * SDK's `qs` escapes (`!`, `'`, `(`, `)`, `*`), with the bracket control
- * characters left literal, as the SDK sends them (`cancellation_details[comment]`).
- */
-const escapeQuery = (text: string): string =>
-  encodeURIComponent(text)
-    .replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
-    .replace(/%5B/g, "[")
-    .replace(/%5D/g, "]");
-
-/**
- * A `DELETE`'s params, moved from the form body Distilled encodes them into
- * (it keeps a body off a `GET` or `HEAD` only) to the query string, where the
- * Stripe SDKs send them (`DELETE /v1/subscriptions/sub_1?invoice_now=true`);
- * the body and its `Content-Type` are dropped. Any other request passes as is.
- */
-const deleteParamsToQuery = (
-  request: HttpClientRequest.HttpClientRequest,
-): HttpClientRequest.HttpClientRequest => {
-  const { body } = request;
-  if (request.method !== "DELETE" || body._tag !== "Uint8Array" || body.contentType !== FORM) {
-    return request;
-  }
-  const query = [...new URLSearchParams(body.text ?? new TextDecoder().decode(body.body))]
-    .map(([key, value]) => `${escapeQuery(key)}=${escapeQuery(value)}`)
-    .join("&");
-  const bodyless = HttpClientRequest.setBody(request, HttpBody.empty);
-  return query === ""
-    ? bodyless
-    : HttpClientRequest.setUrl(
-        bodyless,
-        `${request.url}${request.url.includes("?") ? "&" : "?"}${query}`,
-      );
-};
 
 /**
  * The SDK's retry rule for a response: as the `Stripe-Should-Retry` header
