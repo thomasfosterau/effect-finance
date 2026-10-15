@@ -1,7 +1,7 @@
 {
   "$schema": "https://www.schemastore.org/package",
   "name": "@thomasfosterau/effect-payments-stripe",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A Stripe implementation of the vendor-neutral effect-payments core",
   "keywords": [
     "api",
