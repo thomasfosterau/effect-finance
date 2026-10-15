@@ -5,8 +5,8 @@
  * Every operation Distilled generates is either **assigned** to one published
  * resource subpath (`./Customer`, `./Invoice`, `./Treasury.FinancialAccount`,
  * …) by the longest API path in {@link RESOURCES} it falls under (its test
- * helpers, `/v1/test_helpers/…`, included), or listed in {@link UNEXPOSED}
- * because no subpath holds its resource yet. `tests/resources.test.ts` fails
+ * helpers, `/v1/test_helpers/…`, included), or left out by a longer path in
+ * {@link UNEXPOSED}, which says why it stays unexposed. `tests/resources.test.ts` fails
  * on an operation that is neither, so a Distilled bump that adds one forces a
  * decision; it also fails when a generated module on disk differs from
  * {@link render}'s output (run `generate:resources`).
@@ -15,7 +15,7 @@
  *
  * | rest of the path | `GET` | `POST` | `DELETE` |
  * | --- | --- | --- | --- |
- * | (none) | `list` (a list) / `retrieve` | `create` | `del` |
+ * | (none) | `list` (a list: `data` with `has_more`, or `/v2`'s `next_page_url`) / `retrieve` | `create` | `del` |
  * | `{id}` | `retrieve` | `update` | `del` |
  * | `word` | `word` | `word` | — |
  * | `{id}/word` | `listWord` (a list) / `retrieveWord` | `createWord` (a collection) / `updateWord` (an object) / `word` (an action) | `delWord` |
@@ -48,139 +48,188 @@ export interface Resource {
   readonly paths: ReadonlyArray<string>;
 }
 
-/** Every resource subpath this package publishes. */
+/**
+ * Every resource subpath this package publishes. Names follow the Stripe
+ * SDKs' resource types: a top-level resource is its singular (`/v1/credit_notes`
+ * → `CreditNote`), a namespaced one is dotted (`/v1/billing/meters` →
+ * `Billing.Meter`, `/v2/core/accounts` → `V2.Core.Account`); a sub-collection
+ * Stripe types as a resource of its own gets a subpath of its own
+ * (`/v1/accounts/{account}/persons` → `Person`). `CheckoutSession` keeps the
+ * name it was first published under.
+ */
 export const RESOURCES: ReadonlyArray<Resource> = [
   { subpath: "Account", paths: ["/v1/accounts"] },
   { subpath: "AccountLink", paths: ["/v1/account_links"] },
+  { subpath: "AccountSession", paths: ["/v1/account_sessions"] },
+  { subpath: "ApplePayDomain", paths: ["/v1/apple_pay/domains"] },
+  { subpath: "ApplicationFee", paths: ["/v1/application_fees"] },
+  { subpath: "Apps.Install", paths: ["/v1/apps/installs"] },
+  { subpath: "Apps.Secret", paths: ["/v1/apps/secrets"] },
   { subpath: "Balance", paths: ["/v1/balance"] },
+  { subpath: "BalanceSettings", paths: ["/v1/balance_settings"] },
   { subpath: "BalanceTransaction", paths: ["/v1/balance_transactions"] },
+  { subpath: "Billing.Alert", paths: ["/v1/billing/alerts"] },
+  { subpath: "Billing.CreditBalanceSummary", paths: ["/v1/billing/credit_balance_summary"] },
+  {
+    subpath: "Billing.CreditBalanceTransaction",
+    paths: ["/v1/billing/credit_balance_transactions"],
+  },
+  { subpath: "Billing.CreditGrant", paths: ["/v1/billing/credit_grants"] },
+  { subpath: "Billing.FeedbackOption", paths: ["/v1/billing/feedback_options"] },
+  { subpath: "Billing.Meter", paths: ["/v1/billing/meters"] },
+  { subpath: "Billing.MeterEvent", paths: ["/v1/billing/meter_events"] },
+  { subpath: "Billing.MeterEventAdjustment", paths: ["/v1/billing/meter_event_adjustments"] },
+  { subpath: "BillingPortal.Configuration", paths: ["/v1/billing_portal/configurations"] },
   { subpath: "BillingPortal.Session", paths: ["/v1/billing_portal/sessions"] },
   { subpath: "Charge", paths: ["/v1/charges"] },
   { subpath: "CheckoutSession", paths: ["/v1/checkout/sessions"] },
+  { subpath: "Climate.Order", paths: ["/v1/climate/orders"] },
+  { subpath: "Climate.Product", paths: ["/v1/climate/products"] },
+  { subpath: "Climate.Supplier", paths: ["/v1/climate/suppliers"] },
+  { subpath: "ConfirmationToken", paths: ["/v1/confirmation_tokens"] },
   { subpath: "CountrySpec", paths: ["/v1/country_specs"] },
   { subpath: "Coupon", paths: ["/v1/coupons"] },
+  { subpath: "CreditNote", paths: ["/v1/credit_notes"] },
   { subpath: "Customer", paths: ["/v1/customers"] },
+  { subpath: "CustomerSession", paths: ["/v1/customer_sessions"] },
   { subpath: "Dispute", paths: ["/v1/disputes"] },
+  { subpath: "Entitlements.ActiveEntitlement", paths: ["/v1/entitlements/active_entitlements"] },
+  { subpath: "Entitlements.Feature", paths: ["/v1/entitlements/features"] },
+  { subpath: "EphemeralKey", paths: ["/v1/ephemeral_keys"] },
   { subpath: "Event", paths: ["/v1/events"] },
+  { subpath: "ExchangeRate", paths: ["/v1/exchange_rates"] },
   { subpath: "ExternalAccount", paths: ["/v1/accounts/{account}/external_accounts"] },
   { subpath: "File", paths: ["/v1/files"] },
+  { subpath: "FileLink", paths: ["/v1/file_links"] },
+  { subpath: "FinancialConnections.Account", paths: ["/v1/financial_connections/accounts"] },
+  { subpath: "FinancialConnections.Session", paths: ["/v1/financial_connections/sessions"] },
+  {
+    subpath: "FinancialConnections.Transaction",
+    paths: ["/v1/financial_connections/transactions"],
+  },
+  { subpath: "Forwarding.Request", paths: ["/v1/forwarding/requests"] },
   { subpath: "Identity.VerificationReport", paths: ["/v1/identity/verification_reports"] },
   { subpath: "Identity.VerificationSession", paths: ["/v1/identity/verification_sessions"] },
   { subpath: "Invoice", paths: ["/v1/invoices"] },
+  { subpath: "InvoiceItem", paths: ["/v1/invoiceitems"] },
+  { subpath: "InvoicePayment", paths: ["/v1/invoice_payments"] },
+  { subpath: "InvoiceRenderingTemplate", paths: ["/v1/invoice_rendering_templates"] },
   { subpath: "Issuing.Authorization", paths: ["/v1/issuing/authorizations"] },
   { subpath: "Issuing.Card", paths: ["/v1/issuing/cards"] },
   { subpath: "Issuing.Cardholder", paths: ["/v1/issuing/cardholders"] },
   { subpath: "Issuing.Dispute", paths: ["/v1/issuing/disputes"] },
+  { subpath: "Issuing.PersonalizationDesign", paths: ["/v1/issuing/personalization_designs"] },
+  { subpath: "Issuing.PhysicalBundle", paths: ["/v1/issuing/physical_bundles"] },
+  { subpath: "Issuing.Token", paths: ["/v1/issuing/tokens"] },
   { subpath: "Issuing.Transaction", paths: ["/v1/issuing/transactions"] },
+  { subpath: "Mandate", paths: ["/v1/mandates"] },
+  { subpath: "PaymentAttemptRecord", paths: ["/v1/payment_attempt_records"] },
   { subpath: "PaymentIntent", paths: ["/v1/payment_intents"] },
+  { subpath: "PaymentLink", paths: ["/v1/payment_links"] },
   { subpath: "PaymentMethod", paths: ["/v1/payment_methods"] },
+  { subpath: "PaymentMethodConfiguration", paths: ["/v1/payment_method_configurations"] },
+  { subpath: "PaymentMethodDomain", paths: ["/v1/payment_method_domains"] },
+  { subpath: "PaymentRecord", paths: ["/v1/payment_records"] },
   { subpath: "Payout", paths: ["/v1/payouts"] },
   { subpath: "Person", paths: ["/v1/accounts/{account}/persons"] },
+  { subpath: "Plan", paths: ["/v1/plans"] },
   { subpath: "Price", paths: ["/v1/prices"] },
   { subpath: "Product", paths: ["/v1/products"] },
+  { subpath: "ProductCatalog.TrialOffer", paths: ["/v1/product_catalog/trial_offers"] },
   { subpath: "PromotionCode", paths: ["/v1/promotion_codes"] },
+  { subpath: "Quote", paths: ["/v1/quotes"] },
+  { subpath: "Radar.EarlyFraudWarning", paths: ["/v1/radar/early_fraud_warnings"] },
+  { subpath: "Radar.PaymentEvaluation", paths: ["/v1/radar/payment_evaluations"] },
+  { subpath: "Radar.ValueList", paths: ["/v1/radar/value_lists"] },
+  { subpath: "Radar.ValueListItem", paths: ["/v1/radar/value_list_items"] },
   { subpath: "Refund", paths: ["/v1/refunds"] },
+  { subpath: "Reporting.ReportRun", paths: ["/v1/reporting/report_runs"] },
+  { subpath: "Reporting.ReportType", paths: ["/v1/reporting/report_types"] },
   { subpath: "Review", paths: ["/v1/reviews"] },
+  { subpath: "SetupAttempt", paths: ["/v1/setup_attempts"] },
   { subpath: "SetupIntent", paths: ["/v1/setup_intents"] },
+  { subpath: "ShippingRate", paths: ["/v1/shipping_rates"] },
+  { subpath: "Sigma.ScheduledQueryRun", paths: ["/v1/sigma/scheduled_query_runs"] },
+  { subpath: "Source", paths: ["/v1/sources"] },
   { subpath: "Subscription", paths: ["/v1/subscriptions"] },
+  { subpath: "SubscriptionItem", paths: ["/v1/subscription_items"] },
   { subpath: "SubscriptionSchedule", paths: ["/v1/subscription_schedules"] },
+  { subpath: "Tax.Association", paths: ["/v1/tax/associations"] },
+  { subpath: "Tax.Calculation", paths: ["/v1/tax/calculations"] },
+  { subpath: "Tax.Location", paths: ["/v1/tax/locations"] },
+  { subpath: "Tax.Registration", paths: ["/v1/tax/registrations"] },
+  { subpath: "Tax.Settings", paths: ["/v1/tax/settings"] },
+  { subpath: "Tax.Transaction", paths: ["/v1/tax/transactions"] },
+  { subpath: "TaxCode", paths: ["/v1/tax_codes"] },
+  { subpath: "TaxId", paths: ["/v1/tax_ids"] },
   { subpath: "TaxRate", paths: ["/v1/tax_rates"] },
+  { subpath: "Terminal.Configuration", paths: ["/v1/terminal/configurations"] },
   { subpath: "Terminal.ConnectionToken", paths: ["/v1/terminal/connection_tokens"] },
   { subpath: "Terminal.Location", paths: ["/v1/terminal/locations"] },
+  { subpath: "Terminal.OnboardingLink", paths: ["/v1/terminal/onboarding_links"] },
   { subpath: "Terminal.Reader", paths: ["/v1/terminal/readers"] },
+  { subpath: "TestHelpers.TestClock", paths: ["/v1/test_helpers/test_clocks"] },
+  { subpath: "ThreeDSecure.Authentication", paths: ["/v1/three_d_secure/authentications"] },
+  { subpath: "Token", paths: ["/v1/tokens"] },
   { subpath: "Topup", paths: ["/v1/topups"] },
   { subpath: "Transfer", paths: ["/v1/transfers"] },
+  { subpath: "Treasury.CreditReversal", paths: ["/v1/treasury/credit_reversals"] },
+  { subpath: "Treasury.DebitReversal", paths: ["/v1/treasury/debit_reversals"] },
   { subpath: "Treasury.FinancialAccount", paths: ["/v1/treasury/financial_accounts"] },
   { subpath: "Treasury.InboundTransfer", paths: ["/v1/treasury/inbound_transfers"] },
+  { subpath: "Treasury.OutboundPayment", paths: ["/v1/treasury/outbound_payments"] },
   { subpath: "Treasury.OutboundTransfer", paths: ["/v1/treasury/outbound_transfers"] },
+  { subpath: "Treasury.ReceivedCredit", paths: ["/v1/treasury/received_credits"] },
+  { subpath: "Treasury.ReceivedDebit", paths: ["/v1/treasury/received_debits"] },
   { subpath: "Treasury.Transaction", paths: ["/v1/treasury/transactions"] },
+  { subpath: "Treasury.TransactionEntry", paths: ["/v1/treasury/transaction_entries"] },
+  { subpath: "V2.Billing.MeterEvent", paths: ["/v2/billing/meter_events"] },
+  { subpath: "V2.Billing.MeterEventAdjustment", paths: ["/v2/billing/meter_event_adjustments"] },
+  { subpath: "V2.Billing.MeterEventSession", paths: ["/v2/billing/meter_event_session"] },
+  {
+    subpath: "V2.Commerce.ProductCatalogImport",
+    paths: ["/v2/commerce/product_catalog/imports"],
+  },
+  { subpath: "V2.Core.Account", paths: ["/v2/core/accounts"] },
+  { subpath: "V2.Core.AccountLink", paths: ["/v2/core/account_links"] },
+  { subpath: "V2.Core.AccountPerson", paths: ["/v2/core/accounts/{account_id}/persons"] },
+  {
+    subpath: "V2.Core.AccountPersonToken",
+    paths: ["/v2/core/accounts/{account_id}/person_tokens"],
+  },
+  { subpath: "V2.Core.AccountToken", paths: ["/v2/core/account_tokens"] },
+  { subpath: "V2.Core.Event", paths: ["/v2/core/events"] },
+  { subpath: "V2.Core.EventDestination", paths: ["/v2/core/event_destinations"] },
   { subpath: "WebhookEndpoint", paths: ["/v1/webhook_endpoints"] },
 ];
 
+/** An API path whose operations stay unexposed on purpose, and why. */
+export interface Unexposed {
+  /** The API path template; every operation under it stays unexposed, even under a resource's path. */
+  readonly path: string;
+  /** Why no resource module holds it. */
+  readonly reason: string;
+}
+
 /**
- * API paths whose operations no subpath exposes yet: resources this package
- * has never published a module for. A program reaches them through
- * `@distilled.cloud/stripe` directly. Each entry must still match an
- * operation, so one Distilled drops is removed here too.
+ * API paths whose operations no resource module exposes, deliberately: each
+ * needs what `StripeHttp`'s request policy cannot give it. A program reaches
+ * them through `@distilled.cloud/stripe` directly. An entry wins over a
+ * {@link RESOURCES} path it is longer than (`Quote` keeps everything but its
+ * PDF), and must still match an operation, so one Distilled drops is
+ * removed here too.
  */
-export const UNEXPOSED: ReadonlyArray<string> = [
-  "/v1/account_sessions",
-  "/v1/apple_pay/domains",
-  "/v1/application_fees",
-  "/v1/apps/installs",
-  "/v1/apps/secrets",
-  "/v1/balance_settings",
-  "/v1/billing/alerts",
-  "/v1/billing/credit_balance_summary",
-  "/v1/billing/credit_balance_transactions",
-  "/v1/billing/credit_grants",
-  "/v1/billing/feedback_options",
-  "/v1/billing/meter_event_adjustments",
-  "/v1/billing/meter_events",
-  "/v1/billing/meters",
-  "/v1/billing_portal/configurations",
-  "/v1/climate/orders",
-  "/v1/climate/products",
-  "/v1/climate/suppliers",
-  "/v1/confirmation_tokens",
-  "/v1/credit_notes",
-  "/v1/customer_sessions",
-  "/v1/entitlements/active_entitlements",
-  "/v1/entitlements/features",
-  "/v1/ephemeral_keys",
-  "/v1/exchange_rates",
-  "/v1/file_links",
-  "/v1/financial_connections/accounts",
-  "/v1/financial_connections/sessions",
-  "/v1/financial_connections/transactions",
-  "/v1/forwarding/requests",
-  "/v1/invoice_payments",
-  "/v1/invoice_rendering_templates",
-  "/v1/invoiceitems",
-  "/v1/issuing/personalization_designs",
-  "/v1/issuing/physical_bundles",
-  "/v1/issuing/tokens",
-  "/v1/mandates",
-  "/v1/payment_attempt_records",
-  "/v1/payment_links",
-  "/v1/payment_method_configurations",
-  "/v1/payment_method_domains",
-  "/v1/payment_records",
-  "/v1/plans",
-  "/v1/product_catalog/trial_offers",
-  "/v1/quotes",
-  "/v1/radar/early_fraud_warnings",
-  "/v1/radar/payment_evaluations",
-  "/v1/radar/value_list_items",
-  "/v1/radar/value_lists",
-  "/v1/reporting/report_runs",
-  "/v1/reporting/report_types",
-  "/v1/setup_attempts",
-  "/v1/shipping_rates",
-  "/v1/sigma/scheduled_query_runs",
-  "/v1/sources",
-  "/v1/subscription_items",
-  "/v1/tax/associations",
-  "/v1/tax/calculations",
-  "/v1/tax/locations",
-  "/v1/tax/registrations",
-  "/v1/tax/settings",
-  "/v1/tax/transactions",
-  "/v1/tax_codes",
-  "/v1/tax_ids",
-  "/v1/terminal/configurations",
-  "/v1/terminal/onboarding_links",
-  "/v1/test_helpers/confirmation_tokens",
-  "/v1/test_helpers/test_clocks",
-  "/v1/three_d_secure/authentications",
-  "/v1/tokens",
-  "/v1/treasury/credit_reversals",
-  "/v1/treasury/debit_reversals",
-  "/v1/treasury/outbound_payments",
-  "/v1/treasury/received_credits",
-  "/v1/treasury/received_debits",
-  "/v1/treasury/transaction_entries",
-  "/v2",
+export const UNEXPOSED: ReadonlyArray<Unexposed> = [
+  {
+    path: "/v1/quotes/{quote}/pdf",
+    reason:
+      "a binary PDF streamed from files.stripe.com: StripeHttp sends it to the API origin and reads every 2xx as JSON (Distilled types it `{}`)",
+  },
+  {
+    path: "/v2/billing/meter_event_stream",
+    reason:
+      "sent to meter-events.stripe.com with a meter event session's token, not the account key: StripeHttp sends every request to the API origin with the key (create the session with `V2.Billing.MeterEventSession.create`)",
+  },
 ];
 
 /** An operation the naming rule does not place or name as it should. */
@@ -202,8 +251,18 @@ export const OVERRIDES = {
   // collection to list.
   CreateAccountLoginLink: { name: "createLoginLink" },
   CreateCustomerFundingInstruction: { name: "createFundingInstructions" },
-  // `void` is a reserved word.
+  // A `POST` to a singleton's own path updates it: there is nothing to create.
+  CreateBalanceSettings: { name: "update" },
+  CreateTaxSettings: { name: "update" },
+  // `void` is a reserved word. `voidGrant` is stripe-node's name.
   CreateInvoiceVoid: { name: "voidInvoice" },
+  CreateBillingCreditGrantVoid: { name: "voidGrant" },
+  CreateCreditNoteVoid: { name: "voidCreditNote" },
+  // `POST /v1/apps/secrets/delete` deletes a secret by name and scope, not by
+  // id as every `del` does: stripe-node's `deleteWhere` (`delete` is reserved).
+  CreateAppsSecretsDelete: { name: "delWhere" },
+  // `GET /v1/credit_notes/preview/lines` is a list.
+  GetCreditNotesPreviewLines: { name: "listPreviewLines" },
   // `DELETE /v1/subscriptions/{id}` cancels; the module has always called it `cancel`.
   DeleteSubscription: { name: "cancel" },
 } satisfies Overrides;
@@ -249,7 +308,7 @@ export interface DistilledOperation {
   readonly members: ReadonlyArray<string>;
   /** Whether the input has members beyond the path ids, and whether any is required. */
   readonly params: "none" | "optional" | "required";
-  /** Whether the output is a page (`{ data, has_more }`). */
+  /** Whether the output is a page (`{ data, has_more }`, or `/v2`'s `{ data, next_page_url }`). */
   readonly list: boolean;
   /** Whether the body is `multipart/form-data` (the Files API). */
   readonly upload: boolean;
@@ -261,6 +320,8 @@ export interface DistilledOperation {
 export interface Planned extends DistilledOperation {
   /** The exported function name. */
   readonly exported: string;
+  /** Whether it is one of the resource's test helpers (under `/v1/test_helpers`). */
+  readonly testHelper: boolean;
 }
 
 /** What {@link plan} decides. */
@@ -269,7 +330,7 @@ export interface Plan {
   readonly modules: ReadonlyMap<string, ReadonlyArray<Planned>>;
   /** The operations left unexposed, by Distilled name. */
   readonly unexposed: ReadonlyArray<string>;
-  /** Every problem: an operation unassigned, a name clash, an unused table entry. */
+  /** Every problem: an operation unassigned, a name clash, an unused table entry, a params-carrying `/v2` `DELETE`. */
   readonly problems: ReadonlyArray<string>;
 }
 
@@ -395,17 +456,19 @@ const place = (operation: DistilledOperation): Placement => {
       best === undefined || found.prefix.length > best.prefix.length ? found : best,
     undefined,
   );
-  if (match !== undefined) {
-    return {
-      kind: "resource",
-      subpath: match.subpath,
-      rest: match.rest,
-      testHelper: match.testHelper,
-    };
+  const unexposed = longestMatch(
+    operation.path,
+    UNEXPOSED.map((entry) => entry.path),
+  );
+  if (
+    unexposed !== undefined &&
+    (match === undefined || unexposed.prefix.length > match.prefix.length)
+  ) {
+    return { kind: "unexposed" };
   }
-  return longestMatch(operation.path, UNEXPOSED) === undefined
+  return match === undefined
     ? { kind: "unassigned" }
-    : { kind: "unexposed" };
+    : { kind: "resource", subpath: match.subpath, rest: match.rest, testHelper: match.testHelper };
 };
 
 /** What naming an operation reads: the operation, the words of the rest of its path, every operation. */
@@ -514,6 +577,18 @@ const nameProblems = (
 };
 
 /**
+ * Why an operation cannot be sent as Stripe expects, if it cannot: a `/v2`
+ * `DELETE` with params, which Distilled would encode as a JSON body
+ * (`StripeHttp` moves only a form body's params to the query string).
+ */
+const wireProblems = (operation: DistilledOperation): ReadonlyArray<string> =>
+  operation.method === "DELETE" && operation.path.startsWith("/v2/") && operation.params !== "none"
+    ? [
+        `${operation.name} (DELETE ${operation.path}) takes params, which Distilled would send as a JSON body`,
+      ]
+    : [];
+
+/**
  * The table entries that name nothing Distilled has: an operation it no
  * longer exports, or a `PARAM_TYPES` member that is no longer a param of its
  * operation (whose retyping would silently add a member Distilled dropped).
@@ -536,8 +611,8 @@ const staleEntries = (operations: ReadonlyArray<DistilledOperation>): ReadonlyAr
             );
     }),
     ...UNEXPOSED.filter(
-      (prefix) => !operations.some((operation) => longestMatch(operation.path, [prefix])),
-    ).map((prefix) => `UNEXPOSED lists ${prefix}, which no operation is under`),
+      ({ path }) => !operations.some((operation) => longestMatch(operation.path, [path])),
+    ).map(({ path }) => `UNEXPOSED lists ${path}, which no operation is under`),
   ];
 };
 
@@ -567,8 +642,11 @@ export const plan = (operations: ReadonlyArray<DistilledOperation>): Plan => {
       continue;
     }
     const exported = exportedName(operation, placement, operations);
-    problems.push(...nameProblems(operation, exported, placement.subpath, module));
-    module.push({ ...operation, exported });
+    problems.push(
+      ...nameProblems(operation, exported, placement.subpath, module),
+      ...wireProblems(operation),
+    );
+    module.push({ ...operation, exported, testHelper: placement.testHelper });
   }
   for (const [subpath, planned] of modules) {
     if (planned.length === 0) problems.push(`${subpath} would export no operation`);
@@ -657,7 +735,10 @@ export const readOperations = (
           : others.some((prop) => prop.type.context?.isOptional !== true)
             ? "required"
             : "optional",
-      list: outputNames.includes("data") && outputNames.includes("has_more"),
+      // A `/v1` page carries `has_more`; a `/v2` page, `next_page_url`.
+      list:
+        outputNames.includes("data") &&
+        (outputNames.includes("has_more") || outputNames.includes("next_page_url")),
       upload: http.contentType === "multipart",
       summary: summaryOf(doc),
     };
@@ -724,6 +805,14 @@ const pathsOf = (subpath: string): string =>
     .map((path) => `\`${path}\``)
     .join(", ");
 
+/** The module doc's paragraph on a `/v2` API, which differs from `/v1` on the wire. */
+const V2_NOTE: ReadonlyArray<string> = [
+  " * A `/v2` API: Distilled sends `params` as a JSON body (not form-encoded),",
+  " * and a list is a `{ data, next_page_url, previous_page_url }` page, not",
+  " * `/v1`'s `{ data, has_more }`.",
+  " *",
+];
+
 /** One resource module's source, unformatted. */
 const renderModule = (
   subpath: string,
@@ -737,7 +826,9 @@ const renderModule = (
     "/**",
     ` * Stripe's ${pathsOf(subpath)} API as a raw resource module, the escape hatch for`,
     " * what the neutral capabilities do not cover: every `@distilled.cloud/stripe`",
-    " * operation on the resource, its test helpers included.",
+    operations.some((operation) => operation.testHelper)
+      ? " * operation on the resource, its test helpers included."
+      : " * operation on the resource.",
     " *",
     " * Each operation takes the resource's path ids first, then the rest of",
     " * Distilled's input (`params`), then {@link RequestOptions}, and runs through",
@@ -748,6 +839,7 @@ const renderModule = (
     " * Distilled's declarations and are **not validated** (lenient), so a field",
     " * Distilled marks required may be absent at an older `apiVersion`.",
     " *",
+    ...(operations.some((operation) => operation.path.startsWith("/v2/")) ? V2_NOTE : []),
     " * Operations require `StripeHttp`: provide `StripeHttp.layer` (with",
     " * `FetchHttpClient.layer`), `StripeHttp.layerConfig` or `StripeHttp.layerFromEnv`.",
     " *",

@@ -9,6 +9,9 @@ import { installed } from "../scripts/distilled.ts";
 import { type Planned, plan, readOperations } from "../scripts/resources.ts";
 import { DISTILLED_API_VERSION, layer, type StripeHttp } from "../src/StripeHttp.ts";
 import { type CapturedRequest, jsonResponse, stubFetch, TEST_KEY } from "./support.ts";
+import * as CreditNote from "../src/CreditNote.ts";
+import * as V2CoreAccount from "../src/V2.Core.Account.ts";
+import * as V2CoreEvent from "../src/V2.Core.Event.ts";
 
 /**
  * Every operation of every resource module on the wire (#146): called with
@@ -115,5 +118,59 @@ describe.each([...modules])("%s", (subpath, operations) => {
     expect(error).toMatchObject({
       error: { message: "Invalid JSON received from the Stripe API", statusCode: 200 },
     });
+  });
+});
+
+describe("the resources published for every remaining operation (#154)", () => {
+  it("form-encode a /v1 write (CreditNote.create)", async () => {
+    const { exit, calls } = run(
+      CreditNote.create({ invoice: "in_1", memo: "Goodwill", metadata: { order: "42" } }),
+      () => jsonResponse(200, BODY),
+    );
+    expect(await exit).toEqual(expect.objectContaining({ _tag: "Success", value: BODY }));
+    const [request] = calls;
+    expect(request?.url.pathname).toBe("/v1/credit_notes");
+    expect(request?.headers.get("content-type")).toBe("application/x-www-form-urlencoded");
+    expect(Object.fromEntries(new URLSearchParams(request?.body))).toEqual({
+      invoice: "in_1",
+      memo: "Goodwill",
+      "metadata[order]": "42",
+    });
+  });
+
+  it("send a /v2 write as JSON, under the pinned Stripe-Version and the caller's key", async () => {
+    const { exit, calls } = run(
+      V2CoreAccount.update(
+        "acct_1",
+        { display_name: "Jenny Rosen", metadata: { order: "42" } },
+        { idempotencyKey: "account-update-1" },
+      ),
+      () => jsonResponse(200, BODY),
+    );
+    expect(await exit).toEqual(expect.objectContaining({ _tag: "Success", value: BODY }));
+    const [request] = calls;
+    expect(request?.method).toBe("POST");
+    expect(request?.url.pathname).toBe("/v2/core/accounts/acct_1");
+    expect(request?.headers.get("content-type")).toBe("application/json");
+    expect(JSON.parse(request?.body ?? "null")).toEqual({
+      display_name: "Jenny Rosen",
+      metadata: { order: "42" },
+    });
+    expect(request?.headers.get("stripe-version")).toBe(DISTILLED_API_VERSION);
+    expect(request?.headers.get("idempotency-key")).toBe("account-update-1");
+  });
+
+  it("read a /v2 page's params from the query string (V2.Core.Event.list)", async () => {
+    const page = { data: [], next_page_url: null, previous_page_url: null };
+    const { exit, calls } = run(V2CoreEvent.list({ limit: 2, object_id: "acct_1" }), () =>
+      jsonResponse(200, page),
+    );
+    expect(await exit).toEqual(expect.objectContaining({ _tag: "Success", value: page }));
+    const [request] = calls;
+    expect(request?.method).toBe("GET");
+    expect(request?.url.pathname).toBe("/v2/core/events");
+    expect(request?.url.searchParams.get("limit")).toBe("2");
+    expect(request?.url.searchParams.get("object_id")).toBe("acct_1");
+    expect(request?.body).toBeUndefined();
   });
 });

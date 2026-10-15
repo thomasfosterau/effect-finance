@@ -37,6 +37,8 @@ import * as StripeCheckoutSession from "@thomasfosterau/effect-payments-stripe/C
 import * as StripeBillingPortalSession from "@thomasfosterau/effect-payments-stripe/BillingPortal.Session";
 import * as StripeVerificationSession from "@thomasfosterau/effect-payments-stripe/Identity.VerificationSession";
 import * as StripeInvoice from "@thomasfosterau/effect-payments-stripe/Invoice";
+import * as BillingMeter from "@thomasfosterau/effect-payments-stripe/Billing.Meter";
+import * as V2CoreAccount from "@thomasfosterau/effect-payments-stripe/V2.Core.Account";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
 import * as StripeHttp from "@thomasfosterau/effect-payments-stripe/StripeHttp";
 import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
@@ -108,6 +110,10 @@ export const stripePortalSession = StripeBillingPortalSession.create({
  * silent `any`: every resource module is Distilled-typed now.
  */
 export const stripeVerificationSession = StripeVerificationSession.retrieve("vs_123");
+/** A namespaced resource module published by #154. */
+export const stripeBillingMeter = BillingMeter.retrieve("mtr_123");
+/** A `/v2` resource module (#154), whose params go out as a JSON body. */
+export const stripeV2Account = V2CoreAccount.retrieve("acct_123", { include: ["identity"] });
 export const event = Webhook.constructEvent("{}", "t=1,v1=sig", "whsec_123");
 
 /**
@@ -191,6 +197,15 @@ export type Checks = [
   >,
   /** _stripeVerificationSessionIsDistilled */ Assert<
     Equals<Effect.Success<typeof stripeVerificationSession>, Distilled.IdentityVerificationSession>
+  >,
+  /** _stripeBillingMeterIsDistilled */ Assert<
+    Equals<Effect.Success<typeof stripeBillingMeter>, Distilled.BillingMeter>
+  >,
+  /** _stripeV2AccountIsDistilled */ Assert<
+    Equals<Effect.Success<typeof stripeV2Account>, Distilled.V2CoreAccount>
+  >,
+  /** _stripeV2RequiresTransport */ Assert<
+    Equals<Effect.Services<typeof stripeV2Account>, StripeHttp.StripeHttp>
   >,
   /** _stripeCheckoutIsDistilled */ Assert<
     Equals<Effect.Success<typeof stripeCheckoutSession>, StripeCheckoutSession.CheckoutSession>
