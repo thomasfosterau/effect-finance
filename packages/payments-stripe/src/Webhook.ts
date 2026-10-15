@@ -494,7 +494,10 @@ export interface WebhookConfig {
  * @param payload - The raw request body as a string or Buffer
  * @param signature - The Stripe-Signature header value
  * @param secret - The webhook endpoint secret (starts with `whsec_`)
- * @param tolerance - Tolerance in seconds for timestamp verification (default: 300)
+ * @param tolerance - Tolerance in seconds for timestamp verification (default: 300).
+ *   Passed to the SDK as given: from stripe 23, `0` skips the timestamp check
+ *   altogether (22.x read it as 300), unlike {@link verify}, which refuses any
+ *   timestamp but the current second.
  * @returns Effect that resolves to the verified Event object
  *
  * @example
@@ -553,7 +556,10 @@ export const constructEvent = (
  * @param payload - The raw request body as a string or Buffer
  * @param signature - The Stripe-Signature header value
  * @param secret - The webhook endpoint secret (starts with `whsec_`)
- * @param tolerance - Tolerance in seconds for timestamp verification (default: 300)
+ * @param tolerance - Tolerance in seconds for timestamp verification (default: 300).
+ *   Passed to the SDK as given: from stripe 23, `0` skips the timestamp check
+ *   altogether (22.x read it as 300), unlike {@link verify}, which refuses any
+ *   timestamp but the current second.
  * @param cryptoProvider - Optional custom crypto provider
  * @returns Effect that resolves to the verified Event object
  *

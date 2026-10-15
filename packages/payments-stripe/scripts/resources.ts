@@ -107,12 +107,14 @@ export const UNEXPOSED: ReadonlyArray<string> = [
   "/v1/account_sessions",
   "/v1/apple_pay/domains",
   "/v1/application_fees",
+  "/v1/apps/installs",
   "/v1/apps/secrets",
   "/v1/balance_settings",
   "/v1/billing/alerts",
   "/v1/billing/credit_balance_summary",
   "/v1/billing/credit_balance_transactions",
   "/v1/billing/credit_grants",
+  "/v1/billing/feedback_options",
   "/v1/billing/meter_event_adjustments",
   "/v1/billing/meter_events",
   "/v1/billing/meters",
@@ -145,6 +147,7 @@ export const UNEXPOSED: ReadonlyArray<string> = [
   "/v1/payment_method_domains",
   "/v1/payment_records",
   "/v1/plans",
+  "/v1/product_catalog/trial_offers",
   "/v1/quotes",
   "/v1/radar/early_fraud_warnings",
   "/v1/radar/payment_evaluations",
@@ -159,6 +162,7 @@ export const UNEXPOSED: ReadonlyArray<string> = [
   "/v1/subscription_items",
   "/v1/tax/associations",
   "/v1/tax/calculations",
+  "/v1/tax/locations",
   "/v1/tax/registrations",
   "/v1/tax/settings",
   "/v1/tax/transactions",
@@ -168,6 +172,7 @@ export const UNEXPOSED: ReadonlyArray<string> = [
   "/v1/terminal/onboarding_links",
   "/v1/test_helpers/confirmation_tokens",
   "/v1/test_helpers/test_clocks",
+  "/v1/three_d_secure/authentications",
   "/v1/tokens",
   "/v1/treasury/credit_reversals",
   "/v1/treasury/debit_reversals",
@@ -667,7 +672,7 @@ const docText = (text: string): string => text.replaceAll("*/", "*\\/");
 
 /**
  * A type Distilled names in an operation's declaration: one of its own, or a
- * keyword (`unknown`: rc.13 declares `CreateTransfer` / `GetTransfer` /
+ * keyword (`unknown`: rc.13 to rc.15 declare `CreateTransfer` / `GetTransfer` /
  * `UpdateTransfer` so).
  */
 const KEYWORDS = new Set(["unknown"]);

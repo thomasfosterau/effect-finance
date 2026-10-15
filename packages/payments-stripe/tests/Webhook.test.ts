@@ -131,6 +131,27 @@ describe("Webhook", () => {
       expect(result).toBeDefined();
       expect(result.type).toBe("payment_intent.succeeded");
     });
+
+    // stripe 23 (stripe-node #2876): a tolerance of 0 skips the timestamp
+    // check; 22.x read 0 as the default 300 seconds. The wrapper forwards the
+    // argument as given, so the documented caveat on `constructEvent` holds.
+    it("passes a tolerance of 0 through, which the SDK reads as no timestamp check", async () => {
+      const payload = JSON.stringify({ id: "evt_test", type: "payment_intent.succeeded" });
+      const secret = "whsec_test_secret";
+      const veryOldTimestamp = Math.floor(Date.now() / 1000) - 3600;
+
+      const program = Effect.gen(function* () {
+        const signature = yield* Webhook.generateTestHeaderString(
+          payload,
+          secret,
+          veryOldTimestamp,
+        );
+        return yield* Webhook.constructEvent(payload, signature, secret, 0);
+      });
+
+      const result = await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
+      expect(result.type).toBe("payment_intent.succeeded");
+    });
   });
 
   describe("constructEventAsync", () => {

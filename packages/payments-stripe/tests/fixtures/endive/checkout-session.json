@@ -81,5 +81,6 @@
   "integration_identifier": null,
   "managed_payments": null,
   "origin_context": null,
-  "wallet_options": null
+  "wallet_options": null,
+  "allowed_payment_method_types": null
 }
