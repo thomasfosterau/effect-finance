@@ -34,6 +34,7 @@ Package-local terms, invariants and import boundaries live in each package's `CL
 - **Relative imports in `src/` carry `.js`** (`./Money.js`); tests import the module under test as `../src/<Module>.ts`.
 - **Tests import from `vite-plus/test`**, never `vitest`, and live in `packages/<name>/tests/`. Every vendor seam is stubbed (a fake SDK client, a stubbed `fetch`); no test reaches a live account.
 - **Every export is documented** with a doc comment whose first sentence says what it is for. `vp run docgen` type-checks and runs every `@example` (see [Common pitfalls](#common-pitfalls)).
+- **Put an `@example` on the module's primary export, never on the module doc:** the bundled `.d.ts` drops a module's file-level doc comment, so a module example never reaches a consumer's editor. The module doc points at it (`See {@link create} for an example.`).
 
 ## Commands
 

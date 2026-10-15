@@ -15,22 +15,7 @@
  * The same neutral program runs on Airwallex or Stripe — only the provided layer
  * changes.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Customer from "@thomasfosterau/effect-payments/Customer";
- * import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
- *
- * const program = Customer.create({ email: "jane@example.com" });
- *
- * const layer = AirwallexPayments.layer({
- *   clientId: "...",
- *   apiKey: Redacted.make("..."),
- * }).pipe(Layer.provide(FetchHttpClient.layer));
- * // Calls Airwallex when invoked, so it needs real credentials.
- * const run = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * See `AirwallexPayments.layer` for an example of running a neutral program on Airwallex.
  *
  * @module
  */

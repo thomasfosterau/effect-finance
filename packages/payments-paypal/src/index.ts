@@ -18,22 +18,7 @@
  * core's `Customers` capability. The same neutral program runs on PayPal,
  * Stripe or Airwallex — only the provided layer changes.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Product from "@thomasfosterau/effect-payments/Product";
- * import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
- *
- * const program = Product.create({ name: "Premium" });
- *
- * const layer = PayPalPayments.layer({
- *   clientId: "...",
- *   clientSecret: Redacted.make("..."),
- * }).pipe(Layer.provide(FetchHttpClient.layer));
- * // Calls PayPal when invoked, so it needs real credentials.
- * const run = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * See `PayPalPayments.layer` for an example of running a neutral program on PayPal.
  *
  * @module
  */

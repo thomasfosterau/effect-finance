@@ -332,6 +332,23 @@ export const capabilities: Layer.Layer<
 /**
  * The Airwallex client and its capabilities in one layer, built from
  * configuration. Requires an `HttpClient` (`FetchHttpClient.layer`).
+ *
+ * @example
+ * ```typescript
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/http";
+ * import * as Customer from "@thomasfosterau/effect-payments/Customer";
+ * import * as AirwallexPayments from "@thomasfosterau/effect-payments-airwallex/AirwallexPayments";
+ *
+ * const program = Customer.create({ email: "jane@example.com" });
+ *
+ * const layer = AirwallexPayments.layer({
+ *   clientId: "...",
+ *   apiKey: Redacted.make("..."),
+ * }).pipe(Layer.provide(FetchHttpClient.layer));
+ * // Calls Airwallex when invoked, so it needs real credentials.
+ * const run = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
+ * ```
  */
 export const layer = (config: AirwallexConfig) => Layer.provide(capabilities, clientLayer(config));
 

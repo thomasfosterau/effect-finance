@@ -29,21 +29,7 @@
  * This is the payments analogue of Effect's AI modules: one abstraction, one
  * package per provider, with provider-specific APIs still exposed.
  *
- * @example
- * ```typescript
- * import { Effect, Layer, Redacted } from "effect";
- * import { FetchHttpClient } from "effect/http";
- * import * as Customer from "@thomasfosterau/effect-payments/Customer";
- * import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
- *
- * const program = Customer.create({ email: "jane@example.com" });
- *
- * const layer = StripePayments.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
- *   Layer.provide(FetchHttpClient.layer),
- * );
- * // Calls Stripe when invoked, so it needs a real key.
- * const run = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
- * ```
+ * See `StripePayments.layer` for an example of running a neutral program on Stripe.
  *
  * @module
  */

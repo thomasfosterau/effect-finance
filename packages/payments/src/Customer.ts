@@ -5,17 +5,7 @@
  * (an abstract service that a provider implements), and accessor functions that
  * dispatch to whichever provider has been supplied to the environment.
  *
- * @example
- * ```typescript
- * import { Effect } from "effect";
- * import * as Customer from "@thomasfosterau/effect-payments/Customer";
- *
- * const program = Effect.gen(function* () {
- *   const customer = yield* Customer.create({ email: "jane@example.com" });
- *   return customer;
- * });
- * // Provide a concrete implementation, e.g. the Stripe provider, to run it.
- * ```
+ * See {@link create} for an example.
  *
  * @module
  */
@@ -89,7 +79,21 @@ export class Customers extends Context.Service<
   }
 >()("@effect-payments/Customers") {}
 
-/** Create a customer. */
+/**
+ * Create a customer.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import * as Customer from "@thomasfosterau/effect-payments/Customer";
+ *
+ * const program = Effect.gen(function* () {
+ *   const customer = yield* Customer.create({ email: "jane@example.com" });
+ *   return customer;
+ * });
+ * // Provide a concrete implementation, e.g. the Stripe provider, to run it.
+ * ```
+ */
 export const create = (params: CreateParams): Effect.Effect<Customer, PaymentsError, Customers> =>
   Effect.flatMap(Customers, (service) => service.create(params));
 /** Retrieve a customer by id. */

@@ -601,6 +601,22 @@ export const capabilities: Layer.Layer<
  * connected account are the request policy (`uploadsBaseUrl` is unused: no
  * capability uploads). Fails with `PaymentConfigError` for an empty key.
  * Requires an `HttpClient` (`FetchHttpClient.layer`).
+ *
+ * @example
+ * ```typescript
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/http";
+ * import * as Customer from "@thomasfosterau/effect-payments/Customer";
+ * import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePayments";
+ *
+ * const program = Customer.create({ email: "jane@example.com" });
+ *
+ * const layer = StripePayments.layer({ apiKey: Redacted.make("sk_test_...") }).pipe(
+ *   Layer.provide(FetchHttpClient.layer),
+ * );
+ * // Calls Stripe when invoked, so it needs a real key.
+ * const run = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
+ * ```
  */
 export const layer = (
   config: StripeHttpConfig,

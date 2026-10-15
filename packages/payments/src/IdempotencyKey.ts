@@ -49,6 +49,27 @@
  *   Airwallex's (about 64) limits are unverified (#93), so the shape is
  *   deliberately conservative.
  *
+ * See {@link IdempotencyKey} for an example.
+ *
+ * @module
+ */
+
+import { Effect, Schema } from "effect";
+import { PaymentInvalidRequestError } from "./PaymentsError.js";
+
+/** The shape a key must have: 1 to 64 characters of `A-Z a-z 0-9 _ -`. */
+const KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * A key that makes one logical write safe to repeat: a branded string of 1 to
+ * 64 characters from `A-Z a-z 0-9 _ -`. Make one with {@link generate}, or
+ * from a value of the caller's own with `IdempotencyKey.make` (which throws
+ * on a bad shape) or {@link validate} (which fails with
+ * `PaymentInvalidRequestError`).
+ *
+ * Create the key once per logical write and reuse it on every retry of that
+ * write:
+ *
  * @example
  * ```typescript
  * import { Effect, Schedule } from "effect";
@@ -71,22 +92,6 @@
  *     );
  *   });
  * ```
- *
- * @module
- */
-
-import { Effect, Schema } from "effect";
-import { PaymentInvalidRequestError } from "./PaymentsError.js";
-
-/** The shape a key must have: 1 to 64 characters of `A-Z a-z 0-9 _ -`. */
-const KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-
-/**
- * A key that makes one logical write safe to repeat: a branded string of 1 to
- * 64 characters from `A-Z a-z 0-9 _ -`. Make one with {@link generate}, or
- * from a value of the caller's own with `IdempotencyKey.make` (which throws
- * on a bad shape) or {@link validate} (which fails with
- * `PaymentInvalidRequestError`).
  */
 export const IdempotencyKey = Schema.String.check(
   Schema.isPattern(KEY_PATTERN, {

@@ -8,17 +8,7 @@
  * outage produces, so nothing downstream branches on whether payments are
  * wired. Building a stub layer never fails and requires nothing.
  *
- * @example
- * ```typescript
- * import { Effect } from "effect";
- * import * as Customer from "@thomasfosterau/effect-payments/Customer";
- * import * as Stub from "@thomasfosterau/effect-payments/Stub";
- *
- * // Fails with PaymentsUnavailable.
- * const program = Customer.create({ email: "reader@example.com" }).pipe(
- *   Effect.provide(Stub.unavailable("stripe")),
- * );
- * ```
+ * See {@link unavailable} for an example.
  *
  * @module
  */
@@ -150,6 +140,18 @@ export const layer = (failure: Failure): Layer.Layer<Capabilities> =>
  * Every capability, each call failing with {@link PaymentsUnavailable}: the
  * "not configured ≡ down" stub for an environment with no payment provider
  * configured (an unhydrated stage, a unit suite).
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import * as Customer from "@thomasfosterau/effect-payments/Customer";
+ * import * as Stub from "@thomasfosterau/effect-payments/Stub";
+ *
+ * // Fails with PaymentsUnavailable.
+ * const program = Customer.create({ email: "reader@example.com" }).pipe(
+ *   Effect.provide(Stub.unavailable("stripe")),
+ * );
+ * ```
  */
 export const unavailable = (provider?: string): Layer.Layer<Capabilities> =>
   layer(

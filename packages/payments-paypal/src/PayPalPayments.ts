@@ -557,6 +557,23 @@ export const capabilities: Layer.Layer<
  * configured environment's endpoint or `baseUrl`. Fails with
  * `PaymentConfigError` for a missing id or secret, a bad `baseUrl` or a bad
  * timeout. Requires an `HttpClient` (`FetchHttpClient.layer`).
+ *
+ * @example
+ * ```typescript
+ * import { Effect, Layer, Redacted } from "effect";
+ * import { FetchHttpClient } from "effect/http";
+ * import * as Product from "@thomasfosterau/effect-payments/Product";
+ * import * as PayPalPayments from "@thomasfosterau/effect-payments-paypal/PayPalPayments";
+ *
+ * const program = Product.create({ name: "Premium" });
+ *
+ * const layer = PayPalPayments.layer({
+ *   clientId: "...",
+ *   clientSecret: Redacted.make("..."),
+ * }).pipe(Layer.provide(FetchHttpClient.layer));
+ * // Calls PayPal when invoked, so it needs real credentials.
+ * const run = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
+ * ```
  */
 export const layer = (
   config: PayPalConfig,
