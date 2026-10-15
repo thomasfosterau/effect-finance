@@ -8,19 +8,7 @@
  * `returnUrl`, and any change they made arrives through the provider's
  * webhooks.
  *
- * @example
- * ```typescript
- * import { Effect } from "effect";
- * import * as BillingPortal from "@thomasfosterau/effect-payments/BillingPortal";
- *
- * const program = Effect.gen(function* () {
- *   const session = yield* BillingPortal.create({
- *     customer: "cus_123",
- *     returnUrl: "https://example.com/account/billing",
- *   });
- *   return session.url; // redirect the customer here
- * });
- * ```
+ * See {@link create} for an example.
  *
  * @module
  */
@@ -56,7 +44,23 @@ export class BillingPortalSessions extends Context.Service<
   }
 >()("@effect-payments/BillingPortalSessions") {}
 
-/** Create a hosted billing portal session; redirect the customer to its `url`. */
+/**
+ * Create a hosted billing portal session; redirect the customer to its `url`.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import * as BillingPortal from "@thomasfosterau/effect-payments/BillingPortal";
+ *
+ * const program = Effect.gen(function* () {
+ *   const session = yield* BillingPortal.create({
+ *     customer: "cus_123",
+ *     returnUrl: "https://example.com/account/billing",
+ *   });
+ *   return session.url; // redirect the customer here
+ * });
+ * ```
+ */
 export const create = (
   params: CreateParams,
 ): Effect.Effect<BillingPortalSession, PaymentsError, BillingPortalSessions> =>

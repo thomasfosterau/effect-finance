@@ -10,22 +10,7 @@
  * **No amount is ever an input.** Line items name price ids, so what the buyer
  * pays is whatever the provider's price says, and a client cannot choose it.
  *
- * @example
- * ```typescript
- * import { Effect } from "effect";
- * import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
- *
- * const program = Effect.gen(function* () {
- *   const session = yield* CheckoutSession.create({
- *     mode: "subscription",
- *     customer: "cus_123",
- *     lineItems: [{ price: "price_monthly" }],
- *     successUrl: "https://example.com/billing?checkout=success",
- *     cancelUrl: "https://example.com/pricing",
- *   });
- *   return session.url; // redirect the buyer here
- * });
- * ```
+ * See {@link create} for an example.
  *
  * @module
  */
@@ -110,7 +95,26 @@ export class CheckoutSessions extends Context.Service<
   }
 >()("@effect-payments/CheckoutSessions") {}
 
-/** Create a hosted checkout session; redirect the buyer to its `url`. */
+/**
+ * Create a hosted checkout session; redirect the buyer to its `url`.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
+ *
+ * const program = Effect.gen(function* () {
+ *   const session = yield* CheckoutSession.create({
+ *     mode: "subscription",
+ *     customer: "cus_123",
+ *     lineItems: [{ price: "price_monthly" }],
+ *     successUrl: "https://example.com/billing?checkout=success",
+ *     cancelUrl: "https://example.com/pricing",
+ *   });
+ *   return session.url; // redirect the buyer here
+ * });
+ * ```
+ */
 export const create = (
   params: CreateParams,
 ): Effect.Effect<CheckoutSession, PaymentsError, CheckoutSessions> =>

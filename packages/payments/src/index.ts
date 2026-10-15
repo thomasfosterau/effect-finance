@@ -21,22 +21,7 @@
  * any provider without modification — the payments analogue of Effect's AI
  * modules: one abstraction, one package per provider.
  *
- * @example
- * ```typescript
- * import { Effect } from "effect";
- * import * as Customer from "@thomasfosterau/effect-payments/Customer";
- * import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
- *
- * const onboard = (email: string, priceId: string) =>
- *   Effect.gen(function* () {
- *     const customer = yield* Customer.create({ email });
- *     const subscription = yield* Subscription.create({
- *       customer: customer.id,
- *       items: [{ price: priceId }],
- *     });
- *     return { customer, subscription };
- *   });
- * ```
+ * See `Subscription.create` for an example of a program written against the core.
  *
  * @module
  */
