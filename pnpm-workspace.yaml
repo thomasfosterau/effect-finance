@@ -37,7 +37,7 @@ catalog:
   # resource modules (`generate:resources`) and updates the followed version
   # (`tests/distilledApiVersion.test.ts` and `tests/resources.test.ts` fail
   # until both are done).
-  "@distilled.cloud/stripe": 1.0.0-rc.13
+  "@distilled.cloud/stripe": 1.0.0-rc.15
   # Distilled's PayPal client (same repository and licence): the operations
   # and wire encoding `PayPalPayments` runs on (#146). A runtime dependency
   # of @thomasfosterau/effect-payments-paypal, pinned EXACTLY for the same

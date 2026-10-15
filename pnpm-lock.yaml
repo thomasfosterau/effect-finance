@@ -19,8 +19,8 @@ catalogs:
       specifier: 1.0.0-rc.15
       version: 1.0.0-rc.15
     '@distilled.cloud/stripe':
-      specifier: 1.0.0-rc.13
-      version: 1.0.0-rc.13
+      specifier: 1.0.0-rc.15
+      version: 1.0.0-rc.15
     '@effect/docgen':
       specifier: 4.0.4
       version: 4.0.4
@@ -203,7 +203,7 @@ importers:
         version: 1.0.0-rc.15(effect@4.0.4)
       '@distilled.cloud/stripe':
         specifier: 'catalog:'
-        version: 1.0.0-rc.13(effect@4.0.4)
+        version: 1.0.0-rc.15(effect@4.0.4)
       '@thomasfosterau/effect-payments':
         specifier: workspace:^
         version: link:../payments
@@ -234,7 +234,7 @@ importers:
         version: 1.0.0-rc.15(effect@4.0.4)
       '@distilled.cloud/stripe':
         specifier: 'catalog:'
-        version: 1.0.0-rc.13(effect@4.0.4)
+        version: 1.0.0-rc.15(effect@4.0.4)
       effect:
         specifier: 4.0.4
         version: 4.0.4
@@ -407,11 +407,6 @@ packages:
     resolution: {integrity: sha512-dlT1m5e/0yUL0kRNcQn7yGLVThkgbB0Ga/1AmfDDC/8ik6AIiSf2QLQO2zPYvefsHP0aFgxO93cVLCCfDp7kzQ==}
     engines: {node: '>= 20.12.0'}
 
-  '@distilled.cloud/core@1.0.0-rc.13':
-    resolution: {integrity: sha512-RYyrxW+F5zrTuu1UWV/JoycholBCIkXIusYJdDniDwCdmbjdKGl07KlkkeeY774uBawNGf+pt1ESNGeLVnNHsg==}
-    peerDependencies:
-      effect: 4.0.4
-
   '@distilled.cloud/core@1.0.0-rc.15':
     resolution: {integrity: sha512-TPXxuwcxQ85Pvm0g7ZQSLTQkPc1Wmcb6p6KOk+Be2fP14Xpj5a+7HOSUyPNwbqOP+vPK5Sj0ZLN7M6spKnO2LA==}
     peerDependencies:
@@ -422,8 +417,8 @@ packages:
     peerDependencies:
       effect: 4.0.4
 
-  '@distilled.cloud/stripe@1.0.0-rc.13':
-    resolution: {integrity: sha512-jLTJ1mg4U39lHZb9EGYBJLR91yB3LSG6fVxix+r1BbqaTovWzE+NuJ7fu9fRSeax9jRAqsGLLxe9IxJbOtwQnQ==}
+  '@distilled.cloud/stripe@1.0.0-rc.15':
+    resolution: {integrity: sha512-sYIPEg1MKZrj6aSy4o08anO5dVpyFJHzgEk0WfiMm5BT0oEFtldUuPe/FjEOoY+mFvZ+o+26lJ5voEnWLJSCUA==}
     peerDependencies:
       effect: 4.0.4
 
@@ -1743,10 +1738,6 @@ packages:
     resolution: {integrity: sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw==}
     engines: {node: 18 || 20 || >=22}
 
-  graphql@16.11.0:
-    resolution: {integrity: sha512-mS1lbMsxgQj6hge1XZ6p7GPhbrtFwUFYi3wRzXAC/FmYnyXMTvvI3td3rjmQ2u8ewXueaSvRPWaEcgVVOT9Jnw==}
-    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
-
   gray-matter@3.1.1:
     resolution: {integrity: sha512-nZ1qjLmayEv0/wt3sHig7I0s3/sJO0dkAaKYQ5YAOApUtYEOonXSFdWvL1khvnZMTvov4UufkqlFsilPnejEXA==}
     engines: {node: '>=0.10.0'}
@@ -2602,11 +2593,6 @@ snapshots:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@distilled.cloud/core@1.0.0-rc.13(effect@4.0.4)':
-    dependencies:
-      effect: 4.0.4
-      graphql: 16.11.0
-
   '@distilled.cloud/core@1.0.0-rc.15(effect@4.0.4)':
     dependencies:
       effect: 4.0.4
@@ -2616,9 +2602,9 @@ snapshots:
       '@distilled.cloud/core': 1.0.0-rc.15(effect@4.0.4)
       effect: 4.0.4
 
-  '@distilled.cloud/stripe@1.0.0-rc.13(effect@4.0.4)':
+  '@distilled.cloud/stripe@1.0.0-rc.15(effect@4.0.4)':
     dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.13(effect@4.0.4)
+      '@distilled.cloud/core': 1.0.0-rc.15(effect@4.0.4)
       effect: 4.0.4
 
   '@effect/docgen@4.0.4(@typescript/typescript6@6.0.2)(redis@6.2.1)(tsx@4.23.15)':
@@ -3543,8 +3529,6 @@ snapshots:
       minimatch: 10.2.6
       minipass: 7.1.3
       path-scurry: 2.0.2
-
-  graphql@16.11.0: {}
 
   gray-matter@3.1.1:
     dependencies:
