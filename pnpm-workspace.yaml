@@ -55,9 +55,9 @@ catalog:
   # which the `effect` singleton override below would contradict. Needs `tsx`
   # and a TypeScript JS API (peer `typescript <7`) — the TS6 alias below
   # satisfies it; the examples themselves type-check under the native `tsc`.
-  "@effect/docgen": 4.0.4
-  "@effect/language-service": ^0.87.4
-  "@effect/platform-node": 4.0.4
+  "@effect/docgen": 4.0.5
+  "@effect/language-service": ^0.87.5
+  "@effect/platform-node": 4.0.5
   # Effect Language Service as a native (TypeScript-Go) binary — the TS7 side
   # of the 6/7 split. `effect-tsgo patch` overwrites the native `tsc` binary
   # with an Effect-patched build matched by gitHead, so this pins in lockstep
@@ -74,7 +74,7 @@ catalog:
   "@mpsuesser/oxlint-plugin-effect": ^0.6.0
   "@types/node": ^26.6.5
   "@vitest/coverage-istanbul": 4.1.11
-  effect: 4.0.4
+  effect: 4.0.5
   effect-solutions: ^0.5.3
   fallow: 3.33.1
   # Runs docgen's compiled examples (a peer of @effect/docgen).
