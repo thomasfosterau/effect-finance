@@ -149,6 +149,11 @@ overrides:
   # `effect` MUST be a singleton (see the header): force every resolution to
   # the catalog version so a hoisting reshuffle cannot introduce a second copy.
   effect: "catalog:"
+  # GHSA-587h-7wmj-h5pm (launch-editor <=2.14.1, patched in 2.14.2), reached
+  # only through @changesets/cli 3.0.3, whose `^2.14.1` range already admits
+  # the fix. Remove once a @changesets/cli release requires launch-editor
+  # >=2.14.2 (or the lockfile resolves it without this override).
+  launch-editor: ^2.14.2
 nodeLinker: hoisted
 allowBuilds:
   esbuild: true
