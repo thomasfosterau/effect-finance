@@ -17,7 +17,7 @@ import { type Method, type Operation, type RequestOptions, StripeHttp } from "..
 
 /** What an operation's call needs to know of its Distilled operation. */
 export interface Route {
-  /** The operation's HTTP method (a `POST` gets a generated key when it may be retried). */
+  /** The operation's HTTP method (a `POST`, or a `/v2` `DELETE`, gets a generated key when it may be retried). */
   readonly method: Method;
   /** The path template, for the message of a refused id. */
   readonly path: string;

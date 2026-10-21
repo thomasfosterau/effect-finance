@@ -10,6 +10,9 @@ import * as Customer from "../src/Customer.ts";
 import * as File from "../src/File.ts";
 import * as Person from "../src/Person.ts";
 import * as Subscription from "../src/Subscription.ts";
+import * as V2CoreAccount from "../src/V2.Core.Account.ts";
+import * as V2CoreEvent from "../src/V2.Core.Event.ts";
+import * as V2CoreEventDestination from "../src/V2.Core.EventDestination.ts";
 import {
   DISTILLED_API_VERSION,
   layer,
@@ -317,6 +320,123 @@ describe("RequestOptions on a resource-module operation", () => {
     await result;
     expect(calls[0]?.url.origin).toBe("https://api.stripe.com");
     expect(calls[0]?.headers.get("idempotency-key")).toBe("k-2");
+  });
+});
+
+/**
+ * Where stripe-node 23 sends a `/v2` request differently from `/v1` (#181):
+ * it keys every `/v2` `DELETE` (`_defaultIdempotencyKey`), and it indexes
+ * array query params (`include[0]=…`), where Distilled repeats `include[]`.
+ */
+describe("the /v2 request policy", () => {
+  const retried = (_request: CapturedRequest, attempt: number) =>
+    attempt < 3 ? jsonResponse(503, {}) : jsonResponse(200, { id: "ed_1", object: "v2.deleted" });
+
+  it("generates one key for a /v2 DELETE and reuses it across its attempts", async () => {
+    const { result, calls } = over(V2CoreEventDestination.del("ed_1"), retried);
+    await result;
+    expect(calls.map((call) => [call.method, call.url.pathname])).toEqual(
+      Array.from({ length: 3 }, () => ["DELETE", "/v2/core/event_destinations/ed_1"]),
+    );
+    const keys = calls.map((call) => call.headers.get("idempotency-key"));
+    expect(keys[0]).toMatch(/^effect-payments-retry-[0-9a-f-]{36}$/);
+    expect(new Set(keys).size).toBe(1);
+  });
+
+  it("generates a fresh key for each /v2 DELETE call", async () => {
+    const { result, calls } = over(
+      Effect.all([V2CoreEventDestination.del("ed_1"), V2CoreEventDestination.del("ed_1")]),
+    );
+    await result;
+    const keys = calls.map((call) => call.headers.get("idempotency-key"));
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it("keys a /v2 DELETE under a configured origin", async () => {
+    const { result, calls } = over(V2CoreEventDestination.del("ed_1"), undefined, {
+      baseUrl: "http://localhost:12111",
+    });
+    await result;
+    expect(calls[0]?.url.toString()).toBe("http://localhost:12111/v2/core/event_destinations/ed_1");
+    expect(calls[0]?.headers.get("idempotency-key")).toMatch(/^effect-payments-retry-/);
+  });
+
+  it("keeps a caller's key on a /v2 DELETE across the client's retries", async () => {
+    const { result, calls } = over(
+      V2CoreEventDestination.del("ed_1", { idempotencyKey: "k-v2-del" }),
+      retried,
+    );
+    await result;
+    expect(calls.map((call) => call.headers.get("idempotency-key"))).toEqual([
+      "k-v2-del",
+      "k-v2-del",
+      "k-v2-del",
+    ]);
+  });
+
+  it("generates no key for a /v1 DELETE, as the SDK does not", async () => {
+    const { result, calls } = over(Customer.del("cus_1"), (_request, attempt) =>
+      attempt < 2 ? jsonResponse(503, {}) : jsonResponse(200, { id: "cus_1", deleted: true }),
+    );
+    await result;
+    expect(calls.map((call) => call.headers.get("idempotency-key"))).toEqual([null, null]);
+  });
+
+  it("generates no key for a /v2 DELETE the client will not retry", async () => {
+    const { result, calls } = over(V2CoreEventDestination.del("ed_1"), undefined, {
+      maxNetworkRetries: 0,
+    });
+    await result;
+    expect(calls[0]?.headers.get("idempotency-key")).toBeNull();
+  });
+
+  it("sends no key on a /v2 GET", async () => {
+    const { result, calls } = over(V2CoreAccount.retrieve("acct_1"));
+    await result;
+    expect(calls[0]?.url.toString()).toBe("https://api.stripe.com/v2/core/accounts/acct_1");
+    expect(calls[0]?.headers.get("idempotency-key")).toBeNull();
+  });
+
+  it("indexes a /v2 GET's array query params, as the SDKs send them", async () => {
+    const { result, calls } = over(
+      V2CoreAccount.retrieve("acct_1", { include: ["identity", "configuration.customer"] }),
+    );
+    await result;
+    expect(calls[0]?.url.pathname).toBe("/v2/core/accounts/acct_1");
+    expect(calls[0]?.url.search).toBe("?include[0]=identity&include[1]=configuration.customer");
+  });
+
+  it("indexes each array of a /v2 list, leaving its other params alone", async () => {
+    const { result, calls } = over(
+      V2CoreEvent.list({
+        limit: 2,
+        object_id: "ed (1)",
+        types: ["v1.billing.meter.error_report_triggered", "v2.core.event_destination.ping"],
+      }),
+      () => jsonResponse(200, { data: [], next_page_url: null, previous_page_url: null }),
+    );
+    await result;
+    expect(calls[0]?.url.pathname).toBe("/v2/core/events");
+    expect(calls[0]?.url.search).toBe(
+      "?limit=2&object_id=ed%20%281%29" +
+        "&types[0]=v1.billing.meter.error_report_triggered" +
+        "&types[1]=v2.core.event_destination.ping",
+    );
+  });
+
+  it("leaves a /v2 query without arrays as Distilled sent it", async () => {
+    const { result, calls } = over(V2CoreEvent.list({ limit: 2, object_id: "ed (1)" }), () =>
+      jsonResponse(200, { data: [], next_page_url: null, previous_page_url: null }),
+    );
+    await result;
+    expect(calls[0]?.url.search).toBe("?limit=2&object_id=ed+%281%29");
+  });
+
+  it("leaves a /v1 GET's array query params as Distilled sends them", async () => {
+    const { result, calls } = over(Customer.retrieve("cus_1", { expand: ["default_source"] }));
+    await result;
+    expect([...(calls[0]?.url.searchParams ?? [])]).toEqual([["expand[]", "default_source"]]);
   });
 });
 

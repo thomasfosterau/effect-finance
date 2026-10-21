@@ -14,8 +14,9 @@ const FORM = "application/x-www-form-urlencoded";
  * `encodeURIComponent` plus the five characters it leaves alone that the
  * SDK's `qs` escapes (`!`, `'`, `(`, `)`, `*`), with the bracket control
  * characters left literal, as the SDK sends them (`cancellation_details[comment]`).
+ * Shared with `v2Request.ts`, which re-encodes a `/v2` query the same way.
  */
-const escapeQuery = (text: string): string =>
+export const escapeQuery = (text: string): string =>
   encodeURIComponent(text)
     .replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
     .replace(/%5B/g, "[")
