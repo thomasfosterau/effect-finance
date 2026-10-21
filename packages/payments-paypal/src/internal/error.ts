@@ -6,13 +6,8 @@
  */
 
 import { Option, Schema } from "effect";
-import {
-  PaymentAuthenticationError,
-  PaymentInvalidRequestError,
-  PaymentProviderError,
-  PaymentRateLimitError,
-  type PaymentsError,
-} from "@thomasfosterau/effect-payments";
+import type { PaymentsError } from "@thomasfosterau/effect-payments";
+import { errorFromStatus } from "@thomasfosterau/effect-payments/internal";
 
 /** The provider tag attached to neutral errors raised by this implementation. */
 export const PROVIDER = "paypal";
@@ -37,31 +32,17 @@ export const errorBodyOf = (json: unknown): PayPalErrorBody | undefined =>
   Option.getOrUndefined(Schema.decodeUnknownOption(PayPalErrorBody)(json));
 
 /**
- * Map a PayPal HTTP status + error body onto a neutral payments error.
+ * Map a PayPal HTTP status + error body onto a neutral payments error: the
+ * status picks the class (`errorFromStatus`), the first detail's `field`
+ * names the offending parameter and the body's `name` the provider error code.
  */
 export const handlePayPalError = (
   status: number,
   body: PayPalErrorBody | undefined,
-): PaymentsError => {
-  const message = body?.message ?? `PayPal request failed with status ${status}`;
-
-  if (status === 401 || status === 403) {
-    return new PaymentAuthenticationError({ message, statusCode: status });
-  }
-  if (status === 429) {
-    return new PaymentRateLimitError({ message });
-  }
-  if (status === 400 || status === 404 || status === 422) {
-    return new PaymentInvalidRequestError({
-      message,
-      param: body?.details?.[0]?.field,
-      statusCode: status,
-    });
-  }
-  return new PaymentProviderError({
-    message,
+): PaymentsError =>
+  errorFromStatus(status, {
     provider: PROVIDER,
+    message: body?.message ?? `PayPal request failed with status ${status}`,
     code: body?.name,
-    statusCode: status,
+    param: body?.details?.[0]?.field,
   });
-};

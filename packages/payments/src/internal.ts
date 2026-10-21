@@ -25,6 +25,12 @@
  *   {@link observeResponses} and {@link rejectedError}. None names a vendor or
  *   a client library: each provider keeps its own client wiring, retry and
  *   validation policy, and error classification.
+ * - The response handling of a REST provider: {@link responseDecoder} (a
+ *   wire body decoded and mapped onto a neutral value), {@link epochSecondsOf}
+ *   (an ISO-8601 timestamp as the neutral Unix seconds) and
+ *   {@link errorFromStatus} (an HTTP error status as the neutral error). Each
+ *   provider keeps its wire schemas, its status spellings and the reading of
+ *   its own error body.
  *
  * @module
  */
@@ -48,10 +54,13 @@ import {
   type HttpClientResponse,
 } from "effect/http";
 import {
+  PaymentAuthenticationError,
   PaymentConfigError,
   PaymentInvalidRequestError,
   PaymentNetworkError,
   PaymentProviderError,
+  PaymentRateLimitError,
+  type PaymentsError,
 } from "./PaymentsError.js";
 
 /**
@@ -579,3 +588,101 @@ export const rejectedError = (
     code: stringField(error, "_tag") ?? fallback.code,
     cause: error,
   });
+
+// ---------------------------------------------------------------------------
+// Response handling of a REST provider
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a provider's response decoders. The returned `decoder(what, schema,
+ * map)` decodes a response body with `schema` (the wire shape, narrowed to the
+ * fields `map` reads) and maps it onto a neutral value; a body that does not
+ * decode fails with {@link PaymentProviderError} tagged `provider`, whose
+ * message reads "`name` returned a malformed `what` response" and whose cause
+ * is the decode failure.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const responseDecoder =
+  (options: {
+    /** The provider tag of the error, e.g. `"acme"`. */
+    readonly provider: string;
+    /** The provider's display name, for the message, e.g. `"Acme"`. */
+    readonly name: string;
+  }) =>
+  <S extends Schema.Codec<unknown, unknown>, A>(
+    what: string,
+    schema: S,
+    map: (value: S["Type"]) => A,
+  ) =>
+  (body: unknown): Effect.Effect<A, PaymentProviderError> =>
+    Schema.decodeUnknownEffect(schema)(body).pipe(
+      Effect.mapError(
+        (cause) =>
+          new PaymentProviderError({
+            message: `${options.name} returned a malformed ${what} response`,
+            provider: options.provider,
+            cause,
+          }),
+      ),
+      Effect.map(map),
+    );
+
+/**
+ * An ISO-8601 timestamp as Unix seconds (rounded down), or `0` when it is
+ * absent, empty or does not parse: a neutral entity's timestamps are always a
+ * number.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const epochSecondsOf = (value: string | null | undefined): number => {
+  if (!value) return 0;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
+};
+
+/**
+ * Classify a provider's HTTP error `status` onto the neutral error channel.
+ * The status alone decides the class:
+ *
+ * - 401 / 403: {@link PaymentAuthenticationError};
+ * - 429: {@link PaymentRateLimitError};
+ * - 400 / 404 / 422: {@link PaymentInvalidRequestError}, carrying `param`;
+ * - anything else: {@link PaymentProviderError} tagged `provider`, carrying
+ *   `code`.
+ *
+ * Every class but the rate limit carries the status. Reading `message`,
+ * `code` and `param` out of the vendor's error body, and the fallback message
+ * when it has none, stay with the provider.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const errorFromStatus = (
+  status: number,
+  details: {
+    /** The provider tag of a {@link PaymentProviderError}, e.g. `"acme"`. */
+    readonly provider: string;
+    readonly message: string;
+    /** The vendor's error code, for a {@link PaymentProviderError}. */
+    readonly code?: string | undefined;
+    /** The offending parameter, for a {@link PaymentInvalidRequestError}. */
+    readonly param?: string | undefined;
+  },
+): PaymentsError => {
+  const { message } = details;
+  if (status === 401 || status === 403) {
+    return new PaymentAuthenticationError({ message, statusCode: status });
+  }
+  if (status === 429) {
+    return new PaymentRateLimitError({ message });
+  }
+  if (status === 400 || status === 404 || status === 422) {
+    return new PaymentInvalidRequestError({ message, param: details.param, statusCode: status });
+  }
+  return new PaymentProviderError({
+    message,
+    provider: details.provider,
+    code: details.code,
+    statusCode: status,
+  });
+};

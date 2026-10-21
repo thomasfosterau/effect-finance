@@ -3,15 +3,19 @@ import { Cause, Deferred, Duration, Effect, Exit, Fiber, Option, Ref, Schema } f
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { TestClock } from "effect/testing";
 import {
+  PaymentAuthenticationError,
   PaymentConfigError,
   PaymentInvalidRequestError,
   PaymentNetworkError,
   PaymentProviderError,
+  PaymentRateLimitError,
 } from "../src/PaymentsError.ts";
 import {
   checkId,
   checkMinorUnits,
   decimalText,
+  epochSecondsOf,
+  errorFromStatus,
   exponentFrom,
   formatDecimal,
   isAbsoluteHttpUrl,
@@ -21,6 +25,7 @@ import {
   omitUndefined,
   parseDecimal,
   rejectedError,
+  responseDecoder,
   scaleToMinor,
   send,
   shareLogin,
@@ -542,5 +547,85 @@ describe("rejectedError", () => {
     const error = rejectedError(42, "acme", fallback);
     expect(error.code).toBe("UnknownAcmeError");
     expect(error.message).toBe("The Acme request failed");
+  });
+});
+
+describe("responseDecoder", () => {
+  const decoder = responseDecoder({ provider: "acme", name: "Acme" });
+  const decodeThing = decoder("thing", Schema.Struct({ id: Schema.String }), (thing) =>
+    thing.id.toUpperCase(),
+  );
+
+  it("decodes a body and maps it, ignoring unknown fields", async () => {
+    expect(await Effect.runPromise(decodeThing({ id: "t_1", extra: true }))).toBe("T_1");
+  });
+
+  it("fails a body that does not decode with a PaymentProviderError naming the provider", async () => {
+    const error = await Effect.runPromise(Effect.flip(decodeThing({ id: 42 })));
+    expect(error).toBeInstanceOf(PaymentProviderError);
+    expect(error.provider).toBe("acme");
+    expect(error.message).toBe("Acme returned a malformed thing response");
+    expect(error.cause).toBeDefined();
+  });
+});
+
+describe("epochSecondsOf", () => {
+  it("reads an ISO-8601 timestamp as whole Unix seconds", () => {
+    expect(epochSecondsOf("2024-01-02T03:04:05Z")).toBe(1_704_164_645);
+    expect(epochSecondsOf("2024-01-02T03:04:05.999Z")).toBe(1_704_164_645);
+  });
+
+  it("is 0 for an absent, empty or unparseable timestamp", () => {
+    for (const value of [undefined, null, "", "not a date"]) {
+      expect(epochSecondsOf(value)).toBe(0);
+    }
+  });
+});
+
+describe("errorFromStatus", () => {
+  const details = { provider: "acme", message: "boom", code: "E_ACME", param: "amount" };
+
+  it("classifies 401 and 403 as authentication failures", () => {
+    for (const status of [401, 403]) {
+      const error = errorFromStatus(status, details);
+      expect(error).toBeInstanceOf(PaymentAuthenticationError);
+      expect(error).toMatchObject({ message: "boom", statusCode: status });
+    }
+  });
+
+  it("classifies 429 as a rate limit", () => {
+    const error = errorFromStatus(429, details);
+    expect(error).toBeInstanceOf(PaymentRateLimitError);
+    expect(error).toMatchObject({ message: "boom" });
+  });
+
+  it("classifies 400, 404 and 422 as invalid requests carrying the param", () => {
+    for (const status of [400, 404, 422]) {
+      const error = errorFromStatus(status, details);
+      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+      expect(error).toMatchObject({ message: "boom", param: "amount", statusCode: status });
+    }
+  });
+
+  it("classifies any other status as a provider error carrying the code", () => {
+    for (const status of [402, 409, 500, 503]) {
+      const error = errorFromStatus(status, details);
+      expect(error).toBeInstanceOf(PaymentProviderError);
+      expect(error).toMatchObject({
+        message: "boom",
+        provider: "acme",
+        code: "E_ACME",
+        statusCode: status,
+      });
+    }
+  });
+
+  it("leaves the param and code out when the body named none", () => {
+    expect(errorFromStatus(400, { provider: "acme", message: "m" })).toMatchObject({
+      param: undefined,
+    });
+    expect(errorFromStatus(500, { provider: "acme", message: "m" })).toMatchObject({
+      code: undefined,
+    });
   });
 });

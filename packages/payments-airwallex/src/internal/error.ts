@@ -6,13 +6,8 @@
  */
 
 import { Schema } from "effect";
-import {
-  PaymentAuthenticationError,
-  PaymentInvalidRequestError,
-  PaymentProviderError,
-  PaymentRateLimitError,
-  type PaymentsError,
-} from "@thomasfosterau/effect-payments";
+import type { PaymentsError } from "@thomasfosterau/effect-payments";
+import { errorFromStatus } from "@thomasfosterau/effect-payments/internal";
 
 /** The provider tag attached to neutral errors raised by this implementation. */
 export const PROVIDER = "airwallex";
@@ -26,31 +21,17 @@ export const AirwallexErrorBody = Schema.Struct({
 export type AirwallexErrorBody = typeof AirwallexErrorBody.Type;
 
 /**
- * Map an Airwallex HTTP status + error body onto a neutral payments error.
+ * Map an Airwallex HTTP status + error body onto a neutral payments error:
+ * the status picks the class (`errorFromStatus`), the body's `source` names
+ * the offending parameter and its `code` the provider error code.
  */
 export const handleAirwallexError = (
   status: number,
   body: AirwallexErrorBody | undefined,
-): PaymentsError => {
-  const message = body?.message ?? `Airwallex request failed with status ${status}`;
-
-  if (status === 401 || status === 403) {
-    return new PaymentAuthenticationError({ message, statusCode: status });
-  }
-  if (status === 429) {
-    return new PaymentRateLimitError({ message });
-  }
-  if (status === 400 || status === 404 || status === 422) {
-    return new PaymentInvalidRequestError({
-      message,
-      param: body?.source,
-      statusCode: status,
-    });
-  }
-  return new PaymentProviderError({
-    message,
+): PaymentsError =>
+  errorFromStatus(status, {
     provider: PROVIDER,
+    message: body?.message ?? `Airwallex request failed with status ${status}`,
     code: body?.code,
-    statusCode: status,
+    param: body?.source,
   });
-};

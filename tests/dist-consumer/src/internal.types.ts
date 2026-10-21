@@ -5,18 +5,21 @@
  * contract, not a consumer-facing promise. Never executed; type-checked only.
  */
 
-import type { Duration, Effect, Option } from "effect";
+import type { Duration, Effect, Option, Schema } from "effect";
 import type { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import type {
   PaymentConfigError,
   PaymentInvalidRequestError,
   PaymentNetworkError,
   PaymentProviderError,
+  PaymentsError,
 } from "@thomasfosterau/effect-payments";
 import {
   checkId,
   checkMinorUnits,
   decimalText,
+  epochSecondsOf,
+  errorFromStatus,
   exponentFrom,
   formatDecimal,
   isAbsoluteHttpUrl,
@@ -26,6 +29,7 @@ import {
   omitUndefined,
   parseDecimal,
   rejectedError,
+  responseDecoder,
   scaleToMinor,
   send,
   shareLogin,
@@ -110,4 +114,20 @@ export const responseBody: Option.Option<unknown> = response.body;
 export const rejected: PaymentProviderError = rejectedError(new Error("boom"), "Provider", {
   message: "fallback",
   code: "Unknown",
+});
+
+/** The REST response helpers' declared shapes: a decoder keeps its map's result type. */
+declare const thingSchema: Schema.Struct<{ readonly id: Schema.String }>;
+export const decodeThing: (body: unknown) => Effect.Effect<number, PaymentProviderError> =
+  responseDecoder({ provider: "provider", name: "Provider" })(
+    "thing",
+    thingSchema,
+    (thing) => thing.id.length,
+  );
+export const seconds: number = epochSecondsOf(null);
+export const classified: PaymentsError = errorFromStatus(500, {
+  provider: "provider",
+  message: "m",
+  code: undefined,
+  param: undefined,
 });

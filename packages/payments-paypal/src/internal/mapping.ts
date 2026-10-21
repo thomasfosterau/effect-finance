@@ -9,7 +9,7 @@
  *
  * Each PayPal object a capability layer reads is **decoded** with a `Schema`
  * narrowed to the fields the mapping uses — the response is not trusted, and a
- * 2xx whose body does not decode fails with {@link PaymentProviderError}
+ * 2xx whose body does not decode fails with `PaymentProviderError`
  * rather than producing an entity built from `undefined`. Unknown fields are
  * ignored. Statuses decode as strings and are normalised by the `to*Status`
  * functions below; a status they do not recognise becomes `Enumeration.Other`
@@ -20,7 +20,7 @@
  * @module
  */
 
-import { Effect, Schema } from "effect";
+import { Schema } from "effect";
 import {
   Enumeration,
   Product as ProductNS,
@@ -28,9 +28,9 @@ import {
   PaymentIntent as PaymentIntentNS,
   Subscription as SubscriptionNS,
   Refund as RefundNS,
-  PaymentProviderError,
   type Page,
 } from "@thomasfosterau/effect-payments";
+import { epochSecondsOf, responseDecoder } from "@thomasfosterau/effect-payments/internal";
 import { PROVIDER } from "./error.js";
 import { exponent, parseMinorUnits, toMinorUnits } from "./money.js";
 
@@ -154,12 +154,6 @@ const PayPalPlanList = Schema.Struct({
 // Helpers
 // ---------------------------------------------------------------------------
 
-const toEpochSeconds = (value: string | null | undefined): number => {
-  if (!value) return 0;
-  const ms = Date.parse(value);
-  return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
-};
-
 const toInterval = (unit: string | null | undefined): PriceNS.RecurringInterval => {
   switch ((unit ?? "").toUpperCase()) {
     case "DAY":
@@ -245,7 +239,7 @@ const toProduct = (product: typeof PayPalProduct.Type): ProductNS.Product =>
       description: product.description ?? null,
       active: true,
       metadata: {},
-      created: toEpochSeconds(product.create_time),
+      created: epochSecondsOf(product.create_time),
     },
     TRUSTED,
   );
@@ -274,7 +268,7 @@ const toPrice = (plan: typeof PayPalPlan.Type): PriceNS.Price => {
           )
         : null,
       metadata: {},
-      created: toEpochSeconds(plan.create_time),
+      created: epochSecondsOf(plan.create_time),
     },
     TRUSTED,
   );
@@ -295,7 +289,7 @@ const toPaymentIntent = (order: typeof PayPalOrder.Type): PaymentIntentNS.Paymen
       clientSecret: null,
       description: unit?.description ?? null,
       metadata: {},
-      created: toEpochSeconds(order.create_time),
+      created: epochSecondsOf(order.create_time),
     },
     TRUSTED,
   );
@@ -320,11 +314,11 @@ const toSubscription = (
           TRUSTED,
         ),
       ],
-      currentPeriodStart: toEpochSeconds(subscription.start_time),
-      currentPeriodEnd: toEpochSeconds(subscription.billing_info?.next_billing_time),
+      currentPeriodStart: epochSecondsOf(subscription.start_time),
+      currentPeriodEnd: epochSecondsOf(subscription.billing_info?.next_billing_time),
       cancelAtPeriodEnd: false,
       metadata: {},
-      created: toEpochSeconds(subscription.create_time),
+      created: epochSecondsOf(subscription.create_time),
     },
     TRUSTED,
   );
@@ -342,7 +336,7 @@ const toRefund = (refund: typeof PayPalRefund.Type): RefundNS.Refund => {
       chargeId: null,
       reason: null,
       metadata: {},
-      created: toEpochSeconds(refund.create_time),
+      created: epochSecondsOf(refund.create_time),
     },
     TRUSTED,
   );
@@ -361,28 +355,11 @@ const toPage = <A>(
 // Decoders
 // ---------------------------------------------------------------------------
 
-const malformed = (what: string, cause: unknown): PaymentProviderError =>
-  new PaymentProviderError({
-    message: `PayPal returned a malformed ${what} response`,
-    provider: PROVIDER,
-    cause,
-  });
-
 /**
  * Decode a response body with `schema` and map it, failing with
- * {@link PaymentProviderError} when it does not decode.
+ * `PaymentProviderError` when it does not decode.
  */
-const decoder =
-  <S extends Schema.Codec<unknown, unknown>, A>(
-    what: string,
-    schema: S,
-    map: (value: S["Type"]) => A,
-  ) =>
-  (body: unknown): Effect.Effect<A, PaymentProviderError> =>
-    Schema.decodeUnknownEffect(schema)(body).pipe(
-      Effect.mapError((cause) => malformed(what, cause)),
-      Effect.map(map),
-    );
+const decoder = /* @__PURE__ */ responseDecoder({ provider: PROVIDER, name: "PayPal" });
 
 /** A catalog product. */
 export const decodeProduct = decoder("product", PayPalProduct, toProduct);

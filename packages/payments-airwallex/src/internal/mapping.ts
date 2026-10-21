@@ -5,7 +5,7 @@
  * Each Airwallex object a capability layer reads is **decoded** with a
  * `Schema` narrowed to the fields the mapping uses — the response is not
  * trusted, and a 2xx whose body does not decode fails with
- * {@link PaymentProviderError} rather than producing an entity built from
+ * `PaymentProviderError` rather than producing an entity built from
  * `undefined`. Unknown fields are ignored. Statuses decode as strings and are
  * normalised by the `to*Status` functions below; a status they do not
  * recognise becomes `Enumeration.Other` carrying the raw string, so it never
@@ -15,15 +15,15 @@
  * @module
  */
 
-import { Effect, Schema } from "effect";
+import { Schema } from "effect";
 import {
   Enumeration,
   Customer as CustomerNS,
   PaymentIntent as PaymentIntentNS,
   Refund as RefundNS,
-  PaymentProviderError,
   type Page,
 } from "@thomasfosterau/effect-payments";
+import { epochSecondsOf, responseDecoder } from "@thomasfosterau/effect-payments/internal";
 import { PROVIDER } from "./error.js";
 import { exponent, parseMinorUnits, toMinorUnits } from "./money.js";
 
@@ -100,13 +100,6 @@ const AirwallexList = <S extends Schema.Top>(item: S) =>
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Parse an Airwallex ISO-8601 timestamp into Unix seconds. */
-const toEpochSeconds = (value: string | null | undefined): number => {
-  if (!value) return 0;
-  const ms = Date.parse(value);
-  return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
-};
-
 const composeName = (
   first: string | null | undefined,
   last: string | null | undefined,
@@ -175,7 +168,7 @@ const toCustomer = (customer: typeof AirwallexCustomer.Type): CustomerNS.Custome
       phone: customer.phone_number ?? null,
       description: null,
       metadata: metadataOf(customer.metadata),
-      created: toEpochSeconds(customer.created_at),
+      created: epochSecondsOf(customer.created_at),
       livemode: false,
     },
     TRUSTED,
@@ -196,7 +189,7 @@ const toPaymentIntent = (
       clientSecret: intent.client_secret ?? null,
       description: intent.descriptor ?? null,
       metadata: metadataOf(intent.metadata),
-      created: toEpochSeconds(intent.created_at),
+      created: epochSecondsOf(intent.created_at),
     },
     TRUSTED,
   );
@@ -213,7 +206,7 @@ const toRefund = (refund: typeof AirwallexRefund.Type): RefundNS.Refund =>
       chargeId: null,
       reason: refund.reason ?? null,
       metadata: metadataOf(refund.metadata),
-      created: toEpochSeconds(refund.created_at),
+      created: epochSecondsOf(refund.created_at),
     },
     TRUSTED,
   );
@@ -222,28 +215,11 @@ const toRefund = (refund: typeof AirwallexRefund.Type): RefundNS.Refund =>
 // Decoders
 // ---------------------------------------------------------------------------
 
-const malformed = (what: string, cause: unknown): PaymentProviderError =>
-  new PaymentProviderError({
-    message: `Airwallex returned a malformed ${what} response`,
-    provider: PROVIDER,
-    cause,
-  });
-
 /**
  * Decode a response body with `schema` and map it, failing with
- * {@link PaymentProviderError} when it does not decode.
+ * `PaymentProviderError` when it does not decode.
  */
-const decoder =
-  <S extends Schema.Codec<unknown, unknown>, A>(
-    what: string,
-    schema: S,
-    map: (value: S["Type"]) => A,
-  ) =>
-  (body: unknown): Effect.Effect<A, PaymentProviderError> =>
-    Schema.decodeUnknownEffect(schema)(body).pipe(
-      Effect.mapError((cause) => malformed(what, cause)),
-      Effect.map(map),
-    );
+const decoder = /* @__PURE__ */ responseDecoder({ provider: PROVIDER, name: "Airwallex" });
 
 /** Decode a list response and map every item, as a neutral page. */
 const pageDecoder = <S extends Schema.Codec<unknown, unknown>, A>(
