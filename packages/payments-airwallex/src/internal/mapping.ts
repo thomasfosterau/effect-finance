@@ -15,14 +15,17 @@
  * @module
  */
 
-import { Schema } from "effect";
-import {
-  Enumeration,
-  Customer as CustomerNS,
-  PaymentIntent as PaymentIntentNS,
-  Refund as RefundNS,
-  type Page,
-} from "@thomasfosterau/effect-payments";
+// `Schema` and the core's modules are imported by subpath, as namespaces, and
+// every top-level schema and decoder below is a `/* @__PURE__ */` call: a
+// bundler can then drop the decoders of every capability a program does not
+// use (a property access on a named import may run a getter, so it keeps the
+// whole call).
+import * as Schema from "effect/Schema";
+import * as CustomerNS from "@thomasfosterau/effect-payments/Customer";
+import * as Enumeration from "@thomasfosterau/effect-payments/Enumeration";
+import * as PaymentIntentNS from "@thomasfosterau/effect-payments/PaymentIntent";
+import * as RefundNS from "@thomasfosterau/effect-payments/Refund";
+import type { Page } from "@thomasfosterau/effect-payments";
 import { epochSecondsOf, responseDecoder } from "@thomasfosterau/effect-payments/internal";
 import { PROVIDER } from "./error.js";
 import { exponent, parseMinorUnits, toMinorUnits } from "./money.js";
@@ -43,7 +46,7 @@ const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr
  * amount beyond the safe-integer range in minor units, fails the decode rather
  * than being rounded.
  */
-const amountInCurrency = Schema.makeFilter(
+const amountInCurrency = /* @__PURE__ */ Schema.makeFilter(
   (money: { readonly amount: number; readonly currency: string }) =>
     parseMinorUnits(money.amount, money.currency) !== undefined ||
     `amount must have at most ${exponent(money.currency)} fraction digits for ${money.currency} and fit a safe integer in minor units`,
@@ -56,40 +59,42 @@ const amountInCurrency = Schema.makeFilter(
 );
 
 /** Metadata values of any type decode; only the string ones are kept. */
-const Metadata = Maybe(Schema.Record(Schema.String, Schema.Unknown));
+const Metadata = /* @__PURE__ */ Maybe(
+  /* @__PURE__ */ Schema.Record(Schema.String, Schema.Unknown),
+);
 
-const AirwallexCustomer = Schema.Struct({
+const AirwallexCustomer = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
-  email: Maybe(Schema.String),
-  first_name: Maybe(Schema.String),
-  last_name: Maybe(Schema.String),
-  phone_number: Maybe(Schema.String),
+  email: /* @__PURE__ */ Maybe(Schema.String),
+  first_name: /* @__PURE__ */ Maybe(Schema.String),
+  last_name: /* @__PURE__ */ Maybe(Schema.String),
+  phone_number: /* @__PURE__ */ Maybe(Schema.String),
   metadata: Metadata,
-  created_at: Maybe(Schema.String),
+  created_at: /* @__PURE__ */ Maybe(Schema.String),
 });
 
-const AirwallexPaymentIntent = Schema.Struct({
+const AirwallexPaymentIntent = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
   amount: Schema.Finite,
   currency: Schema.String,
   status: Schema.String,
-  customer_id: Maybe(Schema.String),
-  payment_method_id: Maybe(Schema.String),
-  client_secret: Maybe(Schema.String),
-  descriptor: Maybe(Schema.String),
+  customer_id: /* @__PURE__ */ Maybe(Schema.String),
+  payment_method_id: /* @__PURE__ */ Maybe(Schema.String),
+  client_secret: /* @__PURE__ */ Maybe(Schema.String),
+  descriptor: /* @__PURE__ */ Maybe(Schema.String),
   metadata: Metadata,
-  created_at: Maybe(Schema.String),
+  created_at: /* @__PURE__ */ Maybe(Schema.String),
 }).check(amountInCurrency);
 
-const AirwallexRefund = Schema.Struct({
+const AirwallexRefund = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
   amount: Schema.Finite,
   currency: Schema.String,
   status: Schema.String,
-  payment_intent_id: Maybe(Schema.String),
-  reason: Maybe(Schema.String),
+  payment_intent_id: /* @__PURE__ */ Maybe(Schema.String),
+  reason: /* @__PURE__ */ Maybe(Schema.String),
   metadata: Metadata,
-  created_at: Maybe(Schema.String),
+  created_at: /* @__PURE__ */ Maybe(Schema.String),
 }).check(amountInCurrency);
 
 /** An Airwallex list response. */
@@ -233,28 +238,32 @@ const pageDecoder = <S extends Schema.Codec<unknown, unknown>, A>(
   }));
 
 /** A customer. */
-export const decodeCustomer = decoder("customer", AirwallexCustomer, toCustomer);
+export const decodeCustomer = /* @__PURE__ */ decoder("customer", AirwallexCustomer, toCustomer);
 /** A page of customers. */
-export const decodeCustomerPage = pageDecoder("customer", AirwallexCustomer, toCustomer);
+export const decodeCustomerPage = /* @__PURE__ */ pageDecoder(
+  "customer",
+  AirwallexCustomer,
+  toCustomer,
+);
 /** A payment intent. */
-export const decodePaymentIntent = decoder(
+export const decodePaymentIntent = /* @__PURE__ */ decoder(
   "payment intent",
   AirwallexPaymentIntent,
   toPaymentIntent,
 );
 /** A page of payment intents. */
-export const decodePaymentIntentPage = pageDecoder(
+export const decodePaymentIntentPage = /* @__PURE__ */ pageDecoder(
   "payment intent",
   AirwallexPaymentIntent,
   toPaymentIntent,
 );
 /** The currency of a payment intent. */
-export const decodePaymentIntentCurrency = decoder(
+export const decodePaymentIntentCurrency = /* @__PURE__ */ decoder(
   "payment intent",
   AirwallexPaymentIntent,
   (intent) => intent.currency,
 );
 /** A refund. */
-export const decodeRefund = decoder("refund", AirwallexRefund, toRefund);
+export const decodeRefund = /* @__PURE__ */ decoder("refund", AirwallexRefund, toRefund);
 /** A page of refunds. */
-export const decodeRefundPage = pageDecoder("refund", AirwallexRefund, toRefund);
+export const decodeRefundPage = /* @__PURE__ */ pageDecoder("refund", AirwallexRefund, toRefund);

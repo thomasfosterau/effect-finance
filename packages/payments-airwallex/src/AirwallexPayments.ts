@@ -16,17 +16,18 @@
  */
 
 import { Effect, Layer } from "effect";
-import {
-  Customer as CustomerNS,
-  PaymentIntent as PaymentIntentNS,
-  Refund as RefundNS,
-  CheckoutSession as CheckoutSessionNS,
-  BillingPortal as BillingPortalNS,
-  IdempotencyKey as IdempotencyKeyNS,
-  Stub,
-  PaymentInvalidRequestError,
-  type PaymentsError,
-} from "@thomasfosterau/effect-payments";
+// The capability modules are imported by subpath, as namespaces: a bundler can
+// then tell that the tags passed to the pure layer constructions below are
+// side-effect free, and drop every capability (and its decoders) a program
+// does not use.
+import * as BillingPortalNS from "@thomasfosterau/effect-payments/BillingPortal";
+import * as CheckoutSessionNS from "@thomasfosterau/effect-payments/CheckoutSession";
+import * as CustomerNS from "@thomasfosterau/effect-payments/Customer";
+import * as IdempotencyKeyNS from "@thomasfosterau/effect-payments/IdempotencyKey";
+import * as PaymentIntentNS from "@thomasfosterau/effect-payments/PaymentIntent";
+import * as RefundNS from "@thomasfosterau/effect-payments/Refund";
+import * as StubNS from "@thomasfosterau/effect-payments/Stub";
+import { PaymentInvalidRequestError, type PaymentsError } from "@thomasfosterau/effect-payments";
 import {
   AirwallexClient,
   layer as clientLayer,
@@ -82,9 +83,9 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
  * delete-customer endpoint).
  */
 export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexClient> =
-  Layer.effect(
+  /* @__PURE__ */ Layer.effect(
     CustomerNS.Customers,
-    Effect.map(AirwallexClient, (client) =>
+    /* @__PURE__ */ Effect.map(AirwallexClient, (client) =>
       CustomerNS.Customers.of({
         create: (params) =>
           write(
@@ -149,9 +150,9 @@ export const paymentIntentsLayer: Layer.Layer<
   PaymentIntentNS.PaymentIntents,
   never,
   AirwallexClient
-> = Layer.effect(
+> = /* @__PURE__ */ Layer.effect(
   PaymentIntentNS.PaymentIntents,
-  Effect.map(AirwallexClient, (client) =>
+  /* @__PURE__ */ Effect.map(AirwallexClient, (client) =>
     PaymentIntentNS.PaymentIntents.of({
       create: (params) =>
         toMajorNumber(params.amount, params.currency, "amount").pipe(
@@ -225,71 +226,72 @@ export const paymentIntentsLayer: Layer.Layer<
  * references a `paymentIntent`: `create` without one (a `charge` only) fails
  * with {@link PaymentInvalidRequestError}, and so does `update`.
  */
-export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient> = Layer.effect(
-  RefundNS.Refunds,
-  Effect.map(AirwallexClient, (client) =>
-    RefundNS.Refunds.of({
-      create: (params) =>
-        Effect.gen(function* () {
-          if (!params.paymentIntent) {
-            return yield* notSupported(
-              "refunds without a payment intent (charges are not supported)",
-            );
-          }
-          // Refuse a bad key, or a negative or fractional amount, before the
-          // currency lookup.
-          const idempotencyKey = yield* IdempotencyKeyNS.validate(params.idempotencyKey);
-          if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
-          // The neutral amount is in minor units; Airwallex needs major units,
-          // and the conversion depends on the currency, so resolve it from the
-          // payment intent when a partial amount is requested.
-          let amount: number | undefined;
-          if (params.amount != null) {
-            const currency = yield* client
+export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient> =
+  /* @__PURE__ */ Layer.effect(
+    RefundNS.Refunds,
+    /* @__PURE__ */ Effect.map(AirwallexClient, (client) =>
+      RefundNS.Refunds.of({
+        create: (params) =>
+          Effect.gen(function* () {
+            if (!params.paymentIntent) {
+              return yield* notSupported(
+                "refunds without a payment intent (charges are not supported)",
+              );
+            }
+            // Refuse a bad key, or a negative or fractional amount, before the
+            // currency lookup.
+            const idempotencyKey = yield* IdempotencyKeyNS.validate(params.idempotencyKey);
+            if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
+            // The neutral amount is in minor units; Airwallex needs major units,
+            // and the conversion depends on the currency, so resolve it from the
+            // payment intent when a partial amount is requested.
+            let amount: number | undefined;
+            if (params.amount != null) {
+              const currency = yield* client
+                .request({
+                  method: "GET",
+                  path: `/api/v1/pa/payment_intents/${params.paymentIntent}`,
+                })
+                .pipe(Effect.flatMap(decodePaymentIntentCurrency));
+              amount = yield* toMajorNumber(params.amount, currency, "amount");
+            }
+            return yield* client
               .request({
-                method: "GET",
-                path: `/api/v1/pa/payment_intents/${params.paymentIntent}`,
+                method: "POST",
+                path: "/api/v1/pa/refunds",
+                body: {
+                  request_id: requestId(),
+                  payment_intent_id: params.paymentIntent,
+                  amount,
+                  reason: params.reason,
+                  metadata: params.metadata,
+                },
+                requestId: idempotencyKey,
               })
-              .pipe(Effect.flatMap(decodePaymentIntentCurrency));
-            amount = yield* toMajorNumber(params.amount, currency, "amount");
-          }
-          return yield* client
+              .pipe(Effect.flatMap(decodeRefund));
+          }),
+        retrieve: (id) =>
+          client
             .request({
-              method: "POST",
-              path: "/api/v1/pa/refunds",
-              body: {
-                request_id: requestId(),
-                payment_intent_id: params.paymentIntent,
-                amount,
-                reason: params.reason,
-                metadata: params.metadata,
-              },
-              requestId: idempotencyKey,
+              method: "GET",
+              path: `/api/v1/pa/refunds/${id}`,
             })
-            .pipe(Effect.flatMap(decodeRefund));
-        }),
-      retrieve: (id) =>
-        client
-          .request({
-            method: "GET",
-            path: `/api/v1/pa/refunds/${id}`,
-          })
-          .pipe(Effect.flatMap(decodeRefund)),
-      update: () => notSupported("updating refunds"),
-      list: (params) =>
-        client
-          .request({
-            method: "GET",
-            path: "/api/v1/pa/refunds",
-            query: {
-              page_size: params?.limit,
-              payment_intent_id: params?.paymentIntent,
-            },
-          })
-          .pipe(Effect.flatMap(decodeRefundPage)),
-    }),
-  ),
-);
+            .pipe(Effect.flatMap(decodeRefund)),
+        update: () => notSupported("updating refunds"),
+        list: (params) =>
+          client
+            .request({
+              method: "GET",
+              path: "/api/v1/pa/refunds",
+              query: {
+                page_size: params?.limit,
+                payment_intent_id: params?.paymentIntent,
+              },
+            })
+            .pipe(Effect.flatMap(decodeRefundPage)),
+      }),
+    ),
+  );
 
 // ---------------------------------------------------------------------------
 // Hosted checkout and billing portal (unsupported)
@@ -304,7 +306,7 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient>
  * run on several providers and handles the failure itself.
  */
 export const checkoutSessionsLayer: Layer.Layer<CheckoutSessionNS.CheckoutSessions> =
-  Stub.checkoutSessions(notSupported("hosted checkout sessions"));
+  /* @__PURE__ */ StubNS.checkoutSessions(/* @__PURE__ */ notSupported("hosted checkout sessions"));
 
 /**
  * The {@link BillingPortalNS.BillingPortalSessions} capability for Airwallex:
@@ -313,7 +315,9 @@ export const checkoutSessionsLayer: Layer.Layer<CheckoutSessionNS.CheckoutSessio
  * is not part of {@link capabilities}.
  */
 export const billingPortalSessionsLayer: Layer.Layer<BillingPortalNS.BillingPortalSessions> =
-  Stub.billingPortalSessions(notSupported("billing portal sessions"));
+  /* @__PURE__ */ StubNS.billingPortalSessions(
+    /* @__PURE__ */ notSupported("billing portal sessions"),
+  );
 
 // ---------------------------------------------------------------------------
 // Bundles
@@ -327,7 +331,7 @@ export const capabilities: Layer.Layer<
   CustomerNS.Customers | PaymentIntentNS.PaymentIntents | RefundNS.Refunds,
   never,
   AirwallexClient
-> = Layer.mergeAll(customersLayer, paymentIntentsLayer, refundsLayer);
+> = /* @__PURE__ */ Layer.mergeAll(customersLayer, paymentIntentsLayer, refundsLayer);
 
 /**
  * The Airwallex client and its capabilities in one layer, built from
