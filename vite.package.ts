@@ -71,8 +71,10 @@ export const packageConfig = ({ url }: PackageConfigOptions) => {
         check: {
           command: "tsc -p tsconfig.json",
           dependsOn: [siblingBuild],
-          input: cacheInputs,
-          output: [],
+          cache: {
+            input: cacheInputs,
+            output: [],
+          },
         },
         // The published artifact: one ESM bundle + declaration file per entry
         // point (`vp pack` → tsdown, `platform: neutral`). `sideEffects:
@@ -80,22 +82,28 @@ export const packageConfig = ({ url }: PackageConfigOptions) => {
         build: {
           command: "vp pack",
           dependsOn: [siblingBuild],
-          input: cacheInputs,
-          output: ["dist/**"],
+          cache: {
+            input: cacheInputs,
+            output: ["dist/**"],
+          },
         },
         "test:unit": {
           command: "vp test run tests",
           dependsOn: [siblingBuild],
-          env: ["VITEST_MAX_WORKERS", "NODE_OPTIONS"],
-          input: cacheInputs,
-          output: [],
+          cache: {
+            env: ["VITEST_MAX_WORKERS", "NODE_OPTIONS"],
+            input: cacheInputs,
+            output: [],
+          },
         },
         "test:coverage": {
           command: "vp test run tests --coverage",
           dependsOn: [siblingBuild],
-          env: ["VITEST_MAX_WORKERS", "NODE_OPTIONS"],
-          input: cacheInputs,
-          output: ["coverage/**"],
+          cache: {
+            env: ["VITEST_MAX_WORKERS", "NODE_OPTIONS"],
+            input: cacheInputs,
+            output: ["coverage/**"],
+          },
         },
         // Type-checks AND RUNS every JSDoc `@example` (see the package's
         // docgen.json), then writes the git-ignored API reference to `docs/`.
@@ -105,8 +113,10 @@ export const packageConfig = ({ url }: PackageConfigOptions) => {
         docgen: {
           command: "docgen",
           dependsOn: ["build"],
-          input: cacheInputs,
-          output: ["docs/**"],
+          cache: {
+            input: cacheInputs,
+            output: ["docs/**"],
+          },
         },
       },
     },

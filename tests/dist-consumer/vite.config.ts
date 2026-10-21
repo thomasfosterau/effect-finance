@@ -19,12 +19,14 @@ export default defineConfig({
           "@thomasfosterau/effect-payments-paypal#build",
           "@thomasfosterau/effect-payments-airwallex#build",
         ],
-        input: [
-          { auto: true },
-          "!node_modules/**",
-          { pattern: "packages/*/dist/**", base: "workspace" as const },
-        ],
-        output: [],
+        cache: {
+          input: [
+            { auto: true },
+            "!node_modules/**",
+            { pattern: "packages/*/dist/**", base: "workspace" as const },
+          ],
+          output: [],
+        },
       },
     },
   },
