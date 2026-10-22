@@ -2,51 +2,18 @@
  * Stripe webhook verification and the event vocabulary a billing system acts
  * on.
  *
- * **The default verifier is WebCrypto.** {@link verify} checks the
- * `Stripe-Signature` header with `crypto.subtle` (HMAC-SHA256), compares
- * digests in constant time, enforces a tolerance window around the signing
- * time (±{@link DEFAULT_TOLERANCE} s unless configured), and only then decodes
- * the event envelope. It needs neither the `stripe` SDK nor any Node API, so
- * it runs unchanged in a Cloudflare Worker, and it reads "now" from Effect's
- * `Clock`, so tests drive it with `TestClock`.
- *
- * The scheme: Stripe sends `Stripe-Signature: t=<unix>,v1=<hex>[,v1=<hex>…]`,
- * and `v1` is HMAC-SHA256 with the endpoint's signing secret over
- * `${t}.${rawBody}`. The signature is over the **raw** body bytes, so pass the
- * request body exactly as received — canonically its bytes,
- * `new Uint8Array(await request.arrayBuffer())`, and never a re-serialised
- * parsed object. `await request.text()` is a lossy convenience: it strips a
- * byte-order mark and replaces invalid UTF-8, so a body that has either will
- * not verify. Several `v1` values appear during a secret rotation; every one
- * is compared.
- *
- * Every refusal is a {@link SignatureVerificationError} whose `message` is one
- * of a fixed set of exported constants (malformed header, timestamp outside
- * the window, no matching signature, an unusable tolerance, a signature that
- * could not be computed). The signing secret is taken as a `Redacted` and never reaches an
- * error; the payload is not copied into the error either. Answer every
- * refusal with a bare 400 — telling a caller which check failed helps forge
- * the next attempt.
+ * {@link verify} is the default verifier (WebCrypto, no SDK, no Node API). Its
+ * JSDoc carries the verification notes a handler must follow, where they reach
+ * the published declarations: pass the raw body bytes, answer every refusal
+ * with a bare 400, the tolerance window, and the SDK-based verifier as the
+ * alternative. It also has a sketch of a handler;
+ * `packages/payments-stripe/examples/webhooks.ts` in the repository
+ * (https://github.com/thomasfosterau/effect-finance) is the full version.
  *
  * An event type the system does not act on should still be verified and
  * acknowledged: {@link isHandledEventType} and {@link decodeHandledEvent}
  * narrow the envelope to the handled types ({@link handledEventTypes}) with
  * lenient decoders that read only the fields a handler needs.
- *
- * **The SDK-based verifier stays available** as {@link constructEvent} /
- * {@link constructEventAsync} (and the `generateTestHeaderString*` helpers).
- * Those need an SDK client you build ({@link StripeService}) and the
- * optional `stripe` peer installed; this package never loads the SDK itself.
- *
- * Stripe treats every non-2xx answer as a failed delivery and retries it for
- * a limited period (see https://docs.stripe.com/webhooks), so the status
- * mostly tells the operator which side is at fault: a 400 for a bad delivery,
- * a 500 for a handled event that fails to decode (breakage on this side, say a
- * field moved in a new API version). A fix that ships after the retries stop
- * needs the event resent from the Dashboard. See {@link verify} for a sketch
- * of a handler; `packages/payments-stripe/examples/webhooks.ts` in the
- * repository (https://github.com/thomasfosterau/effect-finance) is the full
- * version.
  *
  * @module
  */
@@ -159,13 +126,50 @@ export const verifySignature = (
  * Verify a delivery with WebCrypto, then decode its event envelope — the
  * default webhook verifier.
  *
- * Nothing is decoded until the signature verifies. A signed body that is not
- * a JSON event envelope fails with `Schema.SchemaError` rather than throwing.
+ * It checks the `Stripe-Signature` header with `crypto.subtle`
+ * (HMAC-SHA256), compares digests in constant time, enforces a tolerance
+ * window around the signing time (±{@link DEFAULT_TOLERANCE} s unless
+ * configured; see {@link VerifyOptions.tolerance}), and only then decodes the
+ * event envelope. It needs neither the `stripe` SDK nor any Node API, so it
+ * runs unchanged in a Cloudflare Worker, and it reads "now" from Effect's
+ * `Clock`, so tests drive it with `TestClock`. Nothing is decoded until the
+ * signature verifies. A signed body that is not a JSON event envelope fails
+ * with `Schema.SchemaError` rather than throwing.
+ *
+ * **Pass the raw body.** Stripe sends
+ * `Stripe-Signature: t=<unix>,v1=<hex>[,v1=<hex>…]`, and `v1` is HMAC-SHA256
+ * with the endpoint's signing secret over `${t}.${rawBody}`. The signature is
+ * over the **raw** body bytes, so pass the request body exactly as received —
+ * canonically its bytes, `new Uint8Array(await request.arrayBuffer())`, and
+ * never a re-serialised parsed object. `await request.text()` is a lossy
+ * convenience: it strips a byte-order mark and replaces invalid UTF-8, so a
+ * body that has either will not verify. Several `v1` values appear during a
+ * secret rotation; every one is compared.
+ *
+ * **Answer every refusal with a bare 400.** Every refusal is a
+ * {@link SignatureVerificationError} whose `message` is one of a fixed set of
+ * exported constants (malformed header, timestamp outside the window, no
+ * matching signature, an unusable tolerance, a signature that could not be
+ * computed). The signing secret is taken as a `Redacted` and never reaches an
+ * error; the payload is not copied into the error either. Telling a caller
+ * which check failed helps forge the next attempt.
+ *
+ * Stripe treats every non-2xx answer as a failed delivery and retries it for
+ * a limited period (see https://docs.stripe.com/webhooks), so the status
+ * mostly tells the operator which side is at fault: a 400 for a bad delivery,
+ * a 500 for a handled event that fails to decode (breakage on this side, say a
+ * field moved in a new API version). Acknowledge the event types the system
+ * does not act on with a 2xx. A fix that ships after the retries stop needs
+ * the event resent from the Dashboard.
+ *
+ * **The SDK-based verifier stays available** as {@link constructEvent} /
+ * {@link constructEventAsync} (and the `generateTestHeaderString*` helpers).
+ * Those need an SDK client you build ({@link StripeService}) and the
+ * optional `stripe` peer installed; this package never loads the SDK itself.
  *
  * A sketch of a handler: answer every refusal with a bare 400, acknowledge
- * the event types it does not act on (Stripe retries every non-2xx answer),
- * and answer a handled event that fails to decode with a 500, since that is
- * breakage on this side.
+ * the event types it does not act on, and answer a handled event that fails
+ * to decode with a 500.
  *
  * @example
  * ```typescript

@@ -8,6 +8,26 @@
  * {@link IdempotencyKey} on the repeat lets the provider recognise it as the
  * same write and answer with the original outcome instead of applying it again.
  *
+ * The contract (which key, which operations, which errors to retry, how long
+ * a provider remembers a key) is on {@link IdempotencyKey}, where it reaches
+ * the published declarations, with an example.
+ *
+ * @module
+ */
+
+import { Effect, Schema } from "effect";
+import { PaymentInvalidRequestError } from "./PaymentsError.js";
+
+/** The shape a key must have: 1 to 64 characters of `A-Z a-z 0-9 _ -`. */
+const KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * A key that makes one logical write safe to repeat: a branded string of 1 to
+ * 64 characters from `A-Z a-z 0-9 _ -`. Make one with {@link generate}, or
+ * from a value of the caller's own with `IdempotencyKey.make` (which throws
+ * on a bad shape) or {@link validate} (which fails with
+ * `PaymentInvalidRequestError`).
+ *
  * **The contract**
  *
  * - **One key per logical write**, created by the caller *before the first
@@ -48,24 +68,6 @@
  *   limit for Catalog Products and Subscriptions. Stripe's (255) and
  *   Airwallex's (about 64) limits are unverified (#93), so the shape is
  *   deliberately conservative.
- *
- * See {@link IdempotencyKey} for an example.
- *
- * @module
- */
-
-import { Effect, Schema } from "effect";
-import { PaymentInvalidRequestError } from "./PaymentsError.js";
-
-/** The shape a key must have: 1 to 64 characters of `A-Z a-z 0-9 _ -`. */
-const KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-
-/**
- * A key that makes one logical write safe to repeat: a branded string of 1 to
- * 64 characters from `A-Z a-z 0-9 _ -`. Make one with {@link generate}, or
- * from a value of the caller's own with `IdempotencyKey.make` (which throws
- * on a bad shape) or {@link validate} (which fails with
- * `PaymentInvalidRequestError`).
  *
  * Create the key once per logical write and reuse it on every retry of that
  * write:
