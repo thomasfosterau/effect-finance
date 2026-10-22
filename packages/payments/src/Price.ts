@@ -98,6 +98,10 @@ export interface ListParams {
   readonly limit?: number | undefined;
   readonly product?: string | undefined;
   readonly active?: boolean | undefined;
+  /**
+   * The previous page's `nextCursor`, to list the page after it. A provider
+   * whose cursor is an item id also takes any item id here.
+   */
   readonly startingAfter?: string | undefined;
 }
 

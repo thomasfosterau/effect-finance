@@ -22,7 +22,9 @@
  * @module
  */
 
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -387,17 +389,22 @@ const decoder =
       }),
     );
 
-/** Decode a list page and map every item, as a neutral page. */
-const pageDecoder = <S extends Schema.Codec<unknown, unknown>, A>(
+/**
+ * Decode a list page and map every item, as a neutral page. Its `nextCursor`
+ * is the last item's id, Stripe's `starting_after` for the page after it.
+ */
+const pageDecoder = <S extends Schema.Codec<unknown, unknown>, A extends { readonly id: string }>(
   what: string,
   item: S,
   map: (value: S["Type"]) => A | undefined,
 ) =>
   decoder(`${what} list`, StripeList(item), (list): Page<A> | undefined => {
     const data = list.data.map(map);
-    return data.every((value): value is A => value !== undefined)
-      ? { data, hasMore: list.has_more }
-      : undefined;
+    if (!data.every((value): value is A => value !== undefined)) return undefined;
+    const last = Arr.last(data);
+    return list.has_more && Option.isSome(last)
+      ? { data, hasMore: true, nextCursor: last.value.id }
+      : { data, hasMore: list.has_more };
   });
 
 /** A customer (or the deleted stub, read back). */

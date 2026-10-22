@@ -52,7 +52,7 @@ Each resource is an abstract Effect service (a `Context.Service`). A program tha
 | `CheckoutSession` | `CheckoutSessions` | `create` (a hosted checkout page → its `url`) |
 | `BillingPortal` | `BillingPortalSessions` | `create` (a hosted billing portal page → its `url`) |
 
-Every operation returns `Effect<Entity, PaymentsError, Capability>`. List operations return a neutral `Page<Entity>` (`{ data, hasMore }`; request the next page with a `startingAfter` cursor); deletions return `Deleted` (`{ id, deleted: true }`).
+Every operation returns `Effect<Entity, PaymentsError, Capability>`. List operations return a neutral `Page<Entity>` (`{ data, hasMore, nextCursor }`; request the next page by passing `nextCursor` as `startingAfter`, with the same `limit` and filters); deletions return `Deleted` (`{ id, deleted: true }`).
 
 ### Hosted checkout and billing portal
 

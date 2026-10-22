@@ -77,6 +77,10 @@ export interface ListParams {
   readonly limit?: number | undefined;
   readonly paymentIntent?: string | undefined;
   readonly charge?: string | undefined;
+  /**
+   * The previous page's `nextCursor`, to list the page after it. A provider
+   * whose cursor is an item id also takes any item id here.
+   */
   readonly startingAfter?: string | undefined;
 }
 

@@ -173,6 +173,17 @@ describe("StripePayments capabilities", () => {
       path: "/v1/customers",
       params: formOf({ limit: 1, starting_after: "cus_0" }),
     });
+    // The next page's cursor is the last item's id.
+    expect(page.nextCursor).toBe("cus_2");
+  });
+
+  it("gives the last page of a list no cursor", async () => {
+    const { result } = run(Customer.list(), {
+      "GET /v1/customers": { object: "list", data: [], has_more: false },
+    });
+    const page = await result;
+    expect(page).toEqual({ data: [], hasMore: false });
+    expect(page).not.toHaveProperty("nextCursor");
   });
 
   it("maps a product", async () => {

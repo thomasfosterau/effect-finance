@@ -8,6 +8,7 @@
 import type { Duration, Effect, HashSet, Option, Schema } from "effect";
 import type { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import type {
+  Page,
   PaymentConfigError,
   PaymentInvalidRequestError,
   PaymentNetworkError,
@@ -27,6 +28,7 @@ import {
   networkError,
   observeResponses,
   omitUndefined,
+  pageNumberedList,
   parseDecimal,
   rejectedError,
   responseDecoder,
@@ -132,3 +134,9 @@ export const classified: PaymentsError = errorFromStatus(500, {
   param: undefined,
   retryAfter: undefined,
 });
+
+declare const listOne: (page: number | undefined) => Effect.Effect<Page<string>, "boom">;
+export const numbered: Effect.Effect<
+  Page<string>,
+  "boom" | PaymentInvalidRequestError
+> = pageNumberedList({ limit: 10 }, { provider: "Provider", firstPage: 1 }, listOne);

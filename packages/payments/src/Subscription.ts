@@ -95,6 +95,10 @@ export interface ListParams {
   readonly customer?: string | undefined;
   /** A status to filter by; only a known status can be requested. */
   readonly status?: KnownSubscriptionStatus | undefined;
+  /**
+   * The previous page's `nextCursor`, to list the page after it. A provider
+   * whose cursor is an item id also takes any item id here.
+   */
   readonly startingAfter?: string | undefined;
 }
 

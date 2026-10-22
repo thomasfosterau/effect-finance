@@ -34,6 +34,7 @@ import {
   networkError,
   observeResponses,
   omitUndefined,
+  pageNumberedList,
   parseDecimal,
   rejectedError,
   responseDecoder,
@@ -691,4 +692,81 @@ describe("errorFromStatus", () => {
       code: undefined,
     });
   });
+});
+
+describe("pageNumberedList", () => {
+  /** List one page of `data` through `pageNumberedList`, recording the page asked for. */
+  const listed = (
+    params: { readonly limit?: number | undefined; readonly startingAfter?: string | undefined },
+    hasMore: boolean,
+    firstPage = 1,
+  ) => {
+    const asked: Array<number | undefined> = [];
+    const result = Effect.runPromise(
+      pageNumberedList(params, { provider: "Acme", firstPage }, (page) => {
+        asked.push(page);
+        return Effect.succeed({ data: ["x"], hasMore });
+      }),
+    );
+    return { result, asked };
+  };
+  /** The failure of listing from `startingAfter`, and whether the list ran. */
+  const failure = async (startingAfter: string, limit?: number) => {
+    const asked: Array<number | undefined> = [];
+    const error = await Effect.runPromise(
+      Effect.flip(
+        pageNumberedList({ startingAfter, limit }, { provider: "Acme", firstPage: 1 }, (page) => {
+          asked.push(page);
+          return Effect.succeed({ data: [], hasMore: false });
+        }),
+      ),
+    );
+    return { error, asked };
+  };
+
+  it("lists the vendor's first page by default, with the next page's cursor", async () => {
+    const { result, asked } = listed({ limit: 2 }, true);
+    expect(await result).toEqual({ data: ["x"], hasMore: true, nextCursor: "page=2&size=2" });
+    expect(asked).toEqual([undefined]);
+    const zeroBased = listed({}, true, 0);
+    expect((await zeroBased.result).nextCursor).toBe("page=1");
+  });
+
+  it("lists the page a cursor names, for the same limit", async () => {
+    const { result, asked } = listed({ limit: 2, startingAfter: "page=2&size=2" }, true);
+    expect((await result).nextCursor).toBe("page=3&size=2");
+    expect(asked).toEqual([2]);
+  });
+
+  it("gives the last page no cursor", async () => {
+    const page = await listed({ startingAfter: "page=3" }, false).result;
+    expect(page).toEqual({ data: ["x"], hasMore: false });
+    expect(page).not.toHaveProperty("nextCursor");
+  });
+
+  it.each(["cus_123", "page=", "page=x", "page=2&size=", "page=0", ""])(
+    "refuses %j, an item id, a malformed cursor or one below the first page, listing nothing",
+    async (cursor) => {
+      const { error, asked } = await failure(cursor);
+      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+      expect(error).toMatchObject({
+        param: "startingAfter",
+        message: "Acme startingAfter must be the nextCursor of a previous page, not an item id",
+      });
+      expect(asked).toEqual([]);
+    },
+  );
+
+  it.each([
+    ["page=2&size=10", 20],
+    ["page=2&size=10", undefined],
+    ["page=2", 10],
+  ] as const)(
+    "refuses %s with limit %s: a cursor for another limit would skip or repeat items",
+    async (cursor, limit) => {
+      const { error } = await failure(cursor, limit);
+      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+      expect(error).toMatchObject({ param: "startingAfter" });
+    },
+  );
 });
