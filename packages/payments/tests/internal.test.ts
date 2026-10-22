@@ -618,6 +618,7 @@ describe("epochSecondsOf", () => {
   it("reads an ISO-8601 timestamp as whole Unix seconds", () => {
     expect(epochSecondsOf("2024-01-02T03:04:05Z")).toBe(1_704_164_645);
     expect(epochSecondsOf("2024-01-02T03:04:05.999Z")).toBe(1_704_164_645);
+    expect(epochSecondsOf("2026-01-01T10:00:00.900+10:00")).toBe(1_767_225_600);
   });
 
   it("is 0 for an absent, empty or unparseable timestamp", () => {
