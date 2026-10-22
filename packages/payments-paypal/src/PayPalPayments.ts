@@ -30,8 +30,11 @@
  */
 
 import type * as Context from "effect/Context";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as R from "effect/Record";
 import type * as Redacted from "effect/Redacted";
 import type { HttpClient } from "effect/http";
 import type { Credentials } from "@distilled.cloud/paypal/Credentials";
@@ -157,6 +160,23 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
   );
 
 /**
+ * Refuse the first neutral option set that PayPal cannot hold, rather than
+ * drop it: each entry is whether the option is set, and what PayPal does not
+ * support.
+ */
+const refuseUnsupported = (
+  options: ReadonlyArray<readonly [set: boolean, operation: string]>,
+): Effect.Effect<void, PaymentsError> =>
+  Option.match(
+    Arr.findFirst(options, ([set]) => set),
+    { onNone: () => Effect.void, onSome: ([, operation]) => notSupported(operation) },
+  );
+
+/** Whether `metadata` names any key: PayPal has nowhere to keep one. */
+const hasMetadata = (metadata: Record<string, string> | undefined): boolean =>
+  metadata !== undefined && !R.isEmptyRecord(metadata);
+
+/**
  * One call through the client, its response decoded by `decode`. `id`, when
  * given, names the resource and the path id the input carries, checked first.
  */
@@ -207,33 +227,50 @@ const products = /* @__PURE__ */ over(ProductNS.Products, (request) => {
     request(getProduct, { product_id: id }, decodeProduct, ["product", id]);
   return {
     create: (params) =>
-      withRequestId(params.idempotencyKey, (payPalRequestId) =>
-        request(
-          createProduct,
-          omitUndefined({
-            payPalRequestId,
-            name: params.name,
-            description: params.description,
-            type: "SERVICE",
-            category: "SOFTWARE",
-          }),
-          decodeProduct,
+      refuseUnsupported([
+        // A PayPal product is always active.
+        [params.active === false, "inactive products"],
+        [hasMetadata(params.metadata), "product metadata"],
+      ]).pipe(
+        Effect.andThen(() =>
+          withRequestId(params.idempotencyKey, (payPalRequestId) =>
+            request(
+              createProduct,
+              omitUndefined({
+                payPalRequestId,
+                name: params.name,
+                description: params.description,
+                type: "SERVICE",
+                category: "SOFTWARE",
+              }),
+              decodeProduct,
+            ),
+          ),
         ),
       ),
     retrieve,
     update: (id, params) =>
-      // PayPal patches a product, then returns 204; re-read to map the result.
-      params.description === undefined
-        ? notSupported("updating a product without a description")
-        : request(
-            patchProduct,
-            {
-              product_id: id,
-              body: [{ op: "replace", path: "/description", value: params.description }],
-            },
-            Effect.succeed,
-            ["product", id],
-          ).pipe(Effect.andThen(retrieve(id))),
+      refuseUnsupported([
+        [params.name !== undefined, "renaming a product"],
+        // A PayPal product is always active.
+        [params.active === false, "inactive products"],
+        [hasMetadata(params.metadata), "product metadata"],
+      ]).pipe(
+        Effect.andThen(() =>
+          // PayPal patches a product, then returns 204; re-read to map the result.
+          params.description === undefined
+            ? notSupported("updating a product without a description")
+            : request(
+                patchProduct,
+                {
+                  product_id: id,
+                  body: [{ op: "replace", path: "/description", value: params.description }],
+                },
+                Effect.succeed,
+                ["product", id],
+              ).pipe(Effect.andThen(retrieve(id))),
+        ),
+      ),
     del: () => notSupported("deleting products"),
     list: (params) =>
       request(listProducts, omitUndefined({ page_size: params?.limit }), decodeProductPage),
@@ -243,7 +280,11 @@ const products = /* @__PURE__ */ over(ProductNS.Products, (request) => {
 /**
  * PayPal Catalog Products as the {@link ProductNS.Products} capability. `del`
  * fails with {@link PaymentInvalidRequestError} (PayPal cannot delete a
- * product), and so does an `update` without a `description`.
+ * product). `update` patches only the `description`, so one without a
+ * `description`, or one that sets `name`, fails the same way. A PayPal product
+ * is always active and keeps no metadata: a `create` or `update` with
+ * `active: false` or a non-empty `metadata` fails too (`active: true` holds
+ * already).
  */
 export const productsLayer: Layer.Layer<ProductNS.Products, never, Requirements> =
   /* @__PURE__ */ Layer.provide(products, clientLayerFromContext);
@@ -261,6 +302,7 @@ const prices = /* @__PURE__ */ over(PriceNS.Prices, (request) => {
         return notSupported("one-time prices (plans must be recurring)");
       }
       const recurring = params.recurring;
+      if (hasMetadata(params.metadata)) return notSupported("price metadata");
       return toMajorString(params.unitAmount, params.currency, "unitAmount").pipe(
         Effect.flatMap((value) =>
           withRequestId(params.idempotencyKey, (payPalRequestId) =>
@@ -270,6 +312,9 @@ const prices = /* @__PURE__ */ over(PriceNS.Prices, (request) => {
                 payPalRequestId,
                 product_id: params.product,
                 name: "Plan",
+                // A plan is created active unless asked otherwise; CREATED is
+                // PayPal's not-yet-active state, read back as `active: false`.
+                status: params.active === false ? "CREATED" : undefined,
                 billing_cycles: [
                   {
                     tenure_type: "REGULAR",
@@ -296,6 +341,7 @@ const prices = /* @__PURE__ */ over(PriceNS.Prices, (request) => {
     update: (id, params) => {
       // The only neutral field PayPal can act on is `active`, via
       // activate/deactivate; then re-read the plan to map the result.
+      if (hasMetadata(params.metadata)) return notSupported("price metadata");
       if (params.active === undefined) {
         return notSupported("updating a plan other than activating it");
       }
@@ -317,7 +363,11 @@ const prices = /* @__PURE__ */ over(PriceNS.Prices, (request) => {
  * PayPal Billing Plans as the {@link PriceNS.Prices} capability. A one-time
  * price fails `create` with {@link PaymentInvalidRequestError} (plans are
  * recurring only), and `update` can only toggle `active` (activate /
- * deactivate); any other update fails the same way.
+ * deactivate); any other update fails the same way. A `create` with
+ * `active: false` makes the plan in PayPal's not-yet-active `CREATED` state. A
+ * plan keeps no metadata, so a `create` or `update` with a non-empty
+ * `metadata` fails too. PayPal requires a plan name, and the neutral price has
+ * none to give, so every plan is named `"Plan"`.
  */
 export const pricesLayer: Layer.Layer<PriceNS.Prices, never, Requirements> =
   /* @__PURE__ */ Layer.provide(prices, clientLayerFromContext);

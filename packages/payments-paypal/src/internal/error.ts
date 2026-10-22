@@ -35,15 +35,19 @@ export const errorBodyOf = (json: unknown): PayPalErrorBody | undefined =>
 /**
  * Map a PayPal HTTP status + error body onto a neutral payments error: the
  * status picks the class (`errorFromStatus`), the first detail's `field`
- * names the offending parameter and the body's `name` the provider error code.
+ * names the offending parameter, the body's `name` the provider error code,
+ * and a 429's `Retry-After` header (whole seconds) becomes the rate limit's
+ * `retryAfter`.
  */
 export const handlePayPalError = (
   status: number,
   body: PayPalErrorBody | undefined,
+  retryAfter?: string | undefined,
 ): PaymentsError =>
   errorFromStatus(status, {
     provider: PROVIDER,
     message: body?.message ?? `PayPal request failed with status ${status}`,
     code: body?.name,
     param: body?.details?.[0]?.field,
+    retryAfter,
   });

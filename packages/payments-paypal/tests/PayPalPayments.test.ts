@@ -261,6 +261,105 @@ describe("PayPalPayments capabilities", () => {
   });
 });
 
+describe("PayPalPayments create and update options", () => {
+  const PRODUCT = { id: "PROD-1", name: "Premium", create_time: "2026-01-01T00:00:00Z" };
+  const PLAN = {
+    id: "P-1",
+    product_id: "PROD-1",
+    status: "CREATED",
+    billing_cycles: [
+      {
+        tenure_type: "REGULAR",
+        frequency: { interval_unit: "MONTH", interval_count: 1 },
+        pricing_scheme: { fixed_price: { currency_code: "USD", value: "10.00" } },
+      },
+    ],
+    create_time: "2026-01-01T00:00:00Z",
+  };
+  const monthly = {
+    product: "PROD-1",
+    currency: "usd",
+    unitAmount: 1000,
+    recurring: { interval: "month" },
+  } as const;
+
+  /** The failure of `effect` and the calls it sent. */
+  const refused = async (
+    effect: Effect.Effect<unknown, unknown, Layer.Success<typeof PayPalPayments.capabilities>>,
+  ) => {
+    const { client, calls } = makeFakeClient(() => PRODUCT);
+    const error = await Effect.runPromise(
+      Effect.flip(effect).pipe(Effect.provide(provide(client))),
+    );
+    return { error, calls };
+  };
+
+  it.each([
+    ["an inactive product", Product.create({ name: "P", active: false }), "inactive products"],
+    [
+      "product metadata on create",
+      Product.create({ name: "P", metadata: { tier: "pro" } }),
+      "product metadata",
+    ],
+    [
+      "a product rename",
+      Product.update("PROD-1", { name: "New", description: "d" }),
+      "renaming a product",
+    ],
+    [
+      "deactivating a product",
+      Product.update("PROD-1", { active: false, description: "d" }),
+      "inactive products",
+    ],
+    [
+      "product metadata on update",
+      Product.update("PROD-1", { metadata: { tier: "pro" }, description: "d" }),
+      "product metadata",
+    ],
+    [
+      "price metadata on create",
+      Price.create({ ...monthly, metadata: { a: "b" } }),
+      "price metadata",
+    ],
+    [
+      "price metadata on update",
+      Price.update("P-1", { active: true, metadata: { a: "b" } }),
+      "price metadata",
+    ],
+  ] as const)("refuses %s, sending nothing", async (_name, effect, operation) => {
+    const { error, calls } = await refused(effect);
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(error).toMatchObject({ message: `PayPal does not support ${operation}` });
+    expect(calls).toEqual([]);
+  });
+
+  it("accepts what PayPal already holds: an active product and empty metadata", async () => {
+    const { client, calls } = makeFakeClient(() => PRODUCT);
+    const product = await Effect.runPromise(
+      Product.create({ name: "Premium", active: true, metadata: {} }).pipe(
+        Effect.provide(provide(client)),
+      ),
+    );
+    expect(product.active).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("creates an inactive price as a plan in PayPal's CREATED state", async () => {
+    const { client, calls } = makeFakeClient(() => PLAN);
+    const price = await Effect.runPromise(
+      Price.create({ ...monthly, active: false }).pipe(Effect.provide(provide(client))),
+    );
+    expect(calls[0].body).toMatchObject({ status: "CREATED" });
+    expect(price.active).toBe(false);
+  });
+
+  it("sends no plan status for an active price, which PayPal creates active", async () => {
+    const { client, calls } = makeFakeClient(() => ({ ...PLAN, status: "ACTIVE" }));
+    await Effect.runPromise(Price.create(monthly).pipe(Effect.provide(provide(client))));
+    expect(calls[0].body).not.toHaveProperty("status");
+  });
+});
+
 describe("PayPalPayments decoding", () => {
   /** Run `effect` against a client answering `body`, to its failure. */
 

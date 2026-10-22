@@ -121,8 +121,8 @@ PayPal's billing suite and checkout APIs map onto a subset of the core capabilit
 
 | Capability | Maps to | Notes |
 | --- | --- | --- |
-| `Products` | Catalog Products | created as a `SERVICE` in the `SOFTWARE` category; `update` replaces only the `description` (one without a `description` fails); no `del` |
-| `Prices` | Billing Plans | recurring only (a one-time price fails); `update` toggles `active` via activate/deactivate, and any other update fails |
+| `Products` | Catalog Products | created as a `SERVICE` in the `SOFTWARE` category; `update` replaces only the `description` (one without a `description`, or one that sets `name`, fails); a product is always active and keeps no metadata, so `active: false` or a non-empty `metadata` fails on `create` and `update`; no `del` |
+| `Prices` | Billing Plans | recurring only (a one-time price fails); every plan is named `"Plan"` (the neutral price has no name); `active: false` on `create` makes the plan in PayPal's not-yet-active `CREATED` state; a non-empty `metadata` fails on `create` and `update`; `update` toggles `active` via activate/deactivate, and any other update fails |
 | `PaymentIntents` | Orders | `intent: "CAPTURE"`, `customer` sent as the purchase unit's `custom_id`; `confirm` = capture; no `update` / `cancel` / `list` |
 | `Subscriptions` | Subscriptions | the first item's `price` is the plan id (and its `quantity` the quantity), `customer` sent as `custom_id`; no `update` / `list` |
 | `Refunds` | Capture refunds | refund a `charge` (capture id) or a captured `paymentIntent`; no `update` / `list` |
@@ -140,7 +140,7 @@ Every capability call fails with the core's `PaymentsError` and nothing else. Pa
 | PayPal answer | Neutral error |
 | --- | --- |
 | 401, 403 | `PaymentAuthenticationError` (and a 401 forgets the cached token, so the next call logs in again) |
-| 429 | `PaymentRateLimitError` |
+| 429 | `PaymentRateLimitError`, with `retryAfter` from a `Retry-After` header given in whole seconds |
 | 400, 404, 422 | `PaymentInvalidRequestError` (`param` from the first of the body's `details[].field`) |
 | any other non-2xx | `PaymentProviderError` (`provider: "paypal"`, `code` from the body's `name`) |
 | a 2xx that does not decode | `PaymentProviderError` |

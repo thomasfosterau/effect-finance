@@ -13,6 +13,7 @@ import {
   PaymentAuthenticationError,
   PaymentConfigError,
   PaymentNetworkError,
+  PaymentRateLimitError,
 } from "@thomasfosterau/effect-payments";
 import * as PayPalPayments from "../src/PayPalPayments.ts";
 import type { PayPalConfig } from "../src/PayPalPayments.ts";
@@ -93,6 +94,21 @@ const hangingPayPal = (hung: {
 };
 
 const retrieve = Product.retrieve("PROD-1");
+
+describe("PayPalPayments session: a rate-limited login", () => {
+  it("fails with PaymentRateLimitError carrying Retry-After in seconds", async () => {
+    const { http } = stubFetch(() =>
+      jsonResponse(
+        429,
+        { name: "RATE_LIMIT_REACHED", message: "Slow down" },
+        { "Retry-After": "9" },
+      ),
+    );
+    const error = await Effect.runPromise(Effect.flip(run(retrieve, http)));
+    expect(error).toBeInstanceOf(PaymentRateLimitError);
+    expect(error).toMatchObject({ message: "Slow down", retryAfter: 9 });
+  });
+});
 
 describe("PayPalPayments session: the cached token", () => {
   it("keeps a newer token when a call made with the old one gets a late 401", async () => {
