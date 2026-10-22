@@ -502,6 +502,22 @@ const sdkTolerance = (tolerance: number | undefined): number | undefined =>
   tolerance === 0 ? DEFAULT_TOLERANCE : tolerance;
 
 /**
+ * The `SignatureVerificationError` an SDK-based wrapper fails with when the
+ * SDK throws: the thrown value's message, the header it was given (if any)
+ * and the payload as a string.
+ */
+const sdkFailure = (
+  error: unknown,
+  payload: string | Buffer,
+  header: string | undefined,
+): SignatureVerificationError =>
+  new SignatureVerificationError({
+    message: error instanceof Error ? error.message : String(error),
+    header,
+    payload: typeof payload === "string" ? payload : payload.toString("utf8"),
+  });
+
+/**
  * Construct an Event from a webhook payload and signature with the SDK's
  * verifier — the optional alternative to {@link verify}, needing
  * {@link StripeService} (an SDK client you build) and the `stripe` peer.
@@ -552,15 +568,7 @@ export const constructEvent = (
     return yield* Effect.try({
       try: () =>
         stripe.webhooks.constructEvent(payload, signature, secret, sdkTolerance(tolerance)),
-      catch: (error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
-        return new SignatureVerificationError({
-          message,
-          header: signature,
-          payload: payloadString,
-        });
-      },
+      catch: (error) => sdkFailure(error, payload, signature),
     });
   });
 
@@ -622,15 +630,7 @@ export const constructEventAsync = (
           sdkTolerance(tolerance),
           cryptoProvider,
         ),
-      catch: (error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
-        return new SignatureVerificationError({
-          message,
-          header: signature,
-          payload: payloadString,
-        });
-      },
+      catch: (error) => sdkFailure(error, payload, signature),
     });
   });
 
@@ -681,15 +681,7 @@ export const generateTestHeaderString = (
             timestamp,
           }),
         ),
-      catch: (error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
-        return new SignatureVerificationError({
-          message,
-          header: undefined,
-          payload: payloadString,
-        });
-      },
+      catch: (error) => sdkFailure(error, payload, undefined),
     });
   });
 
@@ -750,15 +742,7 @@ export const generateTestHeaderStringAsync = (
             cryptoProvider,
           }),
         ),
-      catch: (error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
-        return new SignatureVerificationError({
-          message,
-          header: undefined,
-          payload: payloadString,
-        });
-      },
+      catch: (error) => sdkFailure(error, payload, undefined),
     });
   });
 
