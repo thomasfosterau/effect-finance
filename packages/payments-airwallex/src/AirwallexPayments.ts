@@ -28,7 +28,11 @@ import * as IdempotencyKeyNS from "@thomasfosterau/effect-payments/IdempotencyKe
 import * as PaymentIntentNS from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as RefundNS from "@thomasfosterau/effect-payments/Refund";
 import * as StubNS from "@thomasfosterau/effect-payments/Stub";
-import { PaymentInvalidRequestError, type PaymentsError } from "@thomasfosterau/effect-payments";
+import {
+  type Page,
+  PaymentInvalidRequestError,
+  type PaymentsError,
+} from "@thomasfosterau/effect-payments";
 import {
   AirwallexClient,
   layer as clientLayer,
@@ -45,7 +49,7 @@ import {
   decodeRefund,
   decodeRefundPage,
 } from "./internal/mapping.js";
-import { checkMinorUnits } from "@thomasfosterau/effect-payments/internal";
+import { checkMinorUnits, pageNumberedList } from "@thomasfosterau/effect-payments/internal";
 import { toMajorNumber } from "./internal/money.js";
 
 /** A fresh idempotency key for a write request. */
@@ -83,6 +87,23 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
     }),
   );
 
+/**
+ * One page of an Airwallex list. A filter Airwallex cannot apply (`refused`,
+ * when set) fails first; then `startingAfter` (a previous page's
+ * `nextCursor`) names the 0-based `page_num` to request, and the result
+ * carries the cursor of the page after it.
+ */
+const listPage = <A>(
+  params:
+    | { readonly limit?: number | undefined; readonly startingAfter?: string | undefined }
+    | undefined,
+  refused: string | undefined,
+  list: (pageNum: number | undefined) => Effect.Effect<Page<A>, PaymentsError>,
+): Effect.Effect<Page<A>, PaymentsError> =>
+  (refused === undefined ? Effect.void : notSupported(refused)).pipe(
+    Effect.andThen(pageNumberedList(params, { provider: "Airwallex", firstPage: 0 }, list)),
+  );
+
 // ---------------------------------------------------------------------------
 // Customers
 // ---------------------------------------------------------------------------
@@ -95,7 +116,9 @@ const refuseDescription = (description: string | undefined): Effect.Effect<void,
   description === undefined ? Effect.void : notSupported("customer descriptions");
 
 /**
- * Airwallex customers as the {@link CustomerNS.Customers} capability. `del`
+ * Airwallex customers as the {@link CustomerNS.Customers} capability. `list`
+ * pages by page number through `nextCursor`, and refuses the `email` filter
+ * with {@link PaymentInvalidRequestError}. `del`
  * fails with {@link PaymentInvalidRequestError} (Airwallex has no
  * delete-customer endpoint), and so do a `create` or `update` that set a
  * `description` (this provider maps no Airwallex field to it).
@@ -146,13 +169,18 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
           ).pipe(Effect.flatMap(decodeCustomer)),
         del: () => notSupported("deleting customers"),
         list: (params) =>
-          client
-            .request({
-              method: "GET",
-              path: "/api/v1/pa/customers",
-              query: { page_size: params?.limit },
-            })
-            .pipe(Effect.flatMap(decodeCustomerPage)),
+          listPage(
+            params,
+            params?.email === undefined ? undefined : "filtering customers by email",
+            (pageNum) =>
+              client
+                .request({
+                  method: "GET",
+                  path: "/api/v1/pa/customers",
+                  query: { page_size: params?.limit, page_num: pageNum },
+                })
+                .pipe(Effect.flatMap(decodeCustomerPage)),
+          ),
       }),
     ),
   );
@@ -163,7 +191,7 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
 
 /**
  * Airwallex payment intents as the {@link PaymentIntentNS.PaymentIntents}
- * capability. `update` fails with {@link PaymentInvalidRequestError}; use
+ * capability. `list` pages by page number through `nextCursor`. `update` fails with {@link PaymentInvalidRequestError}; use
  * `confirm` or `cancel`.
  */
 export const paymentIntentsLayer: Layer.Layer<
@@ -223,13 +251,15 @@ export const paymentIntentsLayer: Layer.Layer<
           })
           .pipe(Effect.flatMap(decodePaymentIntent)),
       list: (params) =>
-        client
-          .request({
-            method: "GET",
-            path: "/api/v1/pa/payment_intents",
-            query: { page_size: params?.limit, customer_id: params?.customer },
-          })
-          .pipe(Effect.flatMap(decodePaymentIntentPage)),
+        listPage(params, undefined, (pageNum) =>
+          client
+            .request({
+              method: "GET",
+              path: "/api/v1/pa/payment_intents",
+              query: { page_size: params?.limit, customer_id: params?.customer, page_num: pageNum },
+            })
+            .pipe(Effect.flatMap(decodePaymentIntentPage)),
+        ),
     }),
   ),
 );
@@ -241,7 +271,8 @@ export const paymentIntentsLayer: Layer.Layer<
 /**
  * Airwallex refunds as the {@link RefundNS.Refunds} capability. A refund
  * references a `paymentIntent`: `create` without one (a `charge` only) fails
- * with {@link PaymentInvalidRequestError}, and so does `update`.
+ * with {@link PaymentInvalidRequestError}, and so do `update` and a `list`
+ * filtered by `charge`. `list` pages by page number through `nextCursor`.
  */
 export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient> =
   /* @__PURE__ */ Layer.effect(
@@ -298,16 +329,24 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient>
             .pipe(Effect.flatMap(decodeRefund)),
         update: () => notSupported("updating refunds"),
         list: (params) =>
-          client
-            .request({
-              method: "GET",
-              path: "/api/v1/pa/refunds",
-              query: {
-                page_size: params?.limit,
-                payment_intent_id: params?.paymentIntent,
-              },
-            })
-            .pipe(Effect.flatMap(decodeRefundPage)),
+          listPage(
+            params,
+            params?.charge === undefined
+              ? undefined
+              : "filtering refunds by charge (charges are not supported)",
+            (pageNum) =>
+              client
+                .request({
+                  method: "GET",
+                  path: "/api/v1/pa/refunds",
+                  query: {
+                    page_size: params?.limit,
+                    payment_intent_id: params?.paymentIntent,
+                    page_num: pageNum,
+                  },
+                })
+                .pipe(Effect.flatMap(decodeRefundPage)),
+          ),
       }),
     ),
   );

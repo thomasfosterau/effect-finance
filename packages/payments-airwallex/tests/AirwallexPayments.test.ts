@@ -166,6 +166,69 @@ describe("AirwallexPayments capabilities", () => {
   });
 });
 
+describe("AirwallexPayments list paging", () => {
+  const customer = (id: string) => ({ id, created_at: "2026-01-01T00:00:00Z" });
+  /** A two-page customer list, answered by `page_num` (0 when absent). */
+  const twoPages = (req: AirwallexRequest) =>
+    req.query?.page_num === 1
+      ? { items: [customer("cus_3")], has_more: false }
+      : { items: [customer("cus_1"), customer("cus_2")], has_more: true };
+
+  it("lists the next page with the previous page's nextCursor", async () => {
+    const { client, calls } = makeFakeClient(twoPages);
+    const list = (startingAfter?: string) =>
+      Effect.runPromise(
+        Customer.list({ limit: 2, startingAfter }).pipe(Effect.provide(provide(client))),
+      );
+
+    const first = await list();
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).toBe("page=1&size=2");
+    // The first page sends no `page_num`: Airwallex starts at 0.
+    expect(calls[0].query).toEqual({ page_size: 2, page_num: undefined });
+
+    const second = await list(first.nextCursor);
+    expect(calls[1].query).toEqual({ page_size: 2, page_num: 1 });
+    expect(second.data.map((item) => item.id)).toEqual(["cus_3"]);
+    expect(second.hasMore).toBe(false);
+    expect(second).not.toHaveProperty("nextCursor");
+  });
+
+  it("pages payment intents and refunds the same way, keeping their filters", async () => {
+    const { client, calls } = makeFakeClient(() => ({ items: [], has_more: false }));
+    const run = <A, E>(
+      effect: Effect.Effect<A, E, Layer.Success<typeof AirwallexPayments.capabilities>>,
+    ) => Effect.runPromise(effect.pipe(Effect.provide(provide(client))));
+    await run(PaymentIntent.list({ customer: "cus_1", startingAfter: "page=2" }));
+    await run(Refund.list({ paymentIntent: "int_1", startingAfter: "page=4" }));
+    expect(calls[0].query).toEqual({ page_size: undefined, customer_id: "cus_1", page_num: 2 });
+    expect(calls[1].query).toEqual({
+      page_size: undefined,
+      payment_intent_id: "int_1",
+      page_num: 4,
+    });
+  });
+
+  it.each<
+    readonly [
+      string,
+      Effect.Effect<unknown, unknown, Layer.Success<typeof AirwallexPayments.capabilities>>,
+    ]
+  >([
+    ["an item id", Customer.list({ startingAfter: "cus_1" })],
+    ["a cursor for another limit", Customer.list({ limit: 5, startingAfter: "page=1&size=2" })],
+    ["the email filter on customers", Customer.list({ email: "jane@example.com" })],
+    ["the charge filter on refunds", Refund.list({ charge: "ch_1" })],
+  ])("refuses %s, sending nothing", async (_name, effect) => {
+    const { client, calls } = makeFakeClient(twoPages);
+    const error = await Effect.runPromise(
+      Effect.flip(effect).pipe(Effect.provide(provide(client))),
+    );
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("AirwallexPayments decoding", () => {
   /** Run `effect` against a client answering `body`, to its failure. */
   const failure = <E>(
