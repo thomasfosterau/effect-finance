@@ -34,7 +34,8 @@ const layer = PayPalPayments.layer({
 // from PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET / PAYPAL_ENV (required: live | sandbox):
 // const layer = PayPalPayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 
-const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+// Calls PayPal when invoked: `const product = await createProduct();`
+const createProduct = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
 ```
 
 ### Configuration

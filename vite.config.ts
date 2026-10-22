@@ -102,9 +102,11 @@ export default defineConfig({
       // before any Effect runtime exists — there is no `Config` provider to
       // read from and no `FileSystem` service to call, so `process.env` and
       // `node:*` are the only things that work there. The Effect preset's
-      // service rules have no satisfiable fix in these files.
+      // service rules have no satisfiable fix in these files. The root
+      // `scripts/` are task-graph helpers of the same kind (a step of a
+      // package task, run by bare `node`).
       {
-        files: ["**/vite.config.ts", "**/vitest.config.ts", "vite.package.ts"],
+        files: ["**/vite.config.ts", "**/vitest.config.ts", "vite.package.ts", "scripts/*.ts"],
         rules: {
           "effect/avoid-node-imports": "off",
           "effect/avoid-sync-fs": "off",
@@ -205,7 +207,8 @@ export default defineConfig({
         cache: false,
       },
       // Every package's docgen: type-checks AND RUNS each JSDoc `@example`
-      // against the built `dist/`, then writes the API reference under that
+      // and each `ts` / `typescript` block of the package README against the
+      // built `dist/`, then writes the API reference under that
       // package's (git-ignored) `docs/`. Same pure-graph-node shape as
       // `check`, so a new package adds itself here too.
       docgen: {
