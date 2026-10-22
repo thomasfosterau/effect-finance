@@ -248,7 +248,11 @@ export const make = (
         "login",
       );
       if (!isOk(reply.status)) {
-        return yield* handleAirwallexError(reply.status, errorBodyOf(reply.json));
+        return yield* handleAirwallexError(
+          reply.status,
+          errorBodyOf(reply.json),
+          reply.headers["retry-after"],
+        );
       }
       const body = yield* Schema.decodeUnknownEffect(LoginResponse)(reply.json).pipe(
         Effect.mapError(
@@ -303,7 +307,11 @@ export const make = (
           yield* cache.forget(token);
         }
         if (!isOk(reply.status)) {
-          return yield* handleAirwallexError(reply.status, errorBodyOf(reply.json));
+          return yield* handleAirwallexError(
+            reply.status,
+            errorBodyOf(reply.json),
+            reply.headers["retry-after"],
+          );
         }
         return reply.json;
       });

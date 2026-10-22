@@ -15,6 +15,7 @@ import {
   PaymentConfigError,
   PaymentInvalidRequestError,
   PaymentNetworkError,
+  PaymentRateLimitError,
 } from "@thomasfosterau/effect-payments";
 import { AirwallexClient, layerFromEnv, make, type AirwallexConfig } from "../src/Airwallex.ts";
 import {
@@ -132,6 +133,25 @@ describe("Airwallex client", () => {
 
     expect(error).toBeInstanceOf(PaymentAuthenticationError);
     expect(error.message).toBe("invalid token");
+  });
+
+  it("maps an HTTP 429 to a rate limit carrying Retry-After in seconds", async () => {
+    const request = (retryAfter: Record<string, string>) => {
+      const { http } = stubFetch(() =>
+        jsonResponse(429, { code: "too_many_requests", message: "slow down" }, retryAfter),
+      );
+      return Effect.runPromise(
+        Effect.gen(function* () {
+          const client = yield* make(config({}));
+          return yield* client.request({ method: "GET", path: "/api/v1/pa/customers/cus_1" });
+        }).pipe(Effect.flip, Effect.provide(http)),
+      );
+    };
+
+    const error = await request({ "Retry-After": "12" });
+    expect(error).toBeInstanceOf(PaymentRateLimitError);
+    expect(error).toMatchObject({ message: "slow down", retryAfter: 12 });
+    expect(await request({})).toMatchObject({ retryAfter: undefined });
   });
 
   it("fails with a config error when credentials are missing", async () => {

@@ -88,9 +88,17 @@ const notSupported = (operation: string): Effect.Effect<never, PaymentsError> =>
 // ---------------------------------------------------------------------------
 
 /**
+ * Refuse a customer `description`, which this provider does not map onto an
+ * Airwallex field, rather than drop it.
+ */
+const refuseDescription = (description: string | undefined): Effect.Effect<void, PaymentsError> =>
+  description === undefined ? Effect.void : notSupported("customer descriptions");
+
+/**
  * Airwallex customers as the {@link CustomerNS.Customers} capability. `del`
  * fails with {@link PaymentInvalidRequestError} (Airwallex has no
- * delete-customer endpoint).
+ * delete-customer endpoint), and so do a `create` or `update` that set a
+ * `description` (this provider maps no Airwallex field to it).
  */
 export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexClient> =
   /* @__PURE__ */ Layer.effect(
@@ -98,20 +106,22 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
     /* @__PURE__ */ Effect.map(AirwallexClient, (client) =>
       CustomerNS.Customers.of({
         create: (params) =>
-          write(
-            client,
-            {
-              method: "POST",
-              path: "/api/v1/pa/customers",
-              body: {
-                request_id: requestId(),
-                email: params.email,
-                first_name: params.name,
-                phone_number: params.phone,
-                metadata: params.metadata,
+          Effect.andThen(refuseDescription(params.description), () =>
+            write(
+              client,
+              {
+                method: "POST",
+                path: "/api/v1/pa/customers",
+                body: {
+                  request_id: requestId(),
+                  email: params.email,
+                  first_name: params.name,
+                  phone_number: params.phone,
+                  metadata: params.metadata,
+                },
               },
-            },
-            params.idempotencyKey,
+              params.idempotencyKey,
+            ),
           ).pipe(Effect.flatMap(decodeCustomer)),
         retrieve: (id) =>
           client
@@ -121,8 +131,8 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
             })
             .pipe(Effect.flatMap(decodeCustomer)),
         update: (id, params) =>
-          client
-            .request({
+          Effect.andThen(refuseDescription(params.description), () =>
+            client.request({
               method: "POST",
               path: `/api/v1/pa/customers/${id}/update`,
               body: {
@@ -132,8 +142,8 @@ export const customersLayer: Layer.Layer<CustomerNS.Customers, never, AirwallexC
                 phone_number: params.phone,
                 metadata: params.metadata,
               },
-            })
-            .pipe(Effect.flatMap(decodeCustomer)),
+            }),
+          ).pipe(Effect.flatMap(decodeCustomer)),
         del: () => notSupported("deleting customers"),
         list: (params) =>
           client

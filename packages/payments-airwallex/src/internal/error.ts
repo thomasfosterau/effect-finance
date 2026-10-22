@@ -23,15 +23,18 @@ export type AirwallexErrorBody = typeof AirwallexErrorBody.Type;
 /**
  * Map an Airwallex HTTP status + error body onto a neutral payments error:
  * the status picks the class (`errorFromStatus`), the body's `source` names
- * the offending parameter and its `code` the provider error code.
+ * the offending parameter, its `code` the provider error code, and a 429's
+ * `Retry-After` header (whole seconds) becomes the rate limit's `retryAfter`.
  */
 export const handleAirwallexError = (
   status: number,
   body: AirwallexErrorBody | undefined,
+  retryAfter?: string | undefined,
 ): PaymentsError =>
   errorFromStatus(status, {
     provider: PROVIDER,
     message: body?.message ?? `Airwallex request failed with status ${status}`,
     code: body?.code,
     param: body?.source,
+    retryAfter,
   });
