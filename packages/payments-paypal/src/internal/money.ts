@@ -18,7 +18,8 @@
  * @module
  */
 
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
+import * as HashSet from "effect/HashSet";
 import {
   checkMinorUnits,
   decimalText,
@@ -53,12 +54,12 @@ const OTHER_ZERO_DECIMAL = [
   "xpf",
 ];
 
-const ZERO_DECIMAL = new Set([...PAYPAL_ZERO_DECIMAL, ...OTHER_ZERO_DECIMAL]);
+const ZERO_DECIMAL = HashSet.fromIterable([...PAYPAL_ZERO_DECIMAL, ...OTHER_ZERO_DECIMAL]);
 
 // Currencies with three decimal places (ISO 4217 exponent 3). PayPal supports
 // none of them today; its `Money` object documents thousandths for currencies
 // "like TND", so they keep three rather than being scaled by 100.
-const THREE_DECIMAL = new Set(["bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd"]);
+const THREE_DECIMAL = HashSet.make("bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd");
 
 /** The number of fraction digits PayPal expects for `currency` (case-insensitive). */
 export const exponent = exponentFrom(ZERO_DECIMAL, THREE_DECIMAL);

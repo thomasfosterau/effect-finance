@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
 import * as BillingPortal from "@thomasfosterau/effect-payments/BillingPortal";
 import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";

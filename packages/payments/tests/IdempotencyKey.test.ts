@@ -1,5 +1,8 @@
 import { describe, expect, expectTypeOf, it } from "vite-plus/test";
-import { Effect, Schema } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as HashSet from "effect/HashSet";
+import * as Schema from "effect/Schema";
 import * as IdempotencyKey from "@thomasfosterau/effect-payments/IdempotencyKey";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
@@ -16,43 +19,47 @@ const decodes = Schema.is(IdempotencyKey.IdempotencyKey);
 describe("IdempotencyKey", () => {
   it("generates a valid, distinct key each time it runs", () => {
     const keys = Array.from({ length: 50 }, () => Effect.runSync(IdempotencyKey.generate));
-    for (const key of keys) {
+    Arr.forEach(keys, (key) => {
       expect(key).toMatch(/^[0-9a-f-]{36}$/);
       expect(decodes(key)).toBe(true);
-    }
-    expect(new Set(keys).size).toBe(50);
+    });
+    expect(HashSet.size(HashSet.fromIterable(keys))).toBe(50);
   });
 
   it("accepts 1 to 64 characters of A-Z a-z 0-9 _ -", () => {
-    for (const ok of ["a", "order_42", "Order-42", "x".repeat(64), "0123456789_-ABCxyz"]) {
+    Arr.forEach(["a", "order_42", "Order-42", "x".repeat(64), "0123456789_-ABCxyz"], (ok) => {
       expect(decodes(ok)).toBe(true);
-    }
+    });
   });
 
   it("rejects anything else", () => {
-    for (const bad of [
-      "",
-      "x".repeat(65),
-      "has space",
-      "slash/slash",
-      "dot.dot",
-      "naïve",
-      "a\nb",
-    ]) {
-      expect(decodes(bad)).toBe(false);
-    }
+    Arr.forEach(
+      ["", "x".repeat(65), "has space", "slash/slash", "dot.dot", "naïve", "a\nb"],
+      (bad) => {
+        expect(decodes(bad)).toBe(false);
+      },
+    );
   });
 
   it("validate passes none through, passes a good key, and refuses a bad one", async () => {
     expect(await Effect.runPromise(IdempotencyKey.validate(undefined))).toBeUndefined();
     expect(await Effect.runPromise(IdempotencyKey.validate("order-42"))).toBe("order-42");
-    for (const bad of ["", "x".repeat(65), "bad key"]) {
-      const error = await Effect.runPromise(Effect.flip(IdempotencyKey.validate(bad)));
+    const bads = ["", "x".repeat(65), "bad key"];
+    const errors = await Effect.runPromise(
+      Effect.forEach(bads, (bad) => Effect.flip(IdempotencyKey.validate(bad)), {
+        concurrency: 1,
+      }),
+    );
+    Arr.forEach(errors, (error) => {
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error).toMatchObject({ param: "idempotencyKey" });
-      // The refused value is not echoed back.
-      if (bad !== "") expect(error.message).not.toContain(bad);
-    }
+    });
+    // The refused value is not echoed back (every message contains "").
+    const echoed = Arr.filter(
+      Arr.zip(bads, errors),
+      ([bad, error]) => bad !== "" && error.message.includes(bad),
+    );
+    expect(echoed).toEqual([]);
   });
 
   it("make throws on a bad shape", () => {

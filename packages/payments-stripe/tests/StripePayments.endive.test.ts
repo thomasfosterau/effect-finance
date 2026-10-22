@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Redacted, Schema, type SchemaAST } from "effect";
+import * as Effect from "effect/Effect";
+import * as Rec from "effect/Record";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import type * as SchemaAST from "effect/SchemaAST";
 import { strict as strictValidation } from "@distilled.cloud/core/response-validation";
 import * as Distilled from "@distilled.cloud/stripe/stripe";
 import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
@@ -70,7 +74,7 @@ const strictly = (
 ): unknown =>
   // SAFETY: Distilled's generated schemas are plain structs, unions and
   // suspensions over `effect/Schema` built-ins, which need no services.
-  Schema.decodeUnknownSync(schema as unknown as Schema.Codec<unknown, unknown>, options)(body);
+  Schema.decodeUnknownSync(schema as Schema.Codec<unknown, unknown>, options)(body);
 
 /**
  * Reject excess properties too. Only for the fixtures Distilled models in
@@ -88,7 +92,7 @@ const failureAt = (issue: "Missing key" | "Expected no excess property", member:
 
 /** `fixture` without its `member`: the mutation the strict check must catch. */
 const without = (fixture: Readonly<Record<string, unknown>>, member: string) =>
-  Object.fromEntries(Object.entries(fixture).filter(([key]) => key !== member));
+  Rec.remove(fixture, member);
 
 describe("endive fixtures", () => {
   it("the subscription is endive-shaped: Distilled's schema decodes it strictly", () => {

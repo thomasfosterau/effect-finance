@@ -75,7 +75,6 @@ catalog:
   "@types/node": ^26.6.5
   "@vitest/coverage-istanbul": 5.0.5
   effect: 4.0.5
-  effect-solutions: ^0.5.3
   fallow: 3.34.1
   # Runs docgen's compiled examples (a peer of @effect/docgen).
   tsx: ^4.23.15

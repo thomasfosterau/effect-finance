@@ -22,7 +22,10 @@
  * @module
  */
 
-import { Effect, Predicate, Redacted, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import {
   Enumeration,
   Customer as CustomerNS,

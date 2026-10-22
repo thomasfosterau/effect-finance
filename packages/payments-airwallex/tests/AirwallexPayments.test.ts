@@ -1,11 +1,17 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
 import { PaymentInvalidRequestError, PaymentProviderError } from "@thomasfosterau/effect-payments";
 import { AirwallexClient, type AirwallexRequest } from "../src/Airwallex.ts";
 import * as AirwallexPayments from "../src/AirwallexPayments.ts";
+
+/** `JSON.stringify` through `Schema`: the JSON text a request body is sent as. */
+const toJsonText = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 /**
  * A fake Airwallex client. It records every request and returns whatever the
@@ -48,7 +54,8 @@ describe("AirwallexPayments capabilities", () => {
     expect(customer.id).toBe("cus_aw");
     expect(customer.name).toBe("Jane Smith");
     expect(customer.phone).toBe("+15555550123");
-    expect(customer.created).toBe(Math.floor(Date.parse("2026-01-01T00:00:00Z") / 1000));
+    // 2026-01-01T00:00:00Z in Unix seconds.
+    expect(customer.created).toBe(1_767_225_600);
     // Neutral `name` is sent as Airwallex `first_name`.
     expect(calls[0].body).toMatchObject({ first_name: "Jane Smith" });
   });
@@ -267,13 +274,17 @@ describe("AirwallexPayments money (#68)", () => {
   });
 
   it("fails amounts in exponent notation instead of rounding them", async () => {
-    for (const [amount, currency] of [
-      [1e-7, "USD"],
-      [1e21, "JPY"],
-    ] as const) {
-      const error = await retrieveFailure(intent(amount, currency));
-      expect(error).toBeInstanceOf(PaymentProviderError);
-    }
+    const errors = await Promise.all(
+      Arr.map(
+        [
+          [1e-7, "USD"],
+          [1e21, "JPY"],
+        ] as const,
+        ([amount, currency]) => retrieveFailure(intent(amount, currency)),
+      ),
+    );
+    expect(errors).toHaveLength(2);
+    Arr.forEach(errors, (error) => expect(error).toBeInstanceOf(PaymentProviderError));
   });
 
   it("fails an amount beyond the safe-integer range in minor units", async () => {
@@ -293,22 +304,27 @@ describe("AirwallexPayments money (#68)", () => {
         Effect.provide(provide(client)),
       ),
     );
-    expect(JSON.stringify(calls[0].body)).toContain('"amount":35184372088831.99,');
+    expect(toJsonText(calls[0].body)).toContain('"amount":35184372088831.99,');
     expect(result.amount).toBe(3518437208883199);
   });
 
   it("rejects a negative, fractional or inexact payment intent amount before sending anything", async () => {
     const { client, calls } = makeFakeClient(intent(1));
-    for (const amount of [-100, 10.5, Number.MAX_SAFE_INTEGER]) {
-      const error = await Effect.runPromise(
-        PaymentIntent.create({ amount, currency: "usd" }).pipe(
-          Effect.provide(provide(client)),
-          Effect.flip,
-        ),
-      );
+    const errors = await Effect.runPromise(
+      Effect.forEach(
+        [-100, 10.5, Number.MAX_SAFE_INTEGER],
+        (amount) =>
+          PaymentIntent.create({ amount, currency: "usd" }).pipe(
+            Effect.provide(provide(client)),
+            Effect.flip,
+          ),
+        { concurrency: 1 },
+      ),
+    );
+    Arr.forEach(errors, (error) => {
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error).toMatchObject({ param: "amount" });
-    }
+    });
     expect(calls).toEqual([]);
   });
 
@@ -326,17 +342,24 @@ describe("AirwallexPayments money (#68)", () => {
   });
 
   it("rejects a negative or fractional partial-refund amount before any request", async () => {
-    for (const amount of [-500, 10.5]) {
-      const { client, calls } = makeFakeClient(intent(20));
-      const error = await Effect.runPromise(
-        Refund.create({ paymentIntent: "int_aw", amount }).pipe(
-          Effect.provide(provide(client)),
-          Effect.flip,
-        ),
-      );
+    const outcomes = await Effect.runPromise(
+      Effect.forEach(
+        [-500, 10.5],
+        (amount) => {
+          const { client, calls } = makeFakeClient(intent(20));
+          return Refund.create({ paymentIntent: "int_aw", amount }).pipe(
+            Effect.provide(provide(client)),
+            Effect.flip,
+            Effect.map((error) => ({ error, calls })),
+          );
+        },
+        { concurrency: 1 },
+      ),
+    );
+    Arr.forEach(outcomes, ({ error, calls }) => {
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error).toMatchObject({ param: "amount" });
       expect(calls).toEqual([]);
-    }
+    });
   });
 });

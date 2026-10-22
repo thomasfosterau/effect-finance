@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import { Effect, Option } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import {
   parseSignatureHeader,
   signatureDigest,

@@ -11,6 +11,16 @@ A vendor-neutral payments core for Effect, with Stripe, PayPal and Airwallex pro
 | [`@thomasfosterau/effect-payments-paypal`](packages/payments-paypal) | `Products`, `Prices`, `PaymentIntents`, `Subscriptions`, `Refunds` over Distilled's PayPal operations (`@distilled.cloud/paypal`), with the package's own OAuth login. Peer: `effect` `^4.0.0` (Distilled's own range). |
 | [`@thomasfosterau/effect-payments-airwallex`](packages/payments-airwallex) | `Customers`, `PaymentIntents`, `Refunds` over Airwallex. |
 
+## Install
+
+Install the core, the provider you use, and `effect` (a peer: your application owns the single copy):
+
+```sh
+pnpm add effect @thomasfosterau/effect-payments @thomasfosterau/effect-payments-stripe
+```
+
+## Example
+
 ```typescript
 import { Effect, Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
@@ -30,7 +40,7 @@ Each package's README is its API reference. Runnable examples are in [`packages/
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md); conventions for agents are in [AGENTS.md](AGENTS.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md); conventions for agents are in [AGENTS.md](AGENTS.md). Releases go through Changesets ([PUBLISHING.md](PUBLISHING.md)); report vulnerabilities as [SECURITY.md](SECURITY.md) describes.
 
 ## License
 

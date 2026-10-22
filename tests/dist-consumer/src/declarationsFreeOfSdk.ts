@@ -13,18 +13,19 @@
  * nothing here is Effect code.
  */
 
+import * as Arr from "effect/Array";
 import { graphOf } from "./declarationGraph.ts";
 
 const SDK = "stripe";
 
 /** The entry points whose declarations may name the SDK: the webhook verifier, and the barrel. */
-const NAMES_SDK = new Set(["Webhook.d.ts", "index.d.ts"]);
+const NAMES_SDK: ReadonlyArray<string> = ["Webhook.d.ts", "index.d.ts"];
 
 const isSdk = (specifier: string): boolean => specifier === SDK || specifier.startsWith(`${SDK}/`);
 
 const { entries, reachableFrom, specifiersIn } = graphOf("payments-stripe");
 
-const free = entries().filter((entry) => !NAMES_SDK.has(entry));
+const free = entries().filter((entry) => !Arr.contains(NAMES_SDK, entry));
 const leaks = free.flatMap((entry) =>
   reachableFrom(entry)
     .filter((file) => specifiersIn(file).some(isSdk))
@@ -33,15 +34,23 @@ const leaks = free.flatMap((entry) =>
 // Sanity: the walk sees the SDK where it is named, so it cannot pass vacuously.
 const seen = reachableFrom("Webhook.d.ts").some((file) => specifiersIn(file).some(isSdk));
 
-if (leaks.length > 0 || !seen || free.length < 40) {
-  if (leaks.length > 0) {
-    process.stderr.write(`stripe named in declarations: ${leaks.join(", ")}\n`);
-  }
-  if (!seen) process.stderr.write("sanity check failed: Webhook.d.ts no longer names stripe\n");
-  if (free.length < 40) process.stderr.write(`sanity check failed: only ${free.length} entries\n`);
-  process.exitCode = 1;
-} else {
-  process.stdout.write(
-    `declarations are free of the stripe SDK: ${free.length} entries (all but ${[...NAMES_SDK].join(", ")})\n`,
-  );
-}
+const failures: ReadonlyArray<string> = [
+  ...Arr.match(leaks, {
+    onEmpty: () => [],
+    onNonEmpty: (named) => [`stripe named in declarations: ${named.join(", ")}`],
+  }),
+  ...(seen ? [] : ["sanity check failed: Webhook.d.ts no longer names stripe"]),
+  ...(free.length < 40 ? [`sanity check failed: only ${free.length} entries`] : []),
+];
+
+Arr.match(failures, {
+  onEmpty: () => {
+    process.stdout.write(
+      `declarations are free of the stripe SDK: ${free.length} entries (all but ${NAMES_SDK.join(", ")})\n`,
+    );
+  },
+  onNonEmpty: (messages) => {
+    process.stderr.write(messages.map((message) => `${message}\n`).join(""));
+    process.exitCode = 1;
+  },
+});

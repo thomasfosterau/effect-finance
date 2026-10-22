@@ -18,7 +18,13 @@
  * @module
  */
 
-import { Clock, Context, Effect, Option, Redacted, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import type Stripe from "stripe";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
 import { omitUndefined } from "@thomasfosterau/effect-payments/internal";
@@ -295,7 +301,7 @@ const decodeEventJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Webhook
 export const decodeEvent = (
   payload: string | Uint8Array,
 ): Effect.Effect<WebhookEvent, Schema.SchemaError> =>
-  decodeEventJson(typeof payload === "string" ? payload : new TextDecoder().decode(payload));
+  decodeEventJson(Predicate.isString(payload) ? payload : new TextDecoder().decode(payload));
 
 /**
  * The event types a subscription billing system acts on:
@@ -501,6 +507,21 @@ export interface WebhookConfig {
 const sdkTolerance = (tolerance: number | undefined): number | undefined =>
   tolerance === 0 ? DEFAULT_TOLERANCE : tolerance;
 
+/** A payload the SDK takes as text: a `Buffer` is read as UTF-8. */
+const payloadText = (payload: string | Buffer): string =>
+  Predicate.isString(payload) ? payload : payload.toString("utf8");
+
+/**
+ * An SDK verifier failure as a {@link SignatureVerificationError}: the thrown
+ * error's message, the header and the payload as text.
+ */
+const sdkFailure = (
+  message: string,
+  header: string | undefined,
+  payload: string | Buffer,
+): SignatureVerificationError =>
+  new SignatureVerificationError({ message, header, payload: payloadText(payload) });
+
 /**
  * Construct an Event from a webhook payload and signature with the SDK's
  * verifier — the optional alternative to {@link verify}, needing
@@ -552,15 +573,15 @@ export const constructEvent = (
     return yield* Effect.try({
       try: () =>
         stripe.webhooks.constructEvent(payload, signature, secret, sdkTolerance(tolerance)),
-      catch: (error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
-        return new SignatureVerificationError({
-          message,
-          header: signature,
-          payload: payloadString,
-        });
-      },
+      catch: (error) =>
+        sdkFailure(
+          // The thrown error's message; the value as a string when it carries none.
+          Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
+            ? error.message
+            : String(error),
+          signature,
+          payload,
+        ),
     });
   });
 
@@ -622,15 +643,15 @@ export const constructEventAsync = (
           sdkTolerance(tolerance),
           cryptoProvider,
         ),
-      catch: (error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
-        return new SignatureVerificationError({
-          message,
-          header: signature,
-          payload: payloadString,
-        });
-      },
+      catch: (error) =>
+        sdkFailure(
+          // The thrown error's message; the value as a string when it carries none.
+          Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
+            ? error.message
+            : String(error),
+          signature,
+          payload,
+        ),
     });
   });
 
@@ -676,20 +697,20 @@ export const generateTestHeaderString = (
       try: () =>
         stripe.webhooks.generateTestHeaderString(
           omitUndefined({
-            payload: typeof payload === "string" ? payload : payload.toString("utf8"),
+            payload: payloadText(payload),
             secret,
             timestamp,
           }),
         ),
-      catch: (error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
-        return new SignatureVerificationError({
-          message,
-          header: undefined,
-          payload: payloadString,
-        });
-      },
+      catch: (error) =>
+        sdkFailure(
+          // The thrown error's message; the value as a string when it carries none.
+          Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
+            ? error.message
+            : String(error),
+          undefined,
+          payload,
+        ),
     });
   });
 
@@ -744,21 +765,21 @@ export const generateTestHeaderStringAsync = (
       try: () =>
         stripe.webhooks.generateTestHeaderStringAsync(
           omitUndefined({
-            payload: typeof payload === "string" ? payload : payload.toString("utf8"),
+            payload: payloadText(payload),
             secret,
             timestamp,
             cryptoProvider,
           }),
         ),
-      catch: (error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        const payloadString = typeof payload === "string" ? payload : payload.toString("utf8");
-        return new SignatureVerificationError({
-          message,
-          header: undefined,
-          payload: payloadString,
-        });
-      },
+      catch: (error) =>
+        sdkFailure(
+          // The thrown error's message; the value as a string when it carries none.
+          Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
+            ? error.message
+            : String(error),
+          undefined,
+          payload,
+        ),
     });
   });
 

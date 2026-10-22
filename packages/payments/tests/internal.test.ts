@@ -1,5 +1,16 @@
-import { describe, it, expect } from "vite-plus/test";
-import { Cause, Deferred, Duration, Effect, Exit, Fiber, Option, Ref, Schema } from "effect";
+import { assert, describe, it, expect } from "vite-plus/test";
+import * as Arr from "effect/Array";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as HashSet from "effect/HashSet";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { TestClock } from "effect/testing";
 import {
@@ -56,7 +67,7 @@ const harness = (outcomes: ReadonlyArray<(attempt: number) => Exit.Exit<string, 
     const gate = yield* Deferred.make<void>();
     const readGate = yield* Ref.make(Option.none<Deferred.Deferred<void>>());
 
-    const cached = Effect.gen(function* () {
+    const cached = Effect.fnUntraced(function* () {
       const value = yield* Ref.get(cache);
       // Take the pause (if armed) once: the next read blocks until released.
       const pause = yield* Ref.getAndSet(readGate, Option.none());
@@ -64,7 +75,7 @@ const harness = (outcomes: ReadonlyArray<(attempt: number) => Exit.Exit<string, 
       return value;
     });
 
-    const login = Effect.gen(function* () {
+    const login = Effect.fnUntraced(function* () {
       const attempt = yield* Ref.updateAndGet(logins, (n) => n + 1);
       yield* Deferred.await(gate);
       const script = outcomes[Math.min(attempt, outcomes.length) - 1] ?? refused;
@@ -73,7 +84,7 @@ const harness = (outcomes: ReadonlyArray<(attempt: number) => Exit.Exit<string, 
       return yield* outcome;
     });
 
-    const getToken = yield* shareLogin(cached, login);
+    const getToken = yield* shareLogin(cached(), login());
     return { getToken, logins, gate, readGate, cache };
   });
 
@@ -81,8 +92,9 @@ const fork = <A, E>(effect: Effect.Effect<A, E>) =>
   Effect.forkChild(effect, { startImmediately: true });
 
 /** Let every runnable fiber reach its next suspension point. */
-const settle = Effect.gen(function* () {
-  for (let i = 0; i < 10; i++) yield* Effect.yieldNow;
+const settle = Effect.forEach(Arr.range(1, 10), () => Effect.yieldNow, {
+  concurrency: 1,
+  discard: true,
 });
 
 describe("shareLogin", () => {
@@ -167,9 +179,9 @@ describe("shareLogin", () => {
     );
 
     expect(result.logins).toBe(1);
-    for (const exit of result.exits) {
+    Arr.forEach(result.exits, (exit) => {
       expect(Exit.findErrorOption(exit)).toEqual(Option.some(new LoginFailed({ attempt: 1 })));
-    }
+    });
   });
 
   it("interrupting the leader interrupts its login and lets a waiter take over", async () => {
@@ -237,9 +249,9 @@ describe("parseDecimal", () => {
   });
 
   it("rejects malformed text, excess fraction digits and unsafe magnitudes", () => {
-    for (const text of ["", "abc", "1.", ".5", "+1", "1e3", " 1", "1.2.3", "--1"]) {
+    Arr.forEach(["", "abc", "1.", ".5", "+1", "1e3", " 1", "1.2.3", "--1"], (text) => {
       expect(parseDecimal(text, 2)).toBeUndefined();
-    }
+    });
     expect(parseDecimal("1.001", 2)).toBeUndefined();
     expect(parseDecimal("1.5", 0)).toBeUndefined();
     expect(parseDecimal("90071992547409.92", 2)).toBeUndefined();
@@ -262,19 +274,19 @@ describe("decimalText and formatDecimal", () => {
     expect(formatDecimal(0, 0)).toBe("0");
     expect(formatDecimal(1234, 3)).toBe("1.234");
     expect(formatDecimal(Number.MAX_SAFE_INTEGER, 2)).toBe("90071992547409.91");
-    for (const minor of [10.5, 2 ** 53, Number.NaN, Number.POSITIVE_INFINITY]) {
+    Arr.forEach([10.5, 2 ** 53, Number.NaN, Number.POSITIVE_INFINITY], (minor) => {
       expect(formatDecimal(minor, 2)).toBeUndefined();
-    }
+    });
   });
 
   it("round-trips through parseDecimal", () => {
-    for (const digits of [0, 2, 3]) {
-      for (const minor of [0, 1, 99, 100, 123456789, -1, -250, Number.MAX_SAFE_INTEGER]) {
+    Arr.forEach([0, 2, 3], (digits) => {
+      Arr.forEach([0, 1, 99, 100, 123456789, -1, -250, Number.MAX_SAFE_INTEGER], (minor) => {
         const text = formatDecimal(minor, digits);
-        expect(text).toBeDefined();
-        expect(parseDecimal(text as string, digits)).toBe(minor);
-      }
-    }
+        assert.isDefined(text);
+        expect(parseDecimal(text, digits)).toBe(minor);
+      });
+    });
   });
 });
 
@@ -282,16 +294,22 @@ describe("checkMinorUnits", () => {
   it("needs no currency and refuses a negative or non-safe-integer amount", async () => {
     await Effect.runPromise(checkMinorUnits(0, "amount"));
     await Effect.runPromise(checkMinorUnits(Number.MAX_SAFE_INTEGER, "amount"));
-    for (const minor of [-1, 10.5, 2 ** 53, Number.NaN]) {
-      const error = await Effect.runPromise(Effect.flip(checkMinorUnits(minor, "amount")));
+    const errors = await Effect.runPromise(
+      Effect.forEach(
+        [-1, 10.5, 2 ** 53, Number.NaN],
+        (minor) => Effect.flip(checkMinorUnits(minor, "amount")),
+        { concurrency: 1 },
+      ),
+    );
+    Arr.forEach(errors, (error) => {
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error.param).toBe("amount");
-    }
+    });
   });
 });
 
 describe("exponentFrom", () => {
-  const exponent = exponentFrom(new Set(["jpy"]), new Set(["kwd"]));
+  const exponent = exponentFrom(HashSet.make("jpy"), HashSet.make("kwd"));
 
   it("looks a currency up in the given tables, case-insensitively, defaulting to two", () => {
     expect(exponent("jpy")).toBe(0);
@@ -317,9 +335,9 @@ describe("isOk and isAbsoluteHttpUrl", () => {
   it("accepts only an absolute http(s) URL", () => {
     expect(isAbsoluteHttpUrl("https://api.example.com")).toBe(true);
     expect(isAbsoluteHttpUrl("http://localhost:12111")).toBe(true);
-    for (const value of ["", "/v1", "api.example.com", "ftp://example.com"]) {
+    Arr.forEach(["", "/v1", "api.example.com", "ftp://example.com"], (value) => {
       expect(isAbsoluteHttpUrl(value)).toBe(false);
-    }
+    });
   });
 });
 
@@ -332,13 +350,18 @@ describe("timeoutOf", () => {
   });
 
   it("refuses anything else with PaymentConfigError naming the provider and option", async () => {
-    for (const millis of [0, -1, Number.NaN, -Infinity]) {
-      const error = await Effect.runPromise(Effect.flip(timeoutOf("Acme", "loginTimeout", millis)));
+    const millis = [0, -1, Number.NaN, -Infinity];
+    const errors = await Effect.runPromise(
+      Effect.forEach(millis, (value) => Effect.flip(timeoutOf("Acme", "loginTimeout", value)), {
+        concurrency: 1,
+      }),
+    );
+    Arr.forEach(Arr.zip(millis, errors), ([value, error]) => {
       expect(error).toBeInstanceOf(PaymentConfigError);
       expect(error.message).toBe(
-        `Acme loginTimeout must be a positive number of milliseconds, or Infinity for none (got ${millis})`,
+        `Acme loginTimeout must be a positive number of milliseconds, or Infinity for none (got ${value})`,
       );
-    }
+    });
   });
 });
 
@@ -466,7 +489,7 @@ describe("omitUndefined", () => {
     const input = { a: 1, b: undefined, c: null, d: "", e: false, f: 0 };
     const output = omitUndefined(input);
     expect(output).toEqual({ a: 1, c: null, d: "", e: false, f: 0 });
-    expect(Object.keys(output)).not.toContain("b");
+    expect(Struct.keys(output)).not.toContain("b");
   });
 });
 
@@ -476,13 +499,19 @@ describe("checkId", () => {
   });
 
   it("refuses an empty or non-string id before anything is sent", async () => {
-    for (const id of ["", undefined, 42]) {
-      // SAFETY: untyped callers can pass anything; that is what is under test.
-      const error = await Effect.runPromise(Effect.flip(checkId("customer", id as string)));
+    const errors = await Effect.runPromise(
+      Effect.forEach(
+        ["", undefined, 42],
+        // SAFETY: untyped callers can pass anything; that is what is under test.
+        (id) => Effect.flip(checkId("customer", id as string)),
+        { concurrency: 1 },
+      ),
+    );
+    Arr.forEach(errors, (error) => {
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error.message).toBe("The customer id must be a non-empty string");
       expect(error.param).toBe("id");
-    }
+    });
   });
 });
 
@@ -514,19 +543,27 @@ describe("observeResponses", () => {
       jsonResponse(409, { error: "conflict" }, { "retry-after": "2" }),
     );
     expect(before).toEqual(Option.none());
-    expect(text).toBe(JSON.stringify({ error: "conflict" }));
-    const seen = Option.getOrThrow(after);
-    expect(seen.status).toBe(409);
-    expect(seen.headers["retry-after"]).toBe("2");
-    expect(seen.body).toEqual(Option.some({ error: "conflict" }));
+    expect(text).toBe('{"error":"conflict"}');
+    assert(Option.isSome(after), "a response was observed");
+    expect(after.value.status).toBe(409);
+    expect(after.value.headers["retry-after"]).toBe("2");
+    expect(after.value.body).toEqual(Option.some({ error: "conflict" }));
   });
 
   it("records an empty body or one that is not JSON as None", async () => {
-    for (const body of ["", "<html>"]) {
-      const { text, after } = await observe(() => new Response(body, { status: 200 }));
+    const bodies = ["", "<html>"];
+    const results = await Effect.runPromise(
+      Effect.forEach(
+        bodies,
+        (body) => Effect.tryPromise(() => observe(() => new Response(body, { status: 200 }))),
+        { concurrency: 1 },
+      ),
+    );
+    Arr.forEach(Arr.zip(bodies, results), ([body, { text, after }]) => {
       expect(text).toBe(body);
-      expect(Option.getOrThrow(after).body).toEqual(Option.none());
-    }
+      assert(Option.isSome(after), "a response was observed");
+      expect(after.value.body).toEqual(Option.none());
+    });
   });
 });
 
@@ -576,9 +613,9 @@ describe("epochSecondsOf", () => {
   });
 
   it("is 0 for an absent, empty or unparseable timestamp", () => {
-    for (const value of [undefined, null, "", "not a date"]) {
+    Arr.forEach([undefined, null, "", "not a date"], (value) => {
       expect(epochSecondsOf(value)).toBe(0);
-    }
+    });
   });
 });
 
@@ -586,11 +623,11 @@ describe("errorFromStatus", () => {
   const details = { provider: "acme", message: "boom", code: "E_ACME", param: "amount" };
 
   it("classifies 401 and 403 as authentication failures", () => {
-    for (const status of [401, 403]) {
+    Arr.forEach([401, 403], (status) => {
       const error = errorFromStatus(status, details);
       expect(error).toBeInstanceOf(PaymentAuthenticationError);
       expect(error).toMatchObject({ message: "boom", statusCode: status });
-    }
+    });
   });
 
   it("classifies 429 as a rate limit", () => {
@@ -600,15 +637,15 @@ describe("errorFromStatus", () => {
   });
 
   it("classifies 400, 404 and 422 as invalid requests carrying the param", () => {
-    for (const status of [400, 404, 422]) {
+    Arr.forEach([400, 404, 422], (status) => {
       const error = errorFromStatus(status, details);
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error).toMatchObject({ message: "boom", param: "amount", statusCode: status });
-    }
+    });
   });
 
   it("classifies any other status as a provider error carrying the code", () => {
-    for (const status of [402, 409, 500, 503]) {
+    Arr.forEach([402, 409, 500, 503], (status) => {
       const error = errorFromStatus(status, details);
       expect(error).toBeInstanceOf(PaymentProviderError);
       expect(error).toMatchObject({
@@ -617,7 +654,7 @@ describe("errorFromStatus", () => {
         code: "E_ACME",
         statusCode: status,
       });
-    }
+    });
   });
 
   it("leaves the param and code out when the body named none", () => {

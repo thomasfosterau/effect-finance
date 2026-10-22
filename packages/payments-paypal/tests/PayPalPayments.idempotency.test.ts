@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer, Redacted } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as MutableHashMap from "effect/MutableHashMap";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Record from "effect/Record";
+import * as Redacted from "effect/Redacted";
 import { FetchHttpClient } from "effect/http";
 import * as Product from "@thomasfosterau/effect-payments/Product";
 import * as Price from "@thomasfosterau/effect-payments/Price";
@@ -9,7 +16,7 @@ import * as Refund from "@thomasfosterau/effect-payments/Refund";
 import * as IdempotencyKey from "@thomasfosterau/effect-payments/IdempotencyKey";
 import { PaymentInvalidRequestError, PaymentNetworkError } from "@thomasfosterau/effect-payments";
 import * as PayPalPayments from "../src/PayPalPayments.ts";
-import { capabilitiesOver, stubPayPal } from "./support.ts";
+import { capabilitiesOver, stubPayPal, toJson } from "./support.ts";
 
 /**
  * The neutral `idempotencyKey` (#55, closing #66) on the create and confirm
@@ -66,9 +73,15 @@ const operations = (idempotencyKey: IdempotencyKey.IdempotencyKey | undefined) =
     ],
   ] as const;
 
+/** The path and operation {@link operations} lists under `name`. */
+const operationNamed = (idempotencyKey: IdempotencyKey.IdempotencyKey | undefined, name: string) =>
+  Record.fromEntries(
+    Arr.map(operations(idempotencyKey), ([candidate, path, op]) => [candidate, { path, op }]),
+  )[name];
+
 describe("PayPal maps the neutral idempotencyKey to PayPal-Request-Id", () => {
   it.each(operations(KEY).map(([name]) => name))("%s", async (name) => {
-    const [, path, op] = operations(KEY).find(([candidate]) => candidate === name)!;
+    const { path, op } = operationNamed(KEY, name);
     const { calls } = await requestsOf(op);
     expect(calls.map((call) => [call.method, call.path, call.requestId])).toEqual([
       ["POST", path, KEY],
@@ -78,7 +91,7 @@ describe("PayPal maps the neutral idempotencyKey to PayPal-Request-Id", () => {
   it.each(operations(undefined).map(([name]) => name))(
     "%s sends none without a key",
     async (name) => {
-      const [, , op] = operations(undefined).find(([candidate]) => candidate === name)!;
+      const { op } = operationNamed(undefined, name);
       const { calls } = await requestsOf(op);
       expect(calls.map((call) => call.requestId)).toEqual([undefined]);
     },
@@ -89,11 +102,11 @@ describe("PayPal maps the neutral idempotencyKey to PayPal-Request-Id", () => {
     async (name) => {
       // Untyped code can still pass a string the brand would have refused.
       const bad = "not a valid key" as IdempotencyKey.IdempotencyKey;
-      const [, , op] = operations(bad).find(([candidate]) => candidate === name)!;
+      const { op } = operationNamed(bad, name);
       const { calls, exit } = await requestsOf(op);
       expect(calls).toEqual([]);
       expect(exit._tag).toBe("Failure");
-      expect(JSON.stringify(exit)).toContain("PaymentInvalidRequestError");
+      expect(toJson(exit)).toContain("PaymentInvalidRequestError");
     },
   );
 
@@ -149,7 +162,7 @@ describe("a retried write after a lost response is one logical write (#66)", () 
    * saw it.
    */
   const dedupingPayPal = (loseFirstResponse: boolean) => {
-    const seen = new Map<string, string>();
+    const seen = MutableHashMap.empty<string, string>();
     const sent: Array<string | null> = [];
     let writes = 0;
     let attempts = 0;
@@ -161,9 +174,9 @@ describe("a retried write after a lost response is one logical write (#66)", () 
       attempts += 1;
       const id = new Headers(init?.headers).get("paypal-request-id");
       sent.push(id);
-      const remembered = id === null ? undefined : seen.get(id);
-      const orderId = remembered ?? `ORD-${(writes += 1)}`;
-      if (id !== null) seen.set(id, orderId);
+      const remembered = id === null ? Option.none<string>() : MutableHashMap.get(seen, id);
+      const orderId = Option.getOrElse(remembered, () => `ORD-${(writes += 1)}`);
+      if (id !== null) MutableHashMap.set(seen, id, orderId);
       if (loseFirstResponse && attempts === 1) throw new TypeError("fetch failed");
       return Response.json({ ...ORDER, id: orderId });
     };
@@ -177,7 +190,7 @@ describe("a retried write after a lost response is one logical write (#66)", () 
 
   const createWithRetry = (idempotencyKey: IdempotencyKey.IdempotencyKey | undefined) =>
     PaymentIntent.create({ amount: 100, currency: "usd", idempotencyKey }).pipe(
-      Effect.retry({ while: (error) => error._tag === "PaymentNetworkError", times: 1 }),
+      Effect.retry({ while: Predicate.isTagged("PaymentNetworkError"), times: 1 }),
     );
 
   it("with one key reused on the retry, PayPal applies it once", async () => {

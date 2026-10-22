@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, type Layer } from "effect";
+import * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
 import * as Price from "@thomasfosterau/effect-payments/Price";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Subscription from "@thomasfosterau/effect-payments/Subscription";

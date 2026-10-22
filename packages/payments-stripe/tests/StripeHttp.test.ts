@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vite-plus/test";
-import { ConfigProvider, Effect, Layer, Redacted } from "effect";
+import * as Arr from "effect/Array";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Rec from "effect/Record";
+import * as Redacted from "effect/Redacted";
 import { strict as strictValidation } from "@distilled.cloud/core/response-validation";
 import {
   PaymentConfigError,
@@ -92,7 +97,7 @@ describe("resource modules over StripeHttp", () => {
     await result;
     expect(calls[0]?.method).toBe("GET");
     expect(calls[0]?.url.pathname).toBe("/v1/customers");
-    expect(Object.fromEntries(calls[0]?.url.searchParams ?? [])).toEqual({
+    expect(Rec.fromEntries(calls[0]?.url.searchParams ?? [])).toEqual({
       limit: "3",
       email: "a@example.com",
     });
@@ -155,17 +160,19 @@ describe("resource modules over StripeHttp", () => {
     expect(calls[0]?.url.pathname).toBe("/v1/customers/cus_1");
   });
 
-  it("fails a missing or empty id instead of addressing another endpoint", async () => {
-    for (const id of ["", undefined as unknown as string]) {
-      const { error, calls } = failure(Customer.retrieve(id));
-      const failed = await error;
-      expect(failed).toBeInstanceOf(PaymentInvalidRequestError);
-      expect(failed.message).toBe(
-        "Path segment 1 of /v1/customers/{customer} must be a non-empty string",
-      );
-      expect(failed).toMatchObject({ param: "customer" });
-      expect(calls).toHaveLength(0);
-    }
+  it.each([
+    ["an empty", ""],
+    // SAFETY: untyped code passing no id where the signature requires one.
+    ["a missing", undefined as never],
+  ])("fails %s id instead of addressing another endpoint", async (_label, id: string) => {
+    const { error, calls } = failure(Customer.retrieve(id));
+    const failed = await error;
+    expect(failed).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(failed.message).toBe(
+      "Path segment 1 of /v1/customers/{customer} must be a non-empty string",
+    );
+    expect(failed).toMatchObject({ param: "customer" });
+    expect(calls).toHaveLength(0);
   });
 
   it("names the id that is missing among several", async () => {
@@ -276,7 +283,7 @@ describe("RequestOptions on a resource-module operation", () => {
     const keys = calls.map((call) => call.headers.get("idempotency-key"));
     expect(keys).toHaveLength(3);
     expect(keys[0]).toMatch(/^effect-payments-retry-[0-9a-f-]{36}$/);
-    expect(new Set(keys).size).toBe(1);
+    expect(Arr.dedupe(keys)).toHaveLength(1);
   });
 
   it("keeps a caller's key across the client's own retries", async () => {
@@ -340,7 +347,7 @@ describe("the /v2 request policy", () => {
     );
     const keys = calls.map((call) => call.headers.get("idempotency-key"));
     expect(keys[0]).toMatch(/^effect-payments-retry-[0-9a-f-]{36}$/);
-    expect(new Set(keys).size).toBe(1);
+    expect(Arr.dedupe(keys)).toHaveLength(1);
   });
 
   it("generates a fresh key for each /v2 DELETE call", async () => {
@@ -350,7 +357,7 @@ describe("the /v2 request policy", () => {
     await result;
     const keys = calls.map((call) => call.headers.get("idempotency-key"));
     expect(keys).toHaveLength(2);
-    expect(new Set(keys).size).toBe(2);
+    expect(Arr.dedupe(keys)).toHaveLength(2);
   });
 
   it("keys a /v2 DELETE under a configured origin", async () => {
@@ -532,24 +539,25 @@ describe("StripeHttp configuration", () => {
 
   // Effect's ConfigProvider treats a literal empty string as a MISSING value,
   // so an empty key variable is indistinguishable from an unset one.
-  it("treats an empty key variable as absent, even under preserveEmptyStrings", async () => {
-    for (const provider of [
-      ConfigProvider.fromUnknown({ STRIPE_API_KEY: "" }),
+  it.each([
+    ["by default", ConfigProvider.fromUnknown({ STRIPE_API_KEY: "" })],
+    [
+      "under preserveEmptyStrings",
       ConfigProvider.fromEnv({ env: { STRIPE_API_KEY: "" }, preserveEmptyStrings: true }),
-    ]) {
-      const { http, calls } = stubFetch(() => jsonResponse(200, {}));
-      const error = await Effect.runPromise(
-        Effect.flip(
-          Layer.build(layerFromEnv()).pipe(
-            Effect.scoped,
-            Effect.provide(http),
-            Effect.provide(ConfigProvider.layer(provider)),
-          ),
+    ],
+  ] as const)("treats an empty key variable as absent, %s", async (_label, provider) => {
+    const { http, calls } = stubFetch(() => jsonResponse(200, {}));
+    const error = await Effect.runPromise(
+      Effect.flip(
+        Layer.build(layerFromEnv()).pipe(
+          Effect.scoped,
+          Effect.provide(http),
+          Effect.provide(ConfigProvider.layer(provider)),
         ),
-      );
-      expect(error).toBeInstanceOf(PaymentConfigError);
-      expect(error.message).toContain("STRIPE_API_KEY");
-      expect(calls).toHaveLength(0);
-    }
+      ),
+    );
+    expect(error).toBeInstanceOf(PaymentConfigError);
+    expect(error.message).toContain("STRIPE_API_KEY");
+    expect(calls).toHaveLength(0);
   });
 });

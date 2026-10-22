@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vite-plus/test";
-import { ConfigProvider, Duration, Effect, Layer, Redacted } from "effect";
+import * as Arr from "effect/Array";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { TestClock } from "effect/testing";
 import { strict as strictValidation } from "@distilled.cloud/core/response-validation";
@@ -35,6 +40,7 @@ import {
   stubFetch,
   stubPayPal,
   TEST_TOKEN,
+  toJson,
   withTestClock,
 } from "./support.ts";
 
@@ -102,15 +108,20 @@ const paypal = (
   return { ...stub, resources, loginRequests };
 };
 
+/** `effect` over `PayPalPayments.layer(config(over))` and `http`. */
+const provided = <A, E>(
+  effect: Effect.Effect<A, E, Capabilities>,
+  http: Layer.Layer<HttpClient.HttpClient>,
+  over: Partial<PayPalConfig> = {},
+): Effect.Effect<A, E | PaymentConfigError> =>
+  effect.pipe(Effect.provide(PayPalPayments.layer(config(over))), Effect.provide(http));
+
 /** Run `effect` over `PayPalPayments.layer(config(over))` and `http`. */
 const run = <A, E>(
   effect: Effect.Effect<A, E, Capabilities>,
   http: Layer.Layer<HttpClient.HttpClient>,
   over: Partial<PayPalConfig> = {},
-): Promise<A> =>
-  Effect.runPromise(
-    effect.pipe(Effect.provide(PayPalPayments.layer(config(over))), Effect.provide(http)),
-  );
+): Promise<A> => Effect.runPromise(provided(effect, http, over));
 
 describe("PayPalPayments authentication", () => {
   it("logs in with the client credentials and sends the cached token on every call", async () => {
@@ -288,41 +299,50 @@ describe("PayPalPayments endpoints", () => {
   });
 
   it("fails with PaymentConfigError, sending nothing, when PAYPAL_ENV is missing or misspelt", async () => {
-    for (const values of [{}, { PAYPAL_ENV: "production" }, { PAYPAL_ENV: "" }]) {
-      const api = paypal(() => jsonResponse(200, PRODUCT));
-      const error = await Effect.runPromise(
-        Effect.flip(
-          Product.retrieve("PROD-1").pipe(
-            Effect.provide(fromEnv(values)),
-            Effect.provide(api.http),
-          ),
-        ),
-      );
-      expect(error).toBeInstanceOf(PaymentConfigError);
-      expect(error.message).toContain("PAYPAL_ENV");
-      expect(api.calls).toEqual([]);
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        [{}, { PAYPAL_ENV: "production" }, { PAYPAL_ENV: "" }],
+        (values) => {
+          const api = paypal(() => jsonResponse(200, PRODUCT));
+          return Effect.flip(
+            Product.retrieve("PROD-1").pipe(
+              Effect.provide(fromEnv(values)),
+              Effect.provide(api.http),
+            ),
+          ).pipe(
+            Effect.map((error) => {
+              expect(error).toBeInstanceOf(PaymentConfigError);
+              expect(error.message).toContain("PAYPAL_ENV");
+              expect(api.calls).toEqual([]);
+            }),
+          );
+        },
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 
   it("refuses a missing secret, a relative baseUrl and a zero timeout with PaymentConfigError", async () => {
-    for (const over of [
-      { clientSecret: Redacted.make("") },
-      { baseUrl: "/v1" },
-      { timeout: 0 },
-      { loginTimeout: Number.NaN },
-    ]) {
-      const api = paypal(() => jsonResponse(200, PRODUCT));
-      const error = await Effect.runPromise(
-        Effect.flip(
-          Product.retrieve("PROD-1").pipe(
-            Effect.provide(PayPalPayments.layer(config(over))),
-            Effect.provide(api.http),
-          ),
-        ),
-      );
-      expect(error).toBeInstanceOf(PaymentConfigError);
-      expect(api.calls).toEqual([]);
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        [
+          { clientSecret: Redacted.make("") },
+          { baseUrl: "/v1" },
+          { timeout: 0 },
+          { loginTimeout: Number.NaN },
+        ],
+        (over) => {
+          const api = paypal(() => jsonResponse(200, PRODUCT));
+          return Effect.flip(provided(Product.retrieve("PROD-1"), api.http, over)).pipe(
+            Effect.map((error) => {
+              expect(error).toBeInstanceOf(PaymentConfigError);
+              expect(api.calls).toEqual([]);
+            }),
+          );
+        },
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 });
 
@@ -330,18 +350,24 @@ describe("PayPalPayments requests", () => {
   const KEY = IdempotencyKey.IdempotencyKey.make("write-0001");
 
   /** Every request `effect` made through `layer(config())`, answered from `answers` by path. */
-  const sent = async (
-    effect: Effect.Effect<unknown, unknown, Capabilities>,
-    answer: (path: string) => unknown = () => ({}),
-  ) => {
-    const api = paypal((request) => jsonResponse(200, answer(request.url.pathname)));
-    await Effect.runPromise(
-      Effect.exit(
-        effect.pipe(Effect.provide(PayPalPayments.layer(config())), Effect.provide(api.http)),
-      ),
-    );
-    return api.resources().map(callOf);
-  };
+  const requestsOf = <A, E, Body>(
+    effect: Effect.Effect<A, E, Capabilities>,
+    answer?: ((path: string) => Body) | undefined,
+  ) =>
+    Effect.suspend(() => {
+      const api = paypal((request) =>
+        jsonResponse(200, answer === undefined ? {} : answer(request.url.pathname)),
+      );
+      return Effect.exit(provided(effect, api.http)).pipe(
+        Effect.map(() => api.resources().map(callOf)),
+      );
+    });
+
+  /** {@link requestsOf}, run. */
+  const sent = <A, E, Body>(
+    effect: Effect.Effect<A, E, Capabilities>,
+    answer?: ((path: string) => Body) | undefined,
+  ) => Effect.runPromise(requestsOf(effect, answer));
 
   it("sends the key as PayPal-Request-Id on each write, and none without one", async () => {
     const writes: ReadonlyArray<
@@ -382,14 +408,26 @@ describe("PayPalPayments requests", () => {
         (idempotencyKey) => Refund.create({ charge: "CAP-1", idempotencyKey }),
       ],
     ];
-    for (const [path, write] of writes) {
-      const keyed = await sent(write(KEY));
-      expect(keyed.map((call) => [call.method, call.path, call.requestId])).toEqual([
-        ["POST", path, KEY],
-      ]);
-      const unkeyed = await sent(write(undefined));
-      expect(unkeyed.map((call) => [call.path, call.requestId])).toEqual([[path, undefined]]);
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        writes,
+        ([path, write]) =>
+          requestsOf(write(KEY)).pipe(
+            Effect.map((keyed) =>
+              expect(keyed.map((call) => [call.method, call.path, call.requestId])).toEqual([
+                ["POST", path, KEY],
+              ]),
+            ),
+            Effect.andThen(requestsOf(write(undefined))),
+            Effect.map((unkeyed) =>
+              expect(unkeyed.map((call) => [call.path, call.requestId])).toEqual([
+                [path, undefined],
+              ]),
+            ),
+          ),
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 
   it("sends no PayPal-Request-Id on a lookup, a cancel or an activate", async () => {
@@ -436,10 +474,10 @@ describe("PayPalPayments requests", () => {
         },
       ],
     ]);
-    for (const call of calls) {
+    Arr.forEach(calls, (call) => {
       expect(call.headers.get("content-type")).toBe("application/json");
       expect(call.headers.get("accept")).toBe("application/json");
-    }
+    });
   });
 
   it("sends the request bodies and queries the capabilities always sent", async () => {
@@ -474,22 +512,31 @@ describe("PayPalPayments requests", () => {
   });
 
   it("refuses an empty id before sending anything", async () => {
-    for (const operation of [
-      Product.retrieve(""),
-      Price.update("", { active: true }),
-      PaymentIntent.confirm(""),
-      Subscription.cancel(""),
-      Refund.retrieve(""),
-    ]) {
-      const api = paypal(() => jsonResponse(200, {}));
-      const error = await run(
-        Effect.flip(operation as Effect.Effect<unknown, PaymentsError, Capabilities>),
-        api.http,
-      );
-      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
-      expect(error).toMatchObject({ param: "id" });
-      expect(api.calls).toEqual([]);
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        [
+          Product.retrieve(""),
+          Price.update("", { active: true }),
+          PaymentIntent.confirm(""),
+          Subscription.cancel(""),
+          Refund.retrieve(""),
+        ],
+        (operation) => {
+          const api = paypal(() => jsonResponse(200, {}));
+          return provided(
+            Effect.flip(operation as Effect.Effect<unknown, PaymentsError, Capabilities>),
+            api.http,
+          ).pipe(
+            Effect.map((error) => {
+              expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+              expect(error).toMatchObject({ param: "id" });
+              expect(api.calls).toEqual([]);
+            }),
+          );
+        },
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 
   it("refuses a subscription without an item before sending anything", async () => {
@@ -515,7 +562,7 @@ describe("PayPalPayments requests", () => {
 
   it("decodes only the fields it maps, even under Distilled's strict validation", async () => {
     // A plan without the `sequence` Distilled's schema requires of a billing cycle.
-    const { sequence: _, ...cycle } = PLAN.billing_cycles[0]!;
+    const { sequence: _, ...cycle } = PLAN.billing_cycles[0];
     const api = paypal(() => jsonResponse(200, { ...PLAN, billing_cycles: [cycle] }));
     const price = await run(Price.retrieve("P-1").pipe(Effect.provide(strictValidation)), api.http);
     expect(price.unitAmount).toBe(1000);
@@ -675,11 +722,14 @@ describe("PayPalPayments errors", () => {
   it("a Distilled failure with no response is a PaymentProviderError named by its tag", async () => {
     // Credentials whose effect fails: Distilled's protocol fails the call
     // before anything is sent.
+    const noToken: Effect.Effect<Effect.Success<Credentials["Service"]>, ConfigError> = Effect.fail(
+      new ConfigError({ message: "No token" }),
+    );
     const failing = Layer.succeed(
       Credentials,
       // SAFETY: a consumer's credentials effect that fails at run time, which
       // its type rules out, to reach the no-response path.
-      Effect.fail(new ConfigError({ message: "No token" })) as unknown as Credentials["Service"],
+      noToken as Credentials["Service"],
     );
     const stub = stubFetch(() => jsonResponse(200, PRODUCT));
     const error = await Effect.runPromise(
@@ -749,26 +799,21 @@ describe("PayPalPayments errors", () => {
       ),
     );
     const basic = btoa(`client_1:${CLIENT_SECRET}`);
-    for (const error of [
-      auth,
-      invalid,
-      network,
-      loginRefused,
-      loginDown,
-      timeout,
-      ...loginMalformed,
-    ]) {
-      // `JSON.stringify` and `String` go through Effect's `Headers`
-      // redaction, so they would miss a request kept anywhere in the error;
-      // walk every value it holds instead.
-      const reachable = reachableFrom(error);
-      for (const secret of [TOKEN, CLIENT_SECRET, basic]) {
-        expect(reachable.strings.filter((value) => value.includes(secret))).toEqual([]);
-        expect(JSON.stringify(error)).not.toContain(secret);
-        expect(String(error)).not.toContain(secret);
-      }
-      expect(reachable.objects.filter(HttpClientError.isHttpClientError)).toEqual([]);
-      expect(reachable.objects.filter(HttpClientRequest.isHttpClientRequest)).toEqual([]);
-    }
+    Arr.forEach(
+      [auth, invalid, network, loginRefused, loginDown, timeout, ...loginMalformed],
+      (error) => {
+        // The JSON form (`JSON.stringify`, which `toJson` runs) and `String` go
+        // through Effect's `Headers` redaction, so they would miss a request
+        // kept anywhere in the error; walk every value it holds instead.
+        const reachable = reachableFrom(error);
+        Arr.forEach([TOKEN, CLIENT_SECRET, basic], (secret) => {
+          expect(reachable.strings.filter((value) => value.includes(secret))).toEqual([]);
+          expect(toJson(error)).not.toContain(secret);
+          expect(String(error)).not.toContain(secret);
+        });
+        expect(reachable.objects.filter(HttpClientError.isHttpClientError)).toEqual([]);
+        expect(reachable.objects.filter(HttpClientRequest.isHttpClientRequest)).toEqual([]);
+      },
+    );
   });
 });

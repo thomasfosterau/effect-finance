@@ -23,6 +23,7 @@
  * Plain Node: nothing here is Effect code.
  */
 
+import * as Arr from "effect/Array";
 import { graphOf } from "./declarationGraph.ts";
 
 const DISTILLED = "@distilled.cloud/";
@@ -39,7 +40,11 @@ interface Package {
 }
 
 /** The entries of payments-stripe that are not resource modules. */
-const STRIPE_LIGHT = new Set(["StripePayments.d.ts", "StripeHttp.d.ts", "Webhook.d.ts"]);
+const STRIPE_LIGHT: ReadonlyArray<string> = [
+  "StripePayments.d.ts",
+  "StripeHttp.d.ts",
+  "Webhook.d.ts",
+];
 
 const PACKAGES: ReadonlyArray<Package> = [
   {
@@ -49,7 +54,7 @@ const PACKAGES: ReadonlyArray<Package> = [
     // re-exports them all).
     heavy: {
       module: "@distilled.cloud/stripe/stripe",
-      entries: (entry) => !STRIPE_LIGHT.has(entry),
+      entries: (entry) => !Arr.contains(STRIPE_LIGHT, entry),
     },
   },
   { directory: "payments-paypal", light: "@distilled.cloud/paypal/Credentials" },
@@ -85,11 +90,14 @@ const failures = PACKAGES.flatMap(({ directory, light, heavy }) => {
   return [...disallowed, ...notReexported, ...sanity];
 });
 
-if (failures.length > 0) {
-  for (const failure of failures) process.stderr.write(`${failure}\n`);
-  process.exitCode = 1;
-} else {
-  process.stdout.write(
-    `Distilled declarations as intended: ${PACKAGES.map(({ directory, light, heavy }) => `${directory} names ${light}${heavy === undefined ? "" : `, and its resource modules ${heavy.module}`}`).join("; ")}\n`,
-  );
-}
+Arr.match(failures, {
+  onEmpty: () => {
+    process.stdout.write(
+      `Distilled declarations as intended: ${PACKAGES.map(({ directory, light, heavy }) => `${directory} names ${light}${heavy === undefined ? "" : `, and its resource modules ${heavy.module}`}`).join("; ")}\n`,
+    );
+  },
+  onNonEmpty: (messages) => {
+    process.stderr.write(messages.map((failure) => `${failure}\n`).join(""));
+    process.exitCode = 1;
+  },
+});

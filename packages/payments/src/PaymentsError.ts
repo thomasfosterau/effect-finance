@@ -9,7 +9,7 @@
  * @module
  */
 
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /**
  * Raised when the payment provider rejects a request for a reason that does

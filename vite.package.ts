@@ -11,6 +11,9 @@
  * single list of public entry points.
  */
 import { readFileSync } from "node:fs";
+import * as Arr from "effect/Array";
+import * as R from "effect/Record";
+import * as Schema from "effect/Schema";
 import { defineConfig } from "vite-plus";
 
 /** What differs per package. */
@@ -47,21 +50,32 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\/]/g, "\
  * `pack.entry` from the manifest's `exports`: `"."` → `src/index.ts`, and
  * `"./Customer"` → `src/Customer.ts`, emitted as `dist/<key>.js` + `.d.ts`.
  */
-const entriesFromExports = (exports: Record<string, unknown>): Record<string, string> =>
-  Object.fromEntries(
-    Object.keys(exports).map((key) => {
+const entriesFromExports = (exports: Manifest["exports"]): Record<string, string> =>
+  R.fromEntries(
+    Arr.map(R.keys(exports), (key): readonly [string, string] => {
       const name = key === "." ? "index" : key.slice(2);
       return [name, `src/${name}.ts`];
     }),
   );
 
+/**
+ * What the configuration reads from a package manifest: every one in this
+ * workspace carries `name` and an `exports` map (strict catalog + the release
+ * script depend on both). Only the `exports` keys are read.
+ */
+const Manifest = Schema.Struct({
+  name: Schema.String,
+  exports: Schema.Record(Schema.String, Schema.Unknown),
+});
+
+/** A decoded package manifest. */
+type Manifest = typeof Manifest.Type;
+
+/** Parse a `package.json`'s text as a {@link Manifest}, throwing when it is not one. */
+const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(Manifest));
+
 export const packageConfig = ({ url }: PackageConfigOptions) => {
-  // SAFETY: every package manifest in this workspace carries `name` and an
-  // `exports` map (strict catalog + the release script depend on both).
-  const manifest = JSON.parse(readFileSync(new URL("./package.json", url), "utf8")) as {
-    readonly name: string;
-    readonly exports: Record<string, unknown>;
-  };
+  const manifest = decodeManifest(readFileSync(new URL("./package.json", url), "utf8"));
   const srcDir = new URL("./src/", url).pathname;
   const maxWorkers = process.env.VITEST_MAX_WORKERS;
   return defineConfig({

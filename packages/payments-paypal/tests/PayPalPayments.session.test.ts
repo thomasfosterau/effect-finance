@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Cause, ConfigProvider, Effect, Fiber, Layer, Redacted } from "effect";
+import * as Arr from "effect/Array";
+import * as Cause from "effect/Cause";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import type { HttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 import * as Product from "@thomasfosterau/effect-payments/Product";
@@ -10,7 +16,7 @@ import {
 } from "@thomasfosterau/effect-payments";
 import * as PayPalPayments from "../src/PayPalPayments.ts";
 import type { PayPalConfig } from "../src/PayPalPayments.ts";
-import { type CapturedRequest, jsonResponse, stubFetch, withTestClock } from "./support.ts";
+import { type CapturedRequest, jsonResponse, stubFetch, toJson, withTestClock } from "./support.ts";
 
 /**
  * The OAuth session behind `PayPalPayments.layer` / `layerFromEnv`
@@ -179,8 +185,10 @@ describe("PayPalPayments session: login timeouts", () => {
         const leader = yield* Effect.forkChild(Effect.flip(retrieve));
         yield* macrotask;
         // Four more callers arrive while the login is in flight.
-        const queued = yield* Effect.forEach(Array.from({ length: 4 }), () =>
-          Effect.forkChild(Effect.flip(retrieve)),
+        const queued = yield* Effect.forEach(
+          Array.from({ length: 4 }),
+          () => Effect.forkChild(Effect.flip(retrieve)),
+          { concurrency: 1 },
         );
         yield* macrotask;
         yield* TestClock.adjust("9 seconds");
@@ -188,7 +196,7 @@ describe("PayPalPayments session: login timeouts", () => {
         const fibers = [leader, ...queued];
         const pendingBefore = fibers.every((fiber) => fiber.pollUnsafe() === undefined);
         yield* TestClock.adjust("1 second");
-        const errors = yield* Effect.forEach(fibers, Fiber.join);
+        const errors = yield* Effect.forEach(fibers, Fiber.join, { concurrency: 1 });
         // A caller arriving after the failure starts a fresh login.
         const after = yield* retrieve;
         return { errors, pendingBefore, after };
@@ -202,7 +210,7 @@ describe("PayPalPayments session: login timeouts", () => {
     expect(pendingBefore).toBe(true);
     expect(errors).toHaveLength(5);
     // One login attempt, and every caller sees its very error.
-    for (const error of errors) expect(error).toBe(errors[0]);
+    Arr.forEach(errors, (error) => expect(error).toBe(errors[0]));
     expect(errors[0]).toBeInstanceOf(PaymentNetworkError);
     expect(errors[0]?.message).toBe("PayPal login timed out after 10000 ms");
     expect(after.id).toBe("PROD-1");
@@ -229,7 +237,7 @@ describe("PayPalPayments session: login timeouts", () => {
     );
 
     expect(errors).toHaveLength(5);
-    for (const error of errors) expect(error).toBe(errors[0]);
+    Arr.forEach(errors, (error) => expect(error).toBe(errors[0]));
     expect(errors[0]).toBeInstanceOf(PaymentAuthenticationError);
     expect(after.id).toBe("PROD-1");
     // One refused login for the five, then one fresh login; nothing cached on failure.
@@ -321,13 +329,24 @@ describe("PayPalPayments session: configuration", () => {
       { timeout: -5_000 },
       { timeout: Number.NEGATIVE_INFINITY },
     ];
-    for (const over of invalid) {
-      const { http, state } = hangingPayPal({});
-      const error = await Effect.runPromise(Effect.flip(run(retrieve, http, over)));
-      expect(error).toBeInstanceOf(PaymentConfigError);
-      expect(error.message).toMatch(/^PayPal (loginTimeout|timeout) must be a positive number/);
-      expect(state.logins).toBe(0);
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        invalid,
+        (over) => {
+          const { http, state } = hangingPayPal({});
+          return Effect.flip(run(retrieve, http, over)).pipe(
+            Effect.map((error) => {
+              expect(error).toBeInstanceOf(PaymentConfigError);
+              expect(error.message).toMatch(
+                /^PayPal (loginTimeout|timeout) must be a positive number/,
+              );
+              expect(state.logins).toBe(0);
+            }),
+          );
+        },
+        { concurrency: 1, discard: true },
+      ),
+    );
     const { http } = hangingPayPal({});
     const product = await Effect.runPromise(
       run(retrieve, http, {
@@ -347,29 +366,38 @@ describe("PayPalPayments session: configuration", () => {
     expect(calls).toEqual([]);
   });
 
-  for (const bad of ["", "   ", "api.example.test", "/v1", "ftp://example.test", "not a url"]) {
-    it(`rejects the baseUrl ${JSON.stringify(bad)} with PaymentConfigError and sends nothing`, async () => {
+  Arr.forEach(["", "   ", "api.example.test", "/v1", "ftp://example.test", "not a url"], (bad) => {
+    it(`rejects the baseUrl ${toJson(bad)} with PaymentConfigError and sends nothing`, async () => {
       const { http, calls } = stubFetch(() => jsonResponse(200, PRODUCT));
       const error = await Effect.runPromise(Effect.flip(run(retrieve, http, { baseUrl: bad })));
       expect(error).toBeInstanceOf(PaymentConfigError);
       expect(error.message).toContain("baseUrl");
       expect(calls).toEqual([]);
     });
-  }
+  });
 
   it("accepts an absolute https baseUrl and an http one (a local mock)", async () => {
-    for (const baseUrl of ["https://sandbox.example.test", "http://localhost:8080"]) {
-      const { http, calls } = stubFetch((request) =>
-        isLogin(request) ? LOGIN_RESPONSE() : jsonResponse(200, PRODUCT),
-      );
-      await Effect.runPromise(run(retrieve, http, { baseUrl }));
-      expect(calls.map((request) => request.url.origin)).toEqual([baseUrl, baseUrl]);
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        ["https://sandbox.example.test", "http://localhost:8080"],
+        (baseUrl) => {
+          const { http, calls } = stubFetch((request) =>
+            isLogin(request) ? LOGIN_RESPONSE() : jsonResponse(200, PRODUCT),
+          );
+          return run(retrieve, http, { baseUrl }).pipe(
+            Effect.map(() =>
+              expect(calls.map((request) => request.url.origin)).toEqual([baseUrl, baseUrl]),
+            ),
+          );
+        },
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 
   it("keeps the clientSecret out of the config's string and JSON forms", () => {
     expect(String(config().clientSecret)).not.toContain("secret_1");
-    expect(JSON.stringify(config())).not.toContain("secret_1");
+    expect(toJson(config())).not.toContain("secret_1");
   });
 });
 

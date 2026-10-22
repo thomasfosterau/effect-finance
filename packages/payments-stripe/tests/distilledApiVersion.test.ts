@@ -5,7 +5,9 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 // oxlint-disable-next-line effect/avoid-node-imports -- see the import above
 import { pathToFileURL } from "node:url";
-import { Schema } from "effect";
+import * as HashMap from "effect/HashMap";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import type { CreateWebhookEndpointRequestApiVersion } from "@distilled.cloud/stripe/stripe";
 import Stripe from "stripe";
 import { DISTILLED_API_VERSION } from "../src/StripePayments.ts";
@@ -18,7 +20,7 @@ import { DISTILLED_API_VERSION } from "../src/StripePayments.ts";
  * `packages/stripe/.generated-specs/stripe.json` at the release's commit in
  * alchemy-run/distilled (`063c844c` for `1.0.0-rc.15`).
  */
-const FOLLOWED = new Map([["1.0.0-rc.15", "2026-09-30.endive"]]);
+const FOLLOWED = HashMap.make(["1.0.0-rc.15", "2026-09-30.endive"]);
 
 const Manifest = Schema.Struct({
   name: Schema.Literal("@distilled.cloud/stripe"),
@@ -40,7 +42,7 @@ describe("DISTILLED_API_VERSION", () => {
   const installed = installedVersion();
 
   it("is the API version the installed Distilled release is generated from", () => {
-    const followed = FOLLOWED.get(installed);
+    const followed = Option.getOrUndefined(HashMap.get(FOLLOWED, installed));
     if (followed === undefined) {
       expect.fail(
         `@distilled.cloud/stripe ${installed} is installed, but the API version it is generated ` +

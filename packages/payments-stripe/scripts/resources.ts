@@ -34,7 +34,12 @@
  * @module
  */
 
-import { Effect, Schema } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Order from "effect/Order";
+import * as Predicate from "effect/Predicate";
+import * as R from "effect/Record";
+import * as Schema from "effect/Schema";
 import type * as AST from "effect/SchemaAST";
 import { getAnn, getProps, hasPropAnn, nameOf } from "@distilled.cloud/core/protocol-http";
 import { httpSymbol, labelSymbol } from "@distilled.cloud/core/trait";
@@ -286,7 +291,7 @@ const PARAM_TYPES = {
 const retypedOf = (
   paramTypes: ParamTypes,
   name: string,
-): ReadonlyArray<readonly [string, string]> => Object.entries(paramTypes[name] ?? {});
+): ReadonlyArray<readonly [string, string]> => R.toEntries(paramTypes[name] ?? R.empty());
 
 /** The override of the operation Distilled names `name`, if there is one. */
 const overrideOf = (name: string, overrides: Overrides = OVERRIDES): Override | undefined =>
@@ -326,15 +331,15 @@ export interface Planned extends DistilledOperation {
 
 /** What {@link plan} decides. */
 export interface Plan {
-  /** Each resource subpath's operations, sorted by exported name. */
-  readonly modules: ReadonlyMap<string, ReadonlyArray<Planned>>;
+  /** Each resource subpath's operations, sorted by exported name, in {@link RESOURCES} order. */
+  readonly modules: Readonly<Record<string, ReadonlyArray<Planned>>>;
   /** The operations left unexposed, by Distilled name. */
   readonly unexposed: ReadonlyArray<string>;
   /** Every problem: an operation unassigned, a name clash, an unused table entry, a params-carrying `/v2` `DELETE`. */
   readonly problems: ReadonlyArray<string>;
 }
 
-const RESERVED = new Set([
+const RESERVED: ReadonlyArray<string> = [
   "break",
   "case",
   "catch",
@@ -372,7 +377,7 @@ const RESERVED = new Set([
   "while",
   "with",
   "yield",
-]);
+];
 
 const TEST_HELPERS = "/v1/test_helpers";
 
@@ -567,7 +572,7 @@ const nameProblems = (
 ): ReadonlyArray<string> => {
   const clash = module.find((other) => other.exported === exported);
   return [
-    ...(RESERVED.has(exported)
+    ...(RESERVED.includes(exported)
       ? [`${operation.name} would be exported as the reserved word ${exported}`]
       : []),
     ...(clash === undefined
@@ -594,16 +599,16 @@ const wireProblems = (operation: DistilledOperation): ReadonlyArray<string> =>
  * operation (whose retyping would silently add a member Distilled dropped).
  */
 const staleEntries = (operations: ReadonlyArray<DistilledOperation>): ReadonlyArray<string> => {
-  const known = new Set(operations.map((operation) => operation.name));
+  const known = operations.map((operation) => operation.name);
   return [
-    ...Object.keys(OVERRIDES)
-      .filter((name) => !known.has(name))
+    ...R.keys(OVERRIDES)
+      .filter((name) => !known.includes(name))
       .map((name) => `OVERRIDES names ${name}, which Distilled no longer has`),
-    ...Object.entries(PARAM_TYPES).flatMap(([name, members]) => {
+    ...R.toEntries(PARAM_TYPES).flatMap(([name, members]) => {
       const operation = operations.find((candidate) => candidate.name === name);
       return operation === undefined
         ? [`PARAM_TYPES names ${name}, which Distilled no longer has`]
-        : Object.keys(members)
+        : R.keys(members)
             .filter((member) => !operation.members.includes(member))
             .map(
               (member) =>
@@ -616,43 +621,94 @@ const staleEntries = (operations: ReadonlyArray<DistilledOperation>): ReadonlyAr
   ];
 };
 
+/** How {@link plan} decides one operation: placed in a module, left unexposed, or a problem. */
+type Decision =
+  | { readonly kind: "planned"; readonly subpath: string; readonly planned: Planned }
+  | { readonly kind: "unexposed"; readonly name: string }
+  | { readonly kind: "problem"; readonly problem: string };
+
+/** Decide one of `all`'s operations, whose modules are `subpaths`. */
+const decide = (
+  operation: DistilledOperation,
+  all: ReadonlyArray<DistilledOperation>,
+  subpaths: ReadonlyArray<string>,
+): Decision => {
+  const placement = place(operation);
+  if (placement.kind === "unexposed") return { kind: "unexposed", name: operation.name };
+  if (placement.kind === "unassigned") {
+    return {
+      kind: "problem",
+      problem: `${operation.name} (${operation.method} ${operation.path}) is in no resource module and not listed as unexposed`,
+    };
+  }
+  if (!subpaths.includes(placement.subpath)) {
+    return {
+      kind: "problem",
+      problem: `${operation.name} is overridden into ${placement.subpath}, which is no resource`,
+    };
+  }
+  const exported = exportedName(operation, placement, all);
+  return {
+    kind: "planned",
+    subpath: placement.subpath,
+    planned: { ...operation, exported, testHelper: placement.testHelper },
+  };
+};
+
+/** The operations `decisions` place in `subpath`, in decision order. */
+const plannedIn = (decisions: ReadonlyArray<Decision>, subpath: string): ReadonlyArray<Planned> =>
+  decisions.flatMap((decision) =>
+    decision.kind === "planned" && decision.subpath === subpath ? [decision.planned] : [],
+  );
+
+/** Planned operations by exported name, as `String.prototype.localeCompare` orders them. */
+const byExported: Order.Order<Planned> = Order.mapInput(
+  Order.make((a: string, b: string) => {
+    const compared = a.localeCompare(b);
+    return compared < 0 ? -1 : compared > 0 ? 1 : 0;
+  }),
+  (planned: Planned) => planned.exported,
+);
+
 /** Decide every operation's module and name. */
 export const plan = (operations: ReadonlyArray<DistilledOperation>): Plan => {
-  const modules = new Map<string, Array<Planned>>(
-    RESOURCES.map((resource) => [resource.subpath, []]),
+  const subpaths = RESOURCES.map((resource) => resource.subpath);
+  const decisions = operations.map((operation) => decide(operation, operations, subpaths));
+  // Each operation's problems, in operation order: a name clashes with the
+  // operations placed before it in the same module.
+  const decisionProblems = decisions.flatMap((decision, index) =>
+    decision.kind === "problem"
+      ? [decision.problem]
+      : decision.kind === "planned"
+        ? [
+            ...nameProblems(
+              decision.planned,
+              decision.planned.exported,
+              decision.subpath,
+              plannedIn(decisions.slice(0, index), decision.subpath),
+            ),
+            ...wireProblems(decision.planned),
+          ]
+        : [],
   );
-  const unexposed: Array<string> = [];
-  const problems: Array<string> = [...staleEntries(operations)];
-  for (const operation of operations) {
-    const placement = place(operation);
-    if (placement.kind !== "resource") {
-      if (placement.kind === "unexposed") unexposed.push(operation.name);
-      else {
-        problems.push(
-          `${operation.name} (${operation.method} ${operation.path}) is in no resource module and not listed as unexposed`,
-        );
-      }
-      continue;
-    }
-    const module = modules.get(placement.subpath);
-    if (module === undefined) {
-      problems.push(
-        `${operation.name} is overridden into ${placement.subpath}, which is no resource`,
-      );
-      continue;
-    }
-    const exported = exportedName(operation, placement, operations);
-    problems.push(
-      ...nameProblems(operation, exported, placement.subpath, module),
-      ...wireProblems(operation),
-    );
-    module.push({ ...operation, exported, testHelper: placement.testHelper });
-  }
-  for (const [subpath, planned] of modules) {
-    if (planned.length === 0) problems.push(`${subpath} would export no operation`);
-    planned.sort((a, b) => a.exported.localeCompare(b.exported));
-  }
-  return { modules, unexposed, problems };
+  const modules = R.fromEntries(
+    subpaths.map(
+      (subpath) => [subpath, Arr.sort(plannedIn(decisions, subpath), byExported)] as const,
+    ),
+  );
+  return {
+    modules,
+    unexposed: decisions.flatMap((decision) =>
+      decision.kind === "unexposed" ? [decision.name] : [],
+    ),
+    problems: [
+      ...staleEntries(operations),
+      ...decisionProblems,
+      ...R.toEntries(modules).flatMap(([subpath, planned]) =>
+        Arr.isReadonlyArrayEmpty(planned) ? [`${subpath} would export no operation`] : [],
+      ),
+    ],
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -675,15 +731,16 @@ const OPERATION =
 export const runtimeOperations = (
   distilled: Readonly<Record<string, unknown>>,
 ): ReadonlyArray<string> =>
-  Object.keys(distilled)
-    .filter((name) => {
+  Arr.sort(
+    R.keys(distilled).filter((name) => {
       const value = distilled[name];
       return (
-        typeof value === "function" &&
+        Predicate.isFunction(value) &&
         Object.getOwnPropertyDescriptor(value, "input")?.get !== undefined
       );
-    })
-    .sort();
+    }),
+    Order.String,
+  );
 
 const summaryOf = (doc: string): string =>
   doc
@@ -727,14 +784,18 @@ export const readOperations = (
       output,
       method: http.method,
       path: http.uri,
-      ids: tokens.sort((a, b) => a.at - b.at).map((token) => token.member),
+      ids: Arr.sort(
+        tokens,
+        Order.mapInput(Order.Number, (token: (typeof tokens)[number]) => token.at),
+      ).map((token) => token.member),
       members: others.map((prop) => String(prop.name)),
-      params:
-        others.length === 0
-          ? "none"
-          : others.some((prop) => prop.type.context?.isOptional !== true)
-            ? "required"
-            : "optional",
+      params: Arr.match(others, {
+        onEmpty: () => "none" as const,
+        onNonEmpty: (members) =>
+          members.some((prop) => prop.type.context?.isOptional !== true)
+            ? ("required" as const)
+            : ("optional" as const),
+      }),
       // A `/v1` page carries `has_more`; a `/v2` page, `next_page_url`.
       list:
         outputNames.includes("data") &&
@@ -756,22 +817,27 @@ const docText = (text: string): string => text.replaceAll("*/", "*\\/");
  * keyword (`unknown`: rc.15 declares `CreateTransfer` / `GetTransfer` /
  * `UpdateTransfer` so).
  */
-const KEYWORDS = new Set(["unknown"]);
+const KEYWORDS: ReadonlyArray<string> = ["unknown"];
 
-const typeOf = (name: string): string => (KEYWORDS.has(name) ? name : `Distilled.${name}`);
+const typeOf = (name: string): string => (KEYWORDS.includes(name) ? name : `Distilled.${name}`);
+
+/** A string as a TypeScript (and JSON) string literal: `"customer"`. */
+const quoted: (value: string) => string = Schema.encodeSync(Schema.fromJsonString(Schema.String));
 
 const signatureOf = (operation: Planned): string => {
   const ids = operation.ids.map((id) => `${id}: string`);
   const retyped = retypedOf(PARAM_TYPES, operation.name);
   const omitted = [...operation.ids, ...retyped.map(([member]) => member)];
-  const base =
-    omitted.length === 0
-      ? `Distilled.${operation.input}`
-      : `Omit<Distilled.${operation.input}, ${omitted.map((id) => JSON.stringify(id)).join(" | ")}>`;
-  const rest =
-    retyped.length === 0
-      ? base
-      : `${base} & { ${retyped.map(([member, type]) => `readonly ${member}: ${type}`).join("; ")} }`;
+  const base = Arr.match(omitted, {
+    onEmpty: () => `Distilled.${operation.input}`,
+    onNonEmpty: (members) =>
+      `Omit<Distilled.${operation.input}, ${members.map(quoted).join(" | ")}>`,
+  });
+  const rest = Arr.match(retyped, {
+    onEmpty: () => base,
+    onNonEmpty: (members) =>
+      `${base} & { ${members.map(([member, type]) => `readonly ${member}: ${type}`).join("; ")} }`,
+  });
   const params =
     operation.params === "none"
       ? []
@@ -784,9 +850,9 @@ const signatureOf = (operation: Planned): string => {
 const renderOperation = (operation: Planned): string => {
   const summary = operation.summary === "" ? operation.name : operation.summary;
   const route = [
-    `method: ${JSON.stringify(operation.method)}`,
-    `path: ${JSON.stringify(operation.path)}`,
-    `ids: [${operation.ids.map((id) => JSON.stringify(id)).join(", ")}]`,
+    `method: ${quoted(operation.method)}`,
+    `path: ${quoted(operation.path)}`,
+    `ids: [${operation.ids.map(quoted).join(", ")}]`,
     `params: ${operation.params !== "none"}`,
     ...(operation.upload ? ["upload: true"] : []),
   ].join(", ");
@@ -819,9 +885,12 @@ const renderModule = (
   operations: ReadonlyArray<Planned>,
   version: string,
 ): string => {
-  const types = [...new Set(operations.flatMap((operation) => [operation.input, operation.output]))]
-    .filter((name) => !KEYWORDS.has(name))
-    .sort();
+  const types = Arr.sort(
+    Arr.dedupe(operations.flatMap((operation) => [operation.input, operation.output])).filter(
+      (name) => !KEYWORDS.includes(name),
+    ),
+    Order.String,
+  );
   return [
     "/**",
     ` * Stripe's ${pathsOf(subpath)} API as a raw resource module, the escape hatch for`,
@@ -876,10 +945,10 @@ class FormatError extends Schema.TaggedError<FormatError>()("FormatError", {
 export const render = (
   planned: Plan,
   version: string,
-): Effect.Effect<ReadonlyMap<string, string>, FormatError> =>
+): Effect.Effect<Readonly<Record<string, string>>, FormatError> =>
   Effect.map(
     Effect.forEach(
-      [...planned.modules],
+      R.toEntries(planned.modules),
       ([subpath, operations]) => {
         const file = `src/${subpath}.ts`;
         return Effect.tryPromise({
@@ -887,15 +956,17 @@ export const render = (
           catch: (cause) => new FormatError({ file, messages: [String(cause)] }),
         }).pipe(
           Effect.flatMap(({ code, errors }) =>
-            errors.length === 0
-              ? Effect.succeed([file, code] as const)
-              : Effect.fail(
-                  new FormatError({ file, messages: errors.map((error) => error.message) }),
+            Arr.match(errors, {
+              onEmpty: () => Effect.succeed([file, code] as const),
+              onNonEmpty: (refused) =>
+                Effect.fail(
+                  new FormatError({ file, messages: refused.map((error) => error.message) }),
                 ),
+            }),
           ),
         );
       },
       { concurrency: "unbounded" },
     ),
-    (files) => new Map(files),
+    (files) => R.fromEntries(files),
   );

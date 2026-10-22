@@ -21,7 +21,8 @@
 # sits *below* it. So the environment is correct for a human at a prompt and
 # broken for every non-interactive shell, which is what an agent's tool calls
 # and a git hook both are. `fallow` (which AGENTS.md requires before every
-# commit) is in `node_modules/.bin`, which is on nobody's PATH.
+# commit) and `tsx` (docgen's example runner, and the way to run a one-off
+# TypeScript script) are in `node_modules/.bin`, which is on nobody's PATH.
 #
 # Rather than fight PATH — which this script cannot export into its caller —
 # it writes small re-exec shims for the tools into `~/.local/bin`, a directory
@@ -267,16 +268,33 @@ exit 127
 SHIM
 }
 
+# `tsx` gets the plainest shim: it runs $PROJECT_DIR's install and nothing
+# else, so it never executes a foreign repository's `node_modules` (#176).
+TSX_SHIM_MARKER="# generated-by: .claude/hooks/session-start.sh (tsx re-exec shim)"
+write_tsx_shim() {
+  project_q="$(printf '%q' "$PROJECT_DIR")"
+  write_shim tsx "$TSX_SHIM_MARKER" <<SHIM
+project=$project_q
+if [ -x "\$project/node_modules/.bin/tsx" ]; then
+  exec "\$project/node_modules/.bin/tsx" "\$@"
+fi
+printf 'tsx: no install at %s; run pnpm install --frozen-lockfile in %s\\n' "\$project/node_modules/.bin/tsx" "\$project" >&2
+exit 127
+SHIM
+}
+
 # ── 1. Repo binaries the documented workflows invoke directly ─────────────────
 # AGENTS.md's fallow gate runs `fallow audit …` before every commit; it resolves
 # only from node_modules/.bin. `vp` is included for the remote/web runner,
-# where the global launcher does not exist. Both are shims (above), written
-# even before the install: they resolve the binary when they run.
+# where the global launcher does not exist; `tsx` runs docgen's examples. All
+# three are shims (above), written even before the install: they resolve the
+# binary when they run.
 if [ -n "$PROJECT_DIR" ]; then
   write_fallow_shim
   write_vp_shim
+  write_tsx_shim
 else
-  log "cannot resolve the project directory; not writing the fallow and vp shims"
+  log "cannot resolve the project directory; not writing the fallow, vp and tsx shims"
 fi
 
 # ── 2. Bare `node` (gardeneria #1462) ─────────────────────────────────────────

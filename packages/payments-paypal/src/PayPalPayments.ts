@@ -29,7 +29,10 @@
  * @module
  */
 
-import { type Context, Effect, Layer, type Redacted } from "effect";
+import type * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Redacted from "effect/Redacted";
 import type { HttpClient } from "effect/http";
 import type { Credentials } from "@distilled.cloud/paypal/Credentials";
 import {

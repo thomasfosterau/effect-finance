@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer, Redacted } from "effect";
+import { assert, describe, it, expect } from "vite-plus/test";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as MutableHashMap from "effect/MutableHashMap";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { FetchHttpClient } from "effect/http";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
@@ -61,9 +68,17 @@ const operations = (idempotencyKey: IdempotencyKey.IdempotencyKey | undefined) =
     ],
   ] as const;
 
+/** `JSON.stringify` through `Schema`. */
+const toJsonText = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
+/** The `request_id` of a JSON request body, decoded through `Schema`. */
+const RequestIdBody = Schema.fromJsonString(Schema.Struct({ request_id: Schema.String }));
+
 describe("Airwallex maps the neutral idempotencyKey to request_id", () => {
   it.each(operations(KEY).map(([name]) => name))("%s", async (name) => {
-    const [, path, op] = operations(KEY).find(([candidate]) => candidate === name)!;
+    const found = operations(KEY).find(([candidate]) => candidate === name);
+    assert.isDefined(found);
+    const [, path, op] = found;
     const { calls } = await requestsOf(op);
     expect(calls.map((call) => [call.method, call.path, call.requestId])).toEqual([
       ["POST", path, KEY],
@@ -73,7 +88,9 @@ describe("Airwallex maps the neutral idempotencyKey to request_id", () => {
   it.each(operations(undefined).map(([name]) => name))(
     "%s keeps its fresh per-call request_id without a key",
     async (name) => {
-      const [, , op] = operations(undefined).find(([candidate]) => candidate === name)!;
+      const found = operations(undefined).find(([candidate]) => candidate === name);
+      assert.isDefined(found);
+      const [, , op] = found;
       const { calls } = await requestsOf(op);
       expect(calls.map((call) => call.requestId)).toEqual([undefined]);
       const body = calls[0]?.body as { request_id: string } | undefined;
@@ -86,11 +103,13 @@ describe("Airwallex maps the neutral idempotencyKey to request_id", () => {
     async (name) => {
       // Untyped code can still pass a string the brand would have refused.
       const bad = "not a valid key" as IdempotencyKey.IdempotencyKey;
-      const [, , op] = operations(bad).find(([candidate]) => candidate === name)!;
+      const found = operations(bad).find(([candidate]) => candidate === name);
+      assert.isDefined(found);
+      const [, , op] = found;
       const { calls, exit } = await requestsOf(op);
       expect(calls).toEqual([]);
       expect(exit._tag).toBe("Failure");
-      expect(JSON.stringify(exit)).toContain("PaymentInvalidRequestError");
+      expect(toJsonText(exit)).toContain("PaymentInvalidRequestError");
     },
   );
 
@@ -134,7 +153,7 @@ describe("a retried write after a lost response is one logical write (#66)", () 
    * first write, as a timeout would: the customer exists, the caller never saw it.
    */
   const dedupingAirwallex = (loseFirstResponse: boolean) => {
-    const seen = new Map<string, string>();
+    const seen = MutableHashMap.empty<string, string>();
     const sent: Array<string> = [];
     let writes = 0;
     let attempts = 0;
@@ -142,17 +161,23 @@ describe("a retried write after a lost response is one logical write (#66)", () 
       const url = String(input);
       if (url.endsWith(LOGIN_PATH)) {
         return Response.json(
-          { token: "tok_1", expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() },
+          {
+            token: "tok_1",
+            expires_at: DateTime.formatIso(DateTime.add(DateTime.nowUnsafe(), { minutes: 30 })),
+          },
           { status: 201 },
         );
       }
       attempts += 1;
       const raw = init?.body;
       const text = raw instanceof Uint8Array ? new TextDecoder().decode(raw) : String(raw);
-      const requestId = (JSON.parse(text) as { request_id: string }).request_id;
+      const requestId = Schema.decodeUnknownSync(RequestIdBody)(text).request_id;
       sent.push(requestId);
-      const customerId = seen.get(requestId) ?? `cus_${(writes += 1)}`;
-      seen.set(requestId, customerId);
+      const customerId = Option.getOrElse(
+        MutableHashMap.get(seen, requestId),
+        () => `cus_${(writes += 1)}`,
+      );
+      MutableHashMap.set(seen, requestId, customerId);
       if (loseFirstResponse && attempts === 1) throw new TypeError("fetch failed");
       return Response.json({
         id: customerId,
@@ -170,7 +195,10 @@ describe("a retried write after a lost response is one logical write (#66)", () 
 
   const createWithRetry = (idempotencyKey: IdempotencyKey.IdempotencyKey | undefined) =>
     Customer.create({ email: "a@b.com", idempotencyKey }).pipe(
-      Effect.retry({ while: (error) => error._tag === "PaymentNetworkError", times: 1 }),
+      Effect.retry({
+        while: (error) => Predicate.isTagged(error, "PaymentNetworkError"),
+        times: 1,
+      }),
     );
 
   it("with one key reused on the retry, Airwallex applies it once", async () => {

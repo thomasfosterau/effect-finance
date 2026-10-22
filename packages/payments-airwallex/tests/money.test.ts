@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 import {
   exponent,
@@ -8,6 +11,12 @@ import {
   toMajorNumber,
   toMinorUnits,
 } from "../src/internal/money.ts";
+
+/** `JSON.stringify` through `Schema`: the JSON text a value is sent as. */
+const toJsonText = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
+/** `JSON.parse` of a number's JSON text through `Schema`. */
+const numberFromJsonText = Schema.decodeSync(Schema.fromJsonString(Schema.Number));
 
 /** A small seeded PRNG (mulberry32), so the property runs are reproducible. */
 const prng = (seed: number) => () => {
@@ -32,7 +41,7 @@ const CURRENCIES = [
 
 describe("Airwallex money: currency exponents", () => {
   it("keeps the table: zero, two and three decimals", () => {
-    for (const { code, digits } of CURRENCIES) expect(exponent(code)).toBe(digits);
+    Arr.forEach(CURRENCIES, ({ code, digits }) => expect(exponent(code)).toBe(digits));
   });
 
   it("treats ISK as zero-decimal (#74)", () => {
@@ -43,12 +52,14 @@ describe("Airwallex money: currency exponents", () => {
   });
 
   it("keeps HUF, IDR and TWD at two decimals, their ISO 4217 exponent (#74)", () => {
-    for (const code of ["huf", "idr", "twd", "HUF", "IDR", "TWD"]) expect(exponent(code)).toBe(2);
+    Arr.forEach(["huf", "idr", "twd", "HUF", "IDR", "TWD"], (code) =>
+      expect(exponent(code)).toBe(2),
+    );
     expect(parseMinorUnits(20.5, "huf")).toBe(2050);
   });
 
   it("keeps IQD and LYD at three decimals, their ISO 4217 exponent (#74)", () => {
-    for (const code of ["iqd", "lyd"]) expect(exponent(code)).toBe(3);
+    Arr.forEach(["iqd", "lyd"], (code) => expect(exponent(code)).toBe(3));
   });
 });
 
@@ -121,31 +132,39 @@ describe("Airwallex money: parse", () => {
   });
 
   it("decodes every sampled accepted amount in 2^44..2^46 USD to exactly its minor units", () => {
-    let accepted = 0;
-    let refused = 0;
     // About 53k samples: enough of both outcomes, well inside the default test timeout.
     const step = 100_000_000_003n;
-    for (let minor = 2n ** 44n * 100n; minor < 2n ** 46n * 100n; minor += step) {
+    const start = 2n ** 44n * 100n;
+    const end = 2n ** 46n * 100n;
+    const samples = Arr.makeBy(Number((end - start + step - 1n) / step), (i) => {
+      const minor = start + BigInt(i) * step;
       const text = minor.toString();
       const parsed = parseMinorUnits(Number(`${text.slice(0, -2)}.${text.slice(-2)}`), "usd");
-      if (parsed === undefined) {
-        refused++;
-      } else {
-        accepted++;
-        expect(BigInt(parsed)).toBe(minor);
-      }
-    }
+      return { minor, parsed };
+    });
+    const accepted = Arr.filterMap(samples, ({ minor, parsed }) =>
+      parsed === undefined ? Result.failVoid : Result.succeed({ minor, parsed: BigInt(parsed) }),
+    );
+    const refused = samples.length - accepted.length;
+    // Every accepted amount decodes to exactly its minor units.
+    expect(Arr.map(accepted, ({ parsed }) => parsed)).toEqual(
+      Arr.map(accepted, ({ minor }) => minor),
+    );
     // Both outcomes occur, so the sweep cannot pass vacuously.
-    expect(accepted).toBeGreaterThan(1000);
+    expect(accepted.length).toBeGreaterThan(1000);
     expect(refused).toBeGreaterThan(1000);
   });
 
   it("never decodes an amount near the top of the safe range to the wrong minor units", () => {
-    for (let minor = Number.MAX_SAFE_INTEGER; minor > Number.MAX_SAFE_INTEGER - 20000; minor--) {
-      const text = String(minor);
-      const parsed = parseMinorUnits(Number(`${text.slice(0, -2)}.${text.slice(-2)}`), "usd");
-      if (parsed !== undefined) expect(parsed).toBe(minor);
-    }
+    const decoded = Arr.filterMap(
+      Arr.makeBy(20000, (i) => Number.MAX_SAFE_INTEGER - i),
+      (minor) => {
+        const text = String(minor);
+        const parsed = parseMinorUnits(Number(`${text.slice(0, -2)}.${text.slice(-2)}`), "usd");
+        return parsed === undefined ? Result.failVoid : Result.succeed({ minor, parsed });
+      },
+    );
+    Arr.forEach(decoded, ({ minor, parsed }) => expect(parsed).toBe(minor));
   });
 
   it("rejects an amount outside the safe-integer range in minor units", () => {
@@ -173,34 +192,39 @@ describe("Airwallex money: parse", () => {
 
 describe("Airwallex money: format", () => {
   it("formats fixed examples as numbers whose JSON text is the exact decimal", () => {
-    expect(JSON.stringify(formatMinorUnits(2000, "usd"))).toBe("20");
-    expect(JSON.stringify(formatMinorUnits(2050, "usd"))).toBe("20.5");
-    expect(JSON.stringify(formatMinorUnits(5, "usd"))).toBe("0.05");
-    expect(JSON.stringify(formatMinorUnits(5, "kwd"))).toBe("0.005");
-    expect(JSON.stringify(formatMinorUnits(2000, "jpy"))).toBe("2000");
-    expect(JSON.stringify(formatMinorUnits(3518437208883199, "usd"))).toBe("35184372088831.99");
+    expect(toJsonText(formatMinorUnits(2000, "usd"))).toBe("20");
+    expect(toJsonText(formatMinorUnits(2050, "usd"))).toBe("20.5");
+    expect(toJsonText(formatMinorUnits(5, "usd"))).toBe("0.05");
+    expect(toJsonText(formatMinorUnits(5, "kwd"))).toBe("0.005");
+    expect(toJsonText(formatMinorUnits(2000, "jpy"))).toBe("2000");
+    expect(toJsonText(formatMinorUnits(3518437208883199, "usd"))).toBe("35184372088831.99");
   });
 
-  for (const { code, digits } of CURRENCIES) {
+  Arr.forEach(CURRENCIES, ({ code, digits }) => {
     it(`minor units -> number -> minor units never changes the amount, for ${code}`, () => {
       const next = prng(0x5eed + digits);
-      for (let i = 0; i < 2000; i++) {
-        const minor = safeInteger(next);
-        const major = formatMinorUnits(minor, code);
-        if (major === undefined) continue;
-        const parsed = parseMinorUnits(JSON.parse(JSON.stringify(major)) as number, code);
+      const sent = Arr.filterMap(
+        Arr.makeBy(2000, () => safeInteger(next)),
+        (minor) => {
+          const major = formatMinorUnits(minor, code);
+          return major === undefined ? Result.failVoid : Result.succeed({ minor, major });
+        },
+      );
+      Arr.forEach(sent, ({ minor, major }) => {
+        const parsed = parseMinorUnits(numberFromJsonText(toJsonText(major)), code);
         // Every amount that is sent reads back as exactly itself.
         expect(parsed).toBe(minor);
-      }
+      });
     });
-  }
+  });
 
   it("formats every safe integer up to 15 digits", () => {
     const next = prng(0xa1e);
-    for (let i = 0; i < 2000; i++) {
-      const minor = Math.floor(next() * 1e15);
-      for (const { code } of CURRENCIES) expect(formatMinorUnits(minor, code)).toBeDefined();
-    }
+    Arr.forEach(
+      Arr.makeBy(2000, () => Math.floor(next() * 1e15)),
+      (minor) =>
+        Arr.forEach(CURRENCIES, ({ code }) => expect(formatMinorUnits(minor, code)).toBeDefined()),
+    );
   });
 
   it("refuses an amount no JSON number carries exactly", () => {
@@ -236,10 +260,16 @@ describe("Airwallex money: request amounts", () => {
   });
 
   it("toMajorNumber fails with an invalid-request error naming the parameter", async () => {
-    for (const minor of [10.5, -1, Number.MAX_SAFE_INTEGER, 2 ** 53]) {
-      const error = await Effect.runPromise(Effect.flip(toMajorNumber(minor, "usd", "amount")));
+    const errors = await Effect.runPromise(
+      Effect.forEach(
+        [10.5, -1, Number.MAX_SAFE_INTEGER, 2 ** 53],
+        (minor) => Effect.flip(toMajorNumber(minor, "usd", "amount")),
+        { concurrency: 1 },
+      ),
+    );
+    Arr.forEach(errors, (error) => {
       expect(error).toBeInstanceOf(PaymentInvalidRequestError);
       expect(error.param).toBe("amount");
-    }
+    });
   });
 });

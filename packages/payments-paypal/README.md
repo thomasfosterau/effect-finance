@@ -37,6 +37,32 @@ const layer = PayPalPayments.layer({
 const product = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 ```
 
+### Configuration
+
+`PayPalPayments.layer` takes a `PayPalConfig`:
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `clientId` | yes | The REST app's client id. |
+| `clientSecret` | yes | The client secret, a `Redacted<string>`. |
+| `environment` | no | `"live"` (default) or `"sandbox"`; selects the endpoint. |
+| `baseUrl` | no | An absolute http(s) URL that overrides the environment's endpoint (a proxy, a mock server). |
+| `loginTimeout` | no | Milliseconds the OAuth login may take (default 30 000). |
+| `timeout` | no | Milliseconds a resource request may take (default 80 000). |
+
+An empty `clientId` or `clientSecret`, a bad `baseUrl` or a bad timeout fails the layer build with `PaymentConfigError`.
+
+`layerFromEnv(clientIdVar?, clientSecretVar?)` reads the same configuration through `Config` (the current `ConfigProvider`, by default the process environment):
+
+| Variable | Required | Maps to |
+| --- | --- | --- |
+| `PAYPAL_CLIENT_ID` (or `clientIdVar`) | yes | `clientId` |
+| `PAYPAL_CLIENT_SECRET` (or `clientSecretVar`) | yes | `clientSecret` (read with `Config.Redacted`) |
+| `PAYPAL_ENV` | yes: `live` or `sandbox` | `environment` |
+| `PAYPAL_BASE_URL` | no | `baseUrl` |
+
+The timeouts keep their defaults there. Every problem (a missing, empty or misspelt variable) fails the layer build with `PaymentConfigError` (the Environment and Empty variables notes below).
+
 ### What the layers require
 
 `PayPalPayments.layer` / `layerFromEnv` need only an `HttpClient`: they log in with the client credentials. The individual capability layers (`productsLayer` … `refundsLayer`) and `capabilities` need Distilled's `Credentials` and an `HttpClient` instead, and send the credentials' access token as it is, with no login and no refresh:
@@ -94,15 +120,32 @@ PayPal's billing suite and checkout APIs map onto a subset of the core capabilit
 
 | Capability | Maps to | Notes |
 | --- | --- | --- |
-| `Products` | Catalog Products | no `del` |
-| `Prices` | Billing Plans | recurring only; `update` toggles active via activate/deactivate |
-| `PaymentIntents` | Orders | `confirm` = capture; no `update` / `cancel` / `list` |
-| `Subscriptions` | Subscriptions | no `update` / `list` |
+| `Products` | Catalog Products | created as a `SERVICE` in the `SOFTWARE` category; `update` replaces only the `description` (one without a `description` fails); no `del` |
+| `Prices` | Billing Plans | recurring only (a one-time price fails); `update` toggles `active` via activate/deactivate, and any other update fails |
+| `PaymentIntents` | Orders | `intent: "CAPTURE"`, `customer` sent as the purchase unit's `custom_id`; `confirm` = capture; no `update` / `cancel` / `list` |
+| `Subscriptions` | Subscriptions | the first item's `price` is the plan id (and its `quantity` the quantity), `customer` sent as `custom_id`; no `update` / `list` |
 | `Refunds` | Capture refunds | refund a `charge` (capture id) or a captured `paymentIntent`; no `update` / `list` |
 | `Customers` | — | **not provided** (PayPal has no first-class customer resource) |
 | `CheckoutSessions` / `BillingPortalSessions` | — | not in `capabilities`; `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs fail every call with `PaymentInvalidRequestError` |
 
 Because each capability is an independent Effect service, a program that only uses the supported capabilities is fully satisfied; one that needs `Customers` will not type-check against the PayPal layer. Individual operations without a PayPal equivalent fail with a neutral `PaymentInvalidRequestError`.
+
+**Lists return one page.** `Product.list` and `Price.list` send `limit` as `page_size` (and `Price.list`'s `product` as a filter), and `hasMore` reports whether PayPal links a next page; but `startingAfter` is not sent, so that page cannot be requested yet, and the `active` filters are ignored.
+
+## Errors
+
+Every capability call fails with the core's `PaymentsError` and nothing else. PayPal error responses map by status:
+
+| PayPal answer | Neutral error |
+| --- | --- |
+| 401, 403 | `PaymentAuthenticationError` (and a 401 forgets the cached token, so the next call logs in again) |
+| 429 | `PaymentRateLimitError` |
+| 400, 404, 422 | `PaymentInvalidRequestError` (`param` from the first of the body's `details[].field`) |
+| any other non-2xx | `PaymentProviderError` (`provider: "paypal"`, `code` from the body's `name`) |
+| a 2xx that does not decode | `PaymentProviderError` |
+| a connection failure or timeout | `PaymentNetworkError` |
+
+The message is PayPal's own `message` when it sends one. A failed login maps the same way. Building a layer fails only with `PaymentConfigError`.
 
 ## Notes
 

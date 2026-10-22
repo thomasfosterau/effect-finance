@@ -7,7 +7,11 @@
  * @module
  */
 
-import { Effect, Option } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
 
 /** The parsed `Stripe-Signature` header: `t=<unix>,v1=<hex>[,v1=<hex>…]`. */
 export interface ParsedSignature {
@@ -28,22 +32,25 @@ const DIGITS = /^\d+$/;
  * `none` means the header is malformed.
  */
 export const parseSignatureHeader = (header: string): Option.Option<ParsedSignature> => {
-  let timestamp = Option.none<number>();
-  const candidates: Array<string> = [];
-  for (const part of header.split(",")) {
+  const fields = Arr.flatMap(header.split(","), (part) => {
     const separator = part.indexOf("=");
-    if (separator === -1) continue;
-    const key = part.slice(0, separator).trim();
-    const value = part.slice(separator + 1).trim();
-    if (key === "t" && DIGITS.test(value)) {
-      timestamp = Option.some(Number(value));
-    } else if (key === "v1" && value.length > 0) {
-      candidates.push(value);
-    }
-  }
-  return Option.isNone(timestamp) || candidates.length === 0
-    ? Option.none()
-    : Option.some({ timestamp: timestamp.value, candidates });
+    return separator === -1
+      ? []
+      : [[part.slice(0, separator).trim(), part.slice(separator + 1).trim()] as const];
+  });
+  const timestamp = Option.map(
+    Arr.findLast(fields, ([key, value]) => key === "t" && DIGITS.test(value)),
+    ([, value]) => Number(value),
+  );
+  const candidates = Arr.filterMap(fields, ([key, value]) =>
+    key === "v1" && value !== "" ? Result.succeed(value) : Result.failVoid,
+  );
+  return Option.flatMap(timestamp, (time) =>
+    Arr.match(candidates, {
+      onEmpty: () => Option.none<ParsedSignature>(),
+      onNonEmpty: (values) => Option.some({ timestamp: time, candidates: values }),
+    }),
+  );
 };
 
 /**
@@ -56,10 +63,11 @@ export const parseSignatureHeader = (header: string): Option.Option<ParsedSignat
  */
 export const timingSafeEqual = (left: string, right: string): boolean => {
   if (left.length !== right.length) return false;
-  let difference = 0;
-  for (let index = 0; index < left.length; index++) {
-    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  }
+  const difference = Arr.reduce(
+    left.split(""),
+    0,
+    (accumulated, char, index) => accumulated | (char.charCodeAt(0) ^ right.charCodeAt(index)),
+  );
   return difference === 0;
 };
 
@@ -68,24 +76,22 @@ export const timingSafeEqual = (left: string, right: string): boolean => {
  * no early exit, so two digests during a rotation cost the same whichever
  * matched.
  */
-export const anyMatches = (expected: string, candidates: ReadonlyArray<string>): boolean => {
-  let matched = false;
-  for (const candidate of candidates) {
-    matched = timingSafeEqual(expected, candidate) || matched;
-  }
-  return matched;
-};
+export const anyMatches = (expected: string, candidates: ReadonlyArray<string>): boolean =>
+  Arr.reduce(
+    candidates,
+    false,
+    (matched, candidate) => timingSafeEqual(expected, candidate) || matched,
+  );
 
 /** The payload as bytes: a string is UTF-8 encoded, bytes are signed as received. */
 export const toBytes = (payload: string | Uint8Array): Uint8Array =>
-  typeof payload === "string" ? new TextEncoder().encode(payload) : payload;
+  Predicate.isString(payload) ? new TextEncoder().encode(payload) : payload;
 
 /** Bytes → lowercase hex, which is how Stripe encodes the `v1` digest. */
-const toHex = (buffer: ArrayBuffer): string => {
-  let hex = "";
-  for (const byte of new Uint8Array(buffer)) hex += byte.toString(16).padStart(2, "0");
-  return hex;
-};
+const toHex = (buffer: ArrayBuffer): string =>
+  Arr.map(Arr.fromIterable(new Uint8Array(buffer)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 
 /**
  * Stripe's `v1` digest: HMAC-SHA256 with `secret` over `${timestamp}.` followed

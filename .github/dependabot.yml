@@ -1,27 +1,41 @@
-# Dependabot version-update configuration (copied from the effect-web library,
-# itself from the effect-drizzle-ext library and a subset of the gardeneria
-# application's catalog).
+# Dependabot version-update configuration.
 #
-# `groups` collect dependencies that MUST move together: the Effect 4 release
-# line is a lockstep-versioned singleton set (moved with the consuming
-# applications); the vitest toolchain is pinned to vite-plus's exact versions.
-# Version updates to the vitest toolchain are ignored (they move together by
-# hand, with the @effect/tsgo pin — see pnpm-workspace.yaml).
+# `groups` collect dependencies that MUST move together, so a set never
+# drifts apart across two PRs. Dependabot puts a dependency in the FIRST group
+# that matches it, so the groups run specific → general and every broad
+# pattern carries `exclude-patterns` for the sets above it. Each lockstep
+# group matches every update type, majors included (a major of one member is
+# a major of the set).
 #
-# @effect/tsgo, `typescript` (the TS6 alias) and @typescript/native are also
-# ignored for version updates: `effect-tsgo patch` matches the native `tsc`
-# and vite-plus's `oxlint` by gitHead / version and fails `pnpm install` on
-# any pairing it has no artifact for, so a PR that moves one of them alone
-# goes red. The three move by hand as a set with vite-plus, after checking the
-# `components` table in node_modules/@effect/tsgo/dist/effect-tsgo.cjs; the
-# `effect` group excludes @effect/tsgo so its `@effect/*` pattern never pulls
-# it in (#103).
+# - `toolchain`: vite-plus pins the `oxlint`, `oxfmt` and `vitest` it carries
+#   (`vite` is the same release under its aliased core package, and
+#   @vitest/coverage-istanbul's peer is exact), and `effect-tsgo patch` matches
+#   the native `tsc` (@typescript/native) and vite-plus's `oxlint` by gitHead /
+#   version, failing `pnpm install` on any pairing it has no artifact for. One
+#   PR moves them all; if @effect/tsgo has not yet shipped for the new pairing
+#   the PR stays red until it does (read the `components` table in
+#   node_modules/@effect/tsgo/dist/effect-tsgo.cjs; pnpm-workspace.yaml has
+#   the current pairing).
+# - `distilled`: the three @distilled.cloud packages pin each other exactly.
+#   A Distilled bump also regenerates the Stripe resource modules, which
+#   Dependabot cannot do: finish the PR by hand (AGENTS.md, Commands). The
+#   optional `stripe` SDK peer tracks Distilled's Stripe API version (#160),
+#   so it rides in this group; its majors and minors are ignored below because
+#   they move only on a Distilled bump.
+# - `effect`: the Effect 4 release line is a lockstep-versioned singleton set
+#   (moved with the consuming applications); @effect/tsgo and @effect/docgen
+#   belong to the groups above / below it.
+# - `docgen`: @effect/docgen runs its examples with `tsx`.
+# - `changesets`, `fallow`: release and audit tooling, each its own set.
+# - `minor-and-patch`: everything else that is not a major, in one PR, so the
+#   volume stays low; a major outside the lockstep sets stays its own PR.
 #
 # Every ignore is scoped to the `version-update:semver-*` update types, so
 # SECURITY updates stay enabled; a bare `dependency-name` ignore would block
 # them too.
 #
-# `cooldown` mirrors pnpm-workspace.yaml's `minimumReleaseAge`.
+# `cooldown` mirrors pnpm-workspace.yaml's `minimumReleaseAge` (1 day), with
+# @thomasfosterau/* exempt as `minimumReleaseAgeExclude` exempts it.
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -40,79 +54,84 @@ updates:
       exclude:
         - "@thomasfosterau/*"
     groups:
+      toolchain:
+        applies-to: version-updates
+        patterns:
+          - "vite-plus"
+          - "vite"
+          - "vitest"
+          - "@vitest/*"
+          - "oxlint"
+          - "oxfmt"
+          - "oxlint-tsgolint"
+          - "@effect/tsgo"
+          - "@typescript/native"
+          - "typescript"
+          - "@typescript/typescript6"
+          - "@mpsuesser/oxlint-plugin-effect"
+      distilled:
+        applies-to: version-updates
+        patterns:
+          - "@distilled.cloud/*"
+          - "stripe"
       effect:
+        applies-to: version-updates
         patterns:
           - "effect"
           - "@effect/*"
         exclude-patterns:
           - "@effect/tsgo"
-      vitest-toolchain:
+          - "@effect/docgen"
+      docgen:
+        applies-to: version-updates
         patterns:
-          - "vitest"
-          - "@vitest/coverage-istanbul"
+          - "@effect/docgen"
+          - "tsx"
+      changesets:
+        applies-to: version-updates
+        patterns:
+          - "@changesets/*"
+      fallow:
+        applies-to: version-updates
+        patterns:
+          - "fallow"
+      minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        exclude-patterns:
           - "vite-plus"
+          - "vite"
+          - "vitest"
+          - "@vitest/*"
+          - "oxlint"
+          - "oxfmt"
+          - "oxlint-tsgolint"
+          - "@effect/*"
+          - "@typescript/*"
+          - "typescript"
+          - "@mpsuesser/oxlint-plugin-effect"
+          - "@distilled.cloud/*"
+          - "stripe"
+          - "effect"
+          - "tsx"
+          - "@changesets/*"
+          - "fallow"
+        update-types:
+          - "minor"
+          - "patch"
     ignore:
-      - dependency-name: "@effect/tsgo"
-        update-types:
-          [
-            "version-update:semver-major",
-            "version-update:semver-minor",
-            "version-update:semver-patch",
-          ]
-      - dependency-name: "typescript"
-        update-types:
-          [
-            "version-update:semver-major",
-            "version-update:semver-minor",
-            "version-update:semver-patch",
-          ]
-      - dependency-name: "@typescript/native"
-        update-types:
-          [
-            "version-update:semver-major",
-            "version-update:semver-minor",
-            "version-update:semver-patch",
-          ]
-      - dependency-name: "vite"
-        update-types:
-          [
-            "version-update:semver-major",
-            "version-update:semver-minor",
-            "version-update:semver-patch",
-          ]
-      - dependency-name: "vitest"
-        update-types:
-          [
-            "version-update:semver-major",
-            "version-update:semver-minor",
-            "version-update:semver-patch",
-          ]
-      # Pinned to vitest's exact version (vite-plus 0.3.x → vitest 4.1.11), so
-      # it moves with the trio by hand.
-      - dependency-name: "@vitest/coverage-istanbul"
-        update-types:
-          [
-            "version-update:semver-major",
-            "version-update:semver-minor",
-            "version-update:semver-patch",
-          ]
-      # The SDK is only an optional peer now: its types serve the SDK-based
+      # The SDK is only an optional peer: its types serve the SDK-based
       # `./Webhook` verifier (`constructEvent*`), and no module loads it
       # (#146). Its dev pin follows DISTILLED_API_VERSION (#160): a stripe-node
-      # minor can move the SDK's API version, and a major also moves the published
-      # peer range (`catalogs.peers`), so it moves by hand on a Distilled bump
-      # (`tests/distilledApiVersion.test.ts` fails otherwise), never on its own.
-      # Patches are still proposed: they are harmless, because
-      # `tests/distilledApiVersion.test.ts` catches a patch that moves the API version.
+      # minor can move the SDK's API version, and a major also moves the
+      # published peer range (`catalogs.peers`), so it moves by hand on a
+      # Distilled bump (`tests/distilledApiVersion.test.ts` fails otherwise),
+      # never on its own. Patches are still proposed: they are harmless,
+      # because `tests/distilledApiVersion.test.ts` catches a patch that moves
+      # the API version.
       - dependency-name: "stripe"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
-      - dependency-name: "vite-plus"
-        update-types:
-          [
-            "version-update:semver-major",
-            "version-update:semver-minor",
-            "version-update:semver-patch",
-          ]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -122,5 +141,11 @@ updates:
     labels:
       - "dependencies"
     commit-message:
-      prefix: "ci"
-      include: "scope"
+      prefix: "chore"
+    cooldown:
+      default-days: 1
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"

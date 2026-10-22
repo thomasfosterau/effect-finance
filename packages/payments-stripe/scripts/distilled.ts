@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 // oxlint-disable-next-line effect/avoid-node-imports -- see the import above
 import { pathToFileURL } from "node:url";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 import * as Distilled from "@distilled.cloud/stripe/stripe";
 
 const Manifest = Schema.Struct({

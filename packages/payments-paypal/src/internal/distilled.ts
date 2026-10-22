@@ -37,7 +37,13 @@
  * @module
  */
 
-import { Context, Data, Duration, Effect, Layer, Option, Redacted } from "effect";
+import * as Context from "effect/Context";
+import * as Data from "effect/Data";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { ResponseValidation } from "@distilled.cloud/core/response-validation";
 import { Credentials, type Config as PayPalCredentials } from "@distilled.cloud/paypal/Credentials";

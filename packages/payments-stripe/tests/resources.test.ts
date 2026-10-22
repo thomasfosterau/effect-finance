@@ -1,7 +1,11 @@
-import { describe, it, expect } from "vite-plus/test";
+import { assert, describe, it, expect } from "vite-plus/test";
 // oxlint-disable-next-line effect/use-filesystem-service -- a test comparing generated sources with the files on disk, outside any Effect runtime
 import { readdirSync, readFileSync } from "node:fs";
-import { Effect } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Order from "effect/Order";
+import * as R from "effect/Record";
+import * as Schema from "effect/Schema";
 import { installed } from "../scripts/distilled.ts";
 import {
   OVERRIDES,
@@ -26,6 +30,15 @@ const distilled = installed();
 const operations = readOperations(distilled.declarations, distilled.module);
 const planned = plan(operations);
 const PACKAGE = new URL("../", import.meta.url);
+
+/** The part of the package manifest the subpath check reads. */
+const Manifest = Schema.fromJsonString(
+  Schema.Struct({ exports: Schema.Record(Schema.String, Schema.Unknown) }),
+);
+
+/** Strings in code-unit order, as `Array.prototype.sort` orders them by default. */
+const sorted = (strings: ReadonlyArray<string>): ReadonlyArray<string> =>
+  Arr.sort(strings, Order.String);
 
 /** Exported names, by resource subpath. */
 type Kept = Readonly<Record<string, ReadonlyArray<string>>>;
@@ -89,7 +102,7 @@ const KEPT = {
 
 describe("the resource plan", () => {
   it("reads every operation Distilled exports", () => {
-    expect(operations.map((operation) => operation.name).sort()).toEqual(
+    expect(sorted(operations.map((operation) => operation.name))).toEqual(
       runtimeOperations(distilled.module),
     );
     expect(operations.length).toBeGreaterThan(500);
@@ -97,14 +110,18 @@ describe("the resource plan", () => {
 
   it("places every operation in one module or lists it as unexposed, with no problem", () => {
     expect(planned.problems).toEqual([]);
-    const exposed = [...planned.modules.values()].flat().map((operation) => operation.name);
-    expect(new Set(exposed).size).toBe(exposed.length);
-    expect([...exposed, ...planned.unexposed].sort()).toEqual(runtimeOperations(distilled.module));
+    const exposed = R.values(planned.modules)
+      .flat()
+      .map((operation) => operation.name);
+    expect(Arr.dedupe(exposed).length).toBe(exposed.length);
+    expect(sorted([...exposed, ...planned.unexposed])).toEqual(runtimeOperations(distilled.module));
   });
 
   it("reports an operation under no listed path", () => {
+    const [first] = operations;
+    assert.isDefined(first, "Distilled has no operation");
     const stray = {
-      ...operations[0]!,
+      ...first,
       name: "CreateWidget",
       path: "/v1/widgets",
       method: "POST" as const,
@@ -115,8 +132,10 @@ describe("the resource plan", () => {
   });
 
   it("reports two operations that would share a name", () => {
+    const customer = operations.find((operation) => operation.name === "GetCustomer");
+    assert.isDefined(customer, "Distilled has no GetCustomer");
     const twin = {
-      ...operations.find((operation) => operation.name === "GetCustomer")!,
+      ...customer,
       name: "GetCustomerAgain",
     };
     expect(plan([...operations, twin]).problems).toContain(
@@ -125,7 +144,8 @@ describe("the resource plan", () => {
   });
 
   it("reads each operation's params apart from its path ids", () => {
-    const update = operations.find((operation) => operation.name === "UpdateCustomer")!;
+    const update = operations.find((operation) => operation.name === "UpdateCustomer");
+    assert.isDefined(update, "Distilled has no UpdateCustomer");
     expect(update.ids).toEqual(["customer"]);
     expect(update.members).not.toContain("customer");
     expect(update.members).toContain("email");
@@ -150,14 +170,13 @@ describe("the resource plan", () => {
   });
 
   it("has a module for every resource subpath the package publishes, and nothing else", () => {
-    // SAFETY: the manifest carries an `exports` map.
-    // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
-    const manifest = JSON.parse(readFileSync(new URL("package.json", PACKAGE), "utf8")) as {
-      readonly exports: Record<string, unknown>;
-    };
-    const published = Object.keys(manifest.exports).map((key) => key.replace(/^\.\/?/, ""));
+    const manifest = Schema.decodeUnknownSync(Manifest)(
+      // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
+      readFileSync(new URL("package.json", PACKAGE), "utf8"),
+    );
+    const published = R.keys(manifest.exports).map((key) => key.replace(/^\.\/?/, ""));
     const resources = RESOURCES.map((resource) => resource.subpath);
-    expect(published.filter((key) => !resources.includes(key)).sort()).toEqual([
+    expect(sorted(published.filter((key) => !resources.includes(key)))).toEqual([
       "",
       "StripeHttp",
       "StripePayments",
@@ -168,17 +187,17 @@ describe("the resource plan", () => {
   });
 
   it("keeps every name a module exported before (#146)", () => {
-    for (const [subpath, names] of Object.entries(KEPT)) {
-      const exported = (planned.modules.get(subpath) ?? []).map((operation) => operation.exported);
+    R.toEntries(KEPT).forEach(([subpath, names]) => {
+      const exported = (planned.modules[subpath] ?? []).map((operation) => operation.exported);
       expect(exported, subpath).toEqual(expect.arrayContaining([...names]));
-    }
+    });
     const subpaths = RESOURCES.map((resource) => resource.subpath);
-    expect(Object.keys(KEPT).filter((subpath) => !subpaths.includes(subpath))).toEqual([]);
+    expect(R.keys(KEPT).filter((subpath) => !subpaths.includes(subpath))).toEqual([]);
   });
 
   it("exposes the Invoice and Subscription actions (#142)", () => {
     const names = (subpath: string) =>
-      (planned.modules.get(subpath) ?? []).map((operation) => operation.exported);
+      (planned.modules[subpath] ?? []).map((operation) => operation.exported);
     expect(names("Invoice")).toEqual(
       expect.arrayContaining([
         "finalize",
@@ -209,22 +228,22 @@ describe("the resource plan", () => {
       ),
     ).toEqual([]);
     expect(UNEXPOSED.filter(({ reason }) => reason.trim() === "")).toEqual([]);
-    expect(Object.keys(OVERRIDES).length).toBeGreaterThan(0);
+    expect(R.size(OVERRIDES)).toBeGreaterThan(0);
   });
 
   it("leaves unexposed only the operations StripeHttp cannot run (#154)", () => {
-    expect([...planned.unexposed].sort()).toEqual(["CreateBillingMeterEventStream", "GetQuotePdf"]);
+    expect(sorted(planned.unexposed)).toEqual(["CreateBillingMeterEventStream", "GetQuotePdf"]);
   });
 
   it("lets a longer unexposed path win over a resource's", () => {
-    const quote = (planned.modules.get("Quote") ?? []).map((operation) => operation.name);
+    const quote = (planned.modules["Quote"] ?? []).map((operation) => operation.name);
     expect(quote).toContain("GetQuoteLineItems");
     expect(quote).not.toContain("GetQuotePdf");
   });
 
   it("follows stripe-node's names where the rule cannot, and lists a list", () => {
     const names = (subpath: string) =>
-      (planned.modules.get(subpath) ?? []).map((operation) => operation.exported);
+      (planned.modules[subpath] ?? []).map((operation) => operation.exported);
     expect(names("Billing.CreditGrant")).toContain("voidGrant");
     expect(names("Apps.Secret")).toContain("delWhere");
     expect(names("Apps.Secret")).not.toContain("del");
@@ -244,7 +263,7 @@ describe("the resource plan", () => {
 
   it("says a module includes test helpers only when it has some", () => {
     const helpers = (subpath: string) =>
-      (planned.modules.get(subpath) ?? []).some((operation) => operation.testHelper);
+      (planned.modules[subpath] ?? []).some((operation) => operation.testHelper);
     expect(helpers("Customer")).toBe(true);
     expect(helpers("CreditNote")).toBe(false);
     expect(helpers("TestHelpers.TestClock")).toBe(false);
@@ -252,7 +271,7 @@ describe("the resource plan", () => {
 
   it("reads a /v2 page as a list", () => {
     const names = (subpath: string) =>
-      (planned.modules.get(subpath) ?? []).map((operation) => operation.exported);
+      (planned.modules[subpath] ?? []).map((operation) => operation.exported);
     expect(names("V2.Core.Account")).toEqual(
       expect.arrayContaining(["create", "retrieve", "update", "list", "close"]),
     );
@@ -281,12 +300,12 @@ describe("the resource plan", () => {
 describe("the generated resource modules", () => {
   it("are what the generator writes from the installed Distilled release", async () => {
     const files = await Effect.runPromise(render(planned, distilled.version));
-    expect(files.size).toBe(RESOURCES.length);
-    for (const [file, code] of files) {
+    expect(R.size(files)).toBe(RESOURCES.length);
+    R.toEntries(files).forEach(([file, code]) => {
       // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
       const onDisk = readFileSync(new URL(file, PACKAGE), "utf8");
       expect(onDisk, `${file} is stale: run generate:resources`).toBe(code);
-    }
+    });
   });
 
   it("leave no stale module behind", () => {
@@ -299,6 +318,8 @@ describe("the generated resource modules", () => {
           "Generated by `scripts/generate-resources.ts`",
         ),
     );
-    expect(generated.sort()).toEqual(RESOURCES.map((resource) => `${resource.subpath}.ts`).sort());
+    expect(sorted(generated)).toEqual(
+      sorted(RESOURCES.map((resource) => `${resource.subpath}.ts`)),
+    );
   });
 });

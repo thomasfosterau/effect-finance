@@ -13,7 +13,9 @@
  * @module
  */
 
-import { Context, Effect, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import type { PaymentsError } from "./PaymentsError.js";
 
 /** A hosted billing portal session: the page to redirect the customer to. */

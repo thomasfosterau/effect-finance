@@ -12,7 +12,7 @@ The same neutral program runs on Airwallex, Stripe or PayPal — only the layer 
 pnpm add @thomasfosterau/effect-payments @thomasfosterau/effect-payments-airwallex effect
 ```
 
-`effect` is a peer dependency.
+`effect` is a peer dependency (`>=4.0.0-rc.118`). The core is a dependency of this package; install it yourself too, since your program imports its capability modules. No vendor SDK, and nothing reads `process`: the layers need only an `HttpClient` (`effect/http`), so they run on Node, Bun, Deno and Workers alike.
 
 ## Usage
 
@@ -37,19 +37,82 @@ const layer = AirwallexPayments.layer({
 const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
 ```
 
+### Configuration
+
+`AirwallexPayments.layer` (and `Airwallex.layer` / `make`) takes an `AirwallexConfig`:
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `clientId` | yes | The API client id. |
+| `apiKey` | yes | The API key, a `Redacted<string>`. |
+| `environment` | no | `"live"` (default) or `"sandbox"`; selects the endpoint. |
+| `baseUrl` | no | An absolute http(s) URL that overrides the environment's endpoint (a proxy, a mock server). |
+| `loginTimeout` | no | Milliseconds the token login may take (default 30 000). |
+| `timeout` | no | Milliseconds a resource request may take (default 80 000). |
+
+An empty `clientId` or `apiKey`, a bad `baseUrl` or a bad timeout fails the layer build with `PaymentConfigError`.
+
+`layerFromEnv(clientIdVar?, apiKeyVar?)` reads the same configuration through `Config` (the current `ConfigProvider`, by default the process environment):
+
+| Variable | Required | Maps to |
+| --- | --- | --- |
+| `AIRWALLEX_CLIENT_ID` (or `clientIdVar`) | yes | `clientId` |
+| `AIRWALLEX_API_KEY` (or `apiKeyVar`) | yes | `apiKey` (read with `Config.Redacted`) |
+| `AIRWALLEX_ENV` | yes: `live` or `sandbox` | `environment` |
+| `AIRWALLEX_BASE_URL` | no | `baseUrl` |
+
+The timeouts keep their defaults there. Every problem (a missing, empty or misspelt variable) fails the layer build with `PaymentConfigError` (the Environment and Empty variables notes below).
+
 ## Supported capabilities
 
 Airwallex's payment-acceptance API maps onto a subset of the core capabilities:
 
 | Capability | Status |
 | --- | --- |
-| `Customers` | ✅ (no `del` — Airwallex has no delete-customer endpoint) |
-| `PaymentIntents` | ✅ (no `update` — confirm/cancel instead) |
-| `Refunds` | ✅ (no `update`; refunds reference a payment intent, not a charge) |
+| `Customers` | ✅ (no `del` — Airwallex has no delete-customer endpoint; `name` is sent as `first_name`, and `description` is not sent) |
+| `PaymentIntents` | ✅ (no `update` — confirm/cancel instead; `confirm`'s `paymentMethod` becomes `payment_method.id`) |
+| `Refunds` | ✅ (no `update`; a refund needs a `paymentIntent`, and one with only a `charge` fails; a partial `amount` first reads the payment intent for its currency) |
 | `Products` / `Prices` / `Subscriptions` | ❌ not provided |
 | `CheckoutSessions` / `BillingPortalSessions` | ❌ not in `capabilities`; `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs fail every call with `PaymentInvalidRequestError` |
 
 Because each capability is an independent Effect service, this provider simply doesn't supply layers for the capabilities Airwallex lacks. A program that only uses the supported capabilities is fully satisfied; one that needs, say, `Subscriptions` will not type-check against the Airwallex layer alone. The few individual operations without an Airwallex equivalent fail with a neutral `PaymentInvalidRequestError` rather than pretending to succeed.
+
+**Lists return one page.** `list` sends `limit` as `page_size` (and `PaymentIntent.list`'s `customer`, `Refund.list`'s `paymentIntent` as filters), and `hasMore` reports whether Airwallex has more; but `startingAfter` is not sent, so a following page cannot be requested yet, and `Customer.list`'s `email` and `Refund.list`'s `charge` filters are ignored.
+
+## Errors
+
+Every capability call fails with the core's `PaymentsError` and nothing else. Airwallex error responses map by status:
+
+| Airwallex answer | Neutral error |
+| --- | --- |
+| 401, 403 | `PaymentAuthenticationError` (and a 401 forgets the cached token, so the next call logs in again) |
+| 429 | `PaymentRateLimitError` |
+| 400, 404, 422 | `PaymentInvalidRequestError` (`param` from the body's `source`) |
+| any other non-2xx | `PaymentProviderError` (`provider: "airwallex"`, `code` from the body's `code`) |
+| a 2xx that does not decode | `PaymentProviderError` |
+| a connection failure or timeout | `PaymentNetworkError` |
+
+The message is Airwallex's own `message` when it sends one. A failed login maps the same way. Building a layer fails only with `PaymentConfigError`.
+
+## Calls of your own
+
+`AirwallexClient.request` is the client every capability goes through, and the escape hatch for an Airwallex endpoint the capabilities do not cover: it logs in, sends the bearer token, applies the timeout and maps failures onto `PaymentsError`, and resolves to the response's JSON body as `unknown` (decode it yourself).
+
+```typescript
+import { Effect, Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
+import * as Airwallex from "@thomasfosterau/effect-payments-airwallex/Airwallex";
+
+// Effect<unknown, PaymentsError, AirwallexClient>
+const balances = Effect.flatMap(Airwallex.AirwallexClient, (client) =>
+  client.request({ method: "GET", path: "/api/v1/balances/current" }),
+);
+
+const client = Airwallex.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
+const run = () => Effect.runPromise(balances.pipe(Effect.provide(client)));
+```
+
+`AirwallexPayments.capabilities` builds the capabilities over an `AirwallexClient` you provide, so a program can share one client (and one cached token) between the capabilities and its own calls: `AirwallexPayments.capabilities.pipe(Layer.provideMerge(Airwallex.layerFromEnv()), Layer.provide(FetchHttpClient.layer))`. In a test, provide a fake `AirwallexClient` (`Layer.succeed(Airwallex.AirwallexClient, { request })`) instead.
 
 ## Notes
 
@@ -69,10 +132,10 @@ Because each capability is an independent Effect service, this provider simply d
 
 | Module | Purpose |
 | --- | --- |
-| `AirwallexPayments` | `layer` / `layerFromEnv` (client + every supported capability; need an `HttpClient`), `capabilities` (over an existing `AirwallexClient`), the individual capability layers, and the `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs. |
+| `AirwallexPayments` | `layer` / `layerFromEnv` (client + every supported capability; need an `HttpClient`), `capabilities` (over an existing `AirwallexClient`), the individual capability layers (`customersLayer`, `paymentIntentsLayer`, `refundsLayer`), and the `checkoutSessionsLayer` / `billingPortalSessionsLayer` stubs. |
 | `Airwallex` | The `AirwallexClient` service (token handshake, cached token, `request`), `layer` / `layerFromEnv` / `make`, and the `AirwallexConfig` / `AirwallexEnvironment` / `AirwallexRequest` types. |
 
-The root entry re-exports both as namespaces, plus the core as `Payments`.
+The root entry re-exports both as namespaces, the core as `Payments`, and the `AirwallexConfig` / `AirwallexEnvironment` / `AirwallexRequest` types.
 
 ## License
 

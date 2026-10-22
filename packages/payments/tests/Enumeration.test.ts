@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Schema } from "effect";
+import * as Arr from "effect/Array";
+import * as Schema from "effect/Schema";
 import * as Enumeration from "@thomasfosterau/effect-payments/Enumeration";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Price from "@thomasfosterau/effect-payments/Price";
@@ -39,11 +40,13 @@ describe("Enumeration", () => {
       [Price.PriceType, "recurring"],
       [Price.RecurringInterval, "week"],
     ] as const;
-    for (const [schema, known] of cases) {
+    Arr.forEach(cases, ([schema, known]) => {
+      // SAFETY: every case is a lenient enumeration schema, which decodes from
+      // unknown input; widening it only drops the literal type of its output.
       const decode = Schema.decodeUnknownSync(schema as Schema.Decoder<unknown>);
       expect(decode(known)).toBe(known);
       expect(decode(Enumeration.other("new"))).toEqual({ _tag: "Other", raw: "new" });
       expect(() => decode("not_modelled")).toThrow();
-    }
+    });
   });
 });

@@ -15,7 +15,6 @@
     "@thomasfosterau/effect-payments-paypal",
     "@thomasfosterau/effect-payments-stripe",
     "@types/node",
-    "effect-solutions",
     "@effect/docgen",
     "@effect/tsgo",
     "@effect/language-service",

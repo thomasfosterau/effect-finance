@@ -10,7 +10,7 @@ Write your payment workflows against provider-agnostic capabilities, and choose 
 pnpm add @thomasfosterau/effect-payments effect
 ```
 
-`effect` is a peer dependency. Add a provider package to run a program.
+`effect` is a peer dependency (`>=4.0.0-rc.118`; the Stripe and PayPal providers need `^4.0.0`). Add a provider package to run a program.
 
 ## Usage
 
@@ -54,21 +54,47 @@ Each resource is an abstract Effect service (a `Context.Service`). A program tha
 
 Every operation returns `Effect<Entity, PaymentsError, Capability>`. List operations return a neutral `Page<Entity>` (`{ data, hasMore }`; request the next page with a `startingAfter` cursor); deletions return `Deleted` (`{ id, deleted: true }`).
 
+### Hosted checkout and billing portal
+
+`CheckoutSession.create` and `BillingPortal.create` return an entity whose `url` you redirect the buyer to. A checkout never takes an amount: it names the provider's price ids (`lineItems`, at least one), so the buyer pays the price's amount. `mode` is `"payment"` or `"subscription"` (which also takes `subscriptionMetadata`, stored on the subscription the checkout creates).
+
+```typescript
+import { Effect } from "effect";
+import * as BillingPortal from "@thomasfosterau/effect-payments/BillingPortal";
+import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
+
+// Effect<string, PaymentsError, CheckoutSessions>
+const checkout = (customer: string, priceId: string) =>
+  CheckoutSession.create({
+    mode: "subscription",
+    customer,
+    lineItems: [{ price: priceId }],
+    successUrl: "https://example.com/billing?checkout=success",
+    cancelUrl: "https://example.com/pricing",
+  }).pipe(Effect.map((session) => session.url));
+
+// Effect<string, PaymentsError, BillingPortalSessions>
+const portal = (customer: string) =>
+  BillingPortal.create({ customer, returnUrl: "https://example.com/account" }).pipe(
+    Effect.map((session) => session.url),
+  );
+```
+
 ## Domain types
 
 Entities are provider-agnostic `effect/Schema` classes: `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund`, `CheckoutSession`, `BillingPortalSession` and `Money`. They contain only fields that are meaningful across providers, in a normalized shape (`camelCase`, neutral status enums). **Amounts are always in the smallest currency unit** (`2000` = $20.00), and currencies are lower-cased ISO 4217 codes (`"usd"`).
 
-Status and type enums are lenient: each is the known literals plus `Other` (`{ _tag: "Other", raw }`), carrying a provider value the library does not model, so an unexpected value never fails a whole list page. Match exhaustively with a case for `Other` (`Enumeration.isOther`).
+Status and type enums are lenient: each is the known literals plus `Other` (`{ _tag: "Other", raw }`), carrying a provider value the library does not model, so an unexpected value never fails a whole list page. Match exhaustively with a case for `Other` (`Enumeration.isOther`). Each module exports the enum twice: `Known<Name>` (the literals, the type a request filter takes) and `<Name>` (the lenient union, the type of the entity field): `PaymentIntent.PaymentStatus`, `Subscription.SubscriptionStatus`, `Refund.RefundStatus`, `Price.PriceType` and `Price.RecurringInterval`. `CheckoutSession.CheckoutMode` is a request input and stays closed.
 
 ## Errors
 
 The failure channel is the neutral `PaymentsError` union:
 
-- `PaymentProviderError` — a provider rejected the request (carries `provider`, `code`, `statusCode`).
-- `PaymentAuthenticationError` — authentication failed.
-- `PaymentRateLimitError` — too many requests (carries `retryAfter`).
-- `PaymentInvalidRequestError` — invalid parameters, or an operation the provider does not support.
-- `PaymentNetworkError` — transport-level failure.
+- `PaymentProviderError` — a provider rejected the request for a reason no other variant covers, or answered with a response that does not decode (carries `provider`, `code`, `statusCode`, `cause`).
+- `PaymentAuthenticationError` — authentication failed (carries `statusCode`).
+- `PaymentRateLimitError` — too many requests (carries `retryAfter`, in seconds, when the provider sends one).
+- `PaymentInvalidRequestError` — invalid parameters, or an operation the provider does not support (carries `param`, `statusCode`).
+- `PaymentNetworkError` — transport-level failure, including a timeout (carries `cause`).
 - `PaymentsUnavailable` — no provider can serve the call, typically because its credential is not configured (carries `provider`). This is "not configured ≡ down": it is raised at call time, never while a layer is built, so an application without payments configured still starts and answers the call as it would an outage (an HTTP API answers it with a 503).
 
 Outside the union: `PaymentConfigError` (raised while building a provider layer) and `SignatureVerificationError` (webhook verification).
@@ -137,7 +163,7 @@ Mapping: Stripe sends `Idempotency-Key`; PayPal sends `PayPal-Request-Id` (on th
 
 ## Stubs
 
-`Stub` builds capability layers whose every call fails with one given error: `Stub.layer(failure)` for every capability, one constructor per capability (`Stub.customers`, …, `Stub.billingPortalSessions`), and `Stub.unavailable(provider?)`, every capability failing with `PaymentsUnavailable`, for an environment with no provider configured or a unit suite with no transport at all.
+`Stub` builds capability layers whose every call fails with one given failing `Effect` (`Stub.Failure`): `Stub.layer(failure)` for every capability, one constructor per capability (`Stub.customers`, …, `Stub.billingPortalSessions`), and `Stub.unavailable(provider?)`, every capability failing with `PaymentsUnavailable`, for an environment with no provider configured or a unit suite with no transport at all.
 
 ```typescript
 import { Effect } from "effect";
@@ -156,14 +182,14 @@ Every module is its own subpath (`@thomasfosterau/effect-payments/<Module>`). Th
 
 | Module | Purpose |
 | --- | --- |
-| `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund` | The capability, its entity, its params and the accessor functions. |
+| `Customer`, `Product`, `Price`, `PaymentIntent`, `Subscription`, `Refund` | The capability, its entity, its params (`CreateParams`, `UpdateParams`, `ListParams`, …), its enums and the accessor functions. |
 | `CheckoutSession`, `BillingPortal` | Hosted checkout and billing portal sessions: an entity whose `url` you redirect to. |
 | `Money` | `Money` (minor-unit amount + currency), `make`, `Metadata`. |
 | `Page` | `Page<A>` and `Deleted`. |
 | `PaymentsError` | The error classes and the `PaymentsError` union. |
 | `IdempotencyKey` | The branded key, `generate` and `validate`. |
-| `Enumeration` | The lenient-enum helpers: `Other`, `isOther`, `lenient`. |
-| `Stub` | Capability layers that fail every call with one error. |
+| `Enumeration` | The lenient-enum helpers: `Other`, `other`, `isOther`, `lenient`, `parse` (a raw string → a known literal or `Other`) and `fromWire` (the same as a `Schema` codec, for a provider's wire schema). |
+| `Stub` | Capability layers that fail every call with one error: `layer`, one constructor per capability, `unavailable`, and the `Failure` / `Capabilities` types. |
 
 ## Internal subpath (not public API)
 

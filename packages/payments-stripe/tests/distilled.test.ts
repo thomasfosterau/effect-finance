@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Redacted, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { PaymentProviderError } from "@thomasfosterau/effect-payments";
 import { layer, StripeHttp } from "../src/StripeHttp.ts";
 import { jsonResponse, stubFetch, TEST_KEY } from "./support.ts";

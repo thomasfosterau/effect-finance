@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vite-plus/test";
 // oxlint-disable-next-line effect/use-filesystem-service -- a test inspecting the package's own source files, outside any Effect runtime
 import { readdirSync, readFileSync } from "node:fs";
+import * as Arr from "effect/Array";
+import * as HashSet from "effect/HashSet";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 
 /**
  * `stripe` is an optional peer (#39), kept only for the types of the
@@ -14,28 +18,24 @@ const SRC = new URL("../src/", import.meta.url);
 
 /** The modules a source file imports at runtime (`import type` excluded). */
 const runtimeImportsOf = (source: string): ReadonlyArray<string> => {
-  const found: Array<string> = [];
   const statement =
     /^(?:import|export)\s+(type\s+)?([^"';]*?)\s*from\s+"([^"]+)";|^import\s+"([^"]+)";/gms;
-  for (const match of source.matchAll(statement)) {
+  return Arr.filterMap(Arr.fromIterable(source.matchAll(statement)), (match) => {
     const [, typeOnly, clause = "", from, bare] = match;
-    if (bare !== undefined) {
-      found.push(bare);
-      continue;
-    }
-    if (typeOnly !== undefined || from === undefined) continue;
+    if (bare !== undefined) return Result.succeed(bare);
+    if (typeOnly !== undefined || from === undefined) return Result.failVoid;
     // `import { type A, type B } from …` is erased too.
     const named = /^\{([^}]*)\}$/s.exec(clause.trim());
     if (named !== null) {
-      const specifiers = named[1]!
+      const [, inner = ""] = named;
+      const specifiers = inner
         .split(",")
         .map((item) => item.trim())
         .filter((item) => item !== "");
-      if (specifiers.every((item) => item.startsWith("type "))) continue;
+      if (specifiers.every((item) => item.startsWith("type "))) return Result.failVoid;
     }
-    found.push(from);
-  }
-  return found;
+    return Result.succeed(from);
+  });
 };
 
 /** `./x.js` relative to `file` → the source path under `src/`, or the package name. */
@@ -45,22 +45,30 @@ const resolve = (file: string, specifier: string): string => {
   return url.pathname.slice(SRC.pathname.length);
 };
 
+/** Where a walk stands: the trail to the target once found, and the files already read. */
+interface Walk {
+  readonly path: Option.Option<ReadonlyArray<string>>;
+  readonly seen: HashSet.HashSet<string>;
+}
+
 const reaches = (entry: string, target: string): ReadonlyArray<string> | undefined => {
-  const seen = new Set<string>();
-  const walk = (file: string, trail: ReadonlyArray<string>): ReadonlyArray<string> | undefined => {
-    if (file === target) return trail;
-    if (seen.has(file) || !file.endsWith(".ts")) return undefined;
-    seen.add(file);
+  const walk = (
+    file: string,
+    trail: ReadonlyArray<string>,
+    seen: HashSet.HashSet<string>,
+  ): Walk => {
+    if (file === target) return { path: Option.some(trail), seen };
+    if (HashSet.has(seen, file) || !file.endsWith(".ts")) return { path: Option.none(), seen };
     // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
     const source = readFileSync(new URL(file, SRC), "utf8");
-    for (const specifier of runtimeImportsOf(source)) {
+    const start: Walk = { path: Option.none(), seen: HashSet.add(seen, file) };
+    return Arr.reduce(runtimeImportsOf(source), start, (state, specifier) => {
+      if (Option.isSome(state.path)) return state;
       const next = resolve(file, specifier);
-      const path = walk(next, [...trail, next]);
-      if (path !== undefined) return path;
-    }
-    return undefined;
+      return walk(next, [...trail, next], state.seen);
+    });
   };
-  return walk(entry, [entry]);
+  return Option.getOrUndefined(walk(entry, [entry], HashSet.empty()).path);
 };
 
 // oxlint-disable-next-line effect/avoid-sync-fs -- see the import

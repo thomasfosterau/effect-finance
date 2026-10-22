@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Refund from "@thomasfosterau/effect-payments/Refund";
 import { AirwallexClient } from "../src/Airwallex.ts";

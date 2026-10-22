@@ -5,7 +5,7 @@
  * @module
  */
 
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 import type { PaymentsError } from "@thomasfosterau/effect-payments";
 import { errorFromStatus } from "@thomasfosterau/effect-payments/internal";
 

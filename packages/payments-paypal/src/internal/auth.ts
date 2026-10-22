@@ -11,7 +11,13 @@
  * @module
  */
 
-import { Clock, Config, type Duration, Effect, Option, Redacted, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
+import type * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { Base64 } from "effect/encoding";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import {
@@ -34,7 +40,7 @@ import type { PayPalConfig, PayPalEnvironment } from "../PayPalPayments.js";
 import { errorBodyOf, handlePayPalError, PROVIDER } from "./error.js";
 
 /** The REST API base URL of each {@link PayPalEnvironment}; request paths carry `/v1` or `/v2`. */
-export const BASE_URLS: Readonly<Record<PayPalEnvironment, string>> = {
+const BASE_URLS: Readonly<Record<PayPalEnvironment, string>> = {
   live: "https://api-m.paypal.com",
   sandbox: "https://api-m.sandbox.paypal.com",
 };
@@ -128,7 +134,7 @@ export const sessionOf = (
     );
     const timeout = yield* timeoutOf(NAME, "timeout", config.timeout ?? DEFAULT_TIMEOUT_MS);
 
-    const login: Effect.Effect<string, PaymentsError> = Effect.gen(function* () {
+    const login = Effect.fn("PayPal.login")(function* (): Effect.fn.Return<string, PaymentsError> {
       const reply = yield* send(
         http,
         HttpClientRequest.post(`${baseUrl}/v1/oauth2/token`).pipe(
@@ -164,7 +170,7 @@ export const sessionOf = (
     // One login at a time, and its outcome is shared: concurrent first calls
     // (or calls racing an expiry) await the in-flight login and reuse its
     // token, or all fail with its error, after which the next call retries.
-    const token = yield* shareLogin(cache.cached, login);
+    const token = yield* shareLogin(cache.cached, login());
 
     return { baseUrl, timeout, token, forget: cache.forget };
   });

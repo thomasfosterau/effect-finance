@@ -4,7 +4,7 @@
  * @module
  */
 
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /**
  * Represents an amount of money in the smallest currency unit (e.g. cents for

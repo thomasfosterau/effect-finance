@@ -26,17 +26,15 @@
  * program provides as `Webhook.StripeService`.
  */
 
-import {
-  Clock,
-  Config,
-  ConfigProvider,
-  Console,
-  Effect,
-  Match,
-  Option,
-  Redacted,
-  Schema,
-} from "effect";
+import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as Match from "effect/Match";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import * as Webhook from "@thomasfosterau/effect-payments-stripe/Webhook";
 
 /** The variable the endpoint's signing secret (`whsec_…`) is read from. */
@@ -173,7 +171,10 @@ const delivery = (body: string, header: string | undefined) =>
     headers: header === undefined ? {} : { [Webhook.SIGNATURE_HEADER]: header },
   });
 
-const checkoutCompleted = JSON.stringify({
+/** A test event's body as Stripe sends it: the event serialised as JSON. */
+const toJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
+const checkoutCompleted = toJson({
   id: "evt_test_checkout",
   type: "checkout.session.completed",
   data: {
@@ -186,7 +187,7 @@ const checkoutCompleted = JSON.stringify({
   },
 });
 
-const chargeSucceeded = JSON.stringify({
+const chargeSucceeded = toJson({
   id: "evt_test_charge",
   type: "charge.succeeded",
   data: { object: { id: "ch_test_123" } },
@@ -194,7 +195,7 @@ const chargeSucceeded = JSON.stringify({
 
 // Signed and of a handled type, but without the `items` the subscription
 // schema requires: the shape a field move in a new API version would produce.
-const subscriptionWithoutItems = JSON.stringify({
+const subscriptionWithoutItems = toJson({
   id: "evt_test_subscription",
   type: "customer.subscription.updated",
   data: {
