@@ -207,7 +207,8 @@ export default defineConfig({
         cache: false,
       },
       // Every package's docgen: type-checks AND RUNS each JSDoc `@example`
-      // and each `ts` / `typescript` block of the package README against the
+      // and each `ts` / `typescript` block of the package README (and, in
+      // payments-stripe's, of this root README) against the
       // built `dist/`, then writes the API reference under that
       // package's (git-ignored) `docs/`. Same pure-graph-node shape as
       // `check`, so a new package adds itself here too.

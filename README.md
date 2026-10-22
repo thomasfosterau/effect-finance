@@ -33,7 +33,8 @@ const layer = StripePayments.layer({ apiKey: Redacted.make("sk_test_...") }).pip
   Layer.provide(FetchHttpClient.layer),
 );
 
-await Effect.runPromise(program.pipe(Effect.provide(layer)));
+// Calls Stripe when invoked: `const customer = await createCustomer();`
+const createCustomer = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
 ```
 
 Each package's README is its API reference. Runnable examples are in [`packages/payments-stripe/examples`](packages/payments-stripe/examples).

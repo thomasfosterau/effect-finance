@@ -32,7 +32,7 @@ vp run --filter ./packages/payments-stripe check      # one package's type gate
 vp run -r test:unit                                   # unit tests
 vp test run tests/Webhook.test.ts                     # single file (from inside the package)
 vp run -r build                                       # emit dist/
-vp run docgen                                         # type-check and run every JSDoc @example and README block
+vp run docgen                                         # type-check and run every JSDoc @example and package/root README block
 vp run test:coverage                                  # one Istanbul map for fallow
 vp run fallow:audit                                   # change-set review (not a CI gate)
 ```

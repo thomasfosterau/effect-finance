@@ -1,24 +1,30 @@
 /**
- * Hands a package README's TypeScript code blocks to `@effect/docgen` (#178).
+ * Hands README TypeScript code blocks to `@effect/docgen` (#178).
  *
  * docgen only reads JSDoc under its `srcDir`, so this writes every fenced
- * `ts` / `typescript` block of the `README.md` in the working directory (a
- * package) into the doc comment of one export of a generated module,
- * `docs/readme/src/README.ts` (git-ignored, like the rest of `docs/`). The
- * package's `docgen` task then runs docgen a second time over that directory,
- * so each block is type-checked and run exactly as a JSDoc example is:
- * imports resolve by package name through `exports` to `dist/`.
+ * `ts` / `typescript` block of each README named on the command line (default:
+ * the `README.md` in the working directory, a package) into the doc comment of
+ * one export of a generated module under `docs/readme/src/` (git-ignored, like
+ * the rest of `docs/`), one module per README. The package's `docgen` task then
+ * runs docgen a second time over that directory, so each block is type-checked
+ * and run exactly as a JSDoc example is: imports resolve by package name
+ * through `exports` to `dist/`. payments-stripe's task also passes the root
+ * `README.md`, whose blocks import the core and the Stripe package.
  *
  * The info string is copied verbatim, so docgen's own opt-out applies: a block
  * fenced as `ts skip-type-checking` is a fragment, neither compiled nor run.
- * Each export is named after the block's line in the README (`line19`), which
- * docgen puts in the name of the example file it reports a failure in.
+ * Each export is named after the block's line in its README (`line19`), which
+ * docgen puts in the name of the example file it reports a failure in; the
+ * module is named after the README's path from the workspace root
+ * (`README.ts` for the root one, `packages.payments-stripe.README.ts`).
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as Arr from "effect/Array";
 
 const outDir = "docs/readme/src";
-const lines = readFileSync("README.md", "utf8").split("\n");
+const workspace = fileURLToPath(new URL("..", import.meta.url));
 
 interface Block {
   readonly line: number;
@@ -28,6 +34,12 @@ interface Block {
 interface Scan {
   readonly blocks: ReadonlyArray<Block>;
   readonly open: Block | undefined;
+  readonly errors: ReadonlyArray<string>;
+}
+interface Readme {
+  /** The README's path from the workspace root, as errors and docs name it. */
+  readonly label: string;
+  readonly blocks: ReadonlyArray<Block>;
   readonly errors: ReadonlyArray<string>;
 }
 
@@ -40,54 +52,69 @@ const outside = (scan: Scan, line: string, index: number): Scan => {
 };
 
 /** Inside a block: a bare fence closes it, and any other line joins its body. */
-const inside = (scan: Scan, open: Block, line: string, index: number): Scan => {
+const inside = (label: string, scan: Scan, open: Block, line: string, index: number): Scan => {
   if (/^```\s*$/.test(line)) return { ...scan, blocks: [...scan.blocks, open], open: undefined };
   if (line.includes("*/")) {
-    const error = `README.md:${index + 1}: "*/" would end the generated doc comment`;
+    const error = `${label}:${index + 1}: "*/" would end the generated doc comment`;
     return { ...scan, errors: [...scan.errors, error] };
   }
   return { ...scan, open: { ...open, body: [...open.body, line] } };
 };
 
-const scan = lines.reduce<Scan>(
-  (state, line, index) =>
-    state.open === undefined ? outside(state, line, index) : inside(state, state.open, line, index),
-  { blocks: [], open: undefined, errors: [] },
-);
-const errors =
-  scan.open === undefined
-    ? scan.errors
-    : [...scan.errors, `README.md:${scan.open.line}: unclosed code fence`];
-if (Arr.isReadonlyArrayNonEmpty(errors)) {
-  console.error(errors.join("\n"));
-  process.exit(1);
-}
-const { blocks } = scan;
+/** Every TypeScript block of the README at `path`, plus what stops it being written. */
+const scanReadme = (path: string): Readme => {
+  const label = relative(workspace, resolve(path));
+  const scan = readFileSync(path, "utf8")
+    .split("\n")
+    .reduce<Scan>(
+      (state, line, index) =>
+        state.open === undefined
+          ? outside(state, line, index)
+          : inside(label, state, state.open, line, index),
+      { blocks: [], open: undefined, errors: [] },
+    );
+  const unclosed =
+    scan.open === undefined ? [] : [`${label}:${scan.open.line}: unclosed code fence`];
+  return { label, blocks: scan.blocks, errors: [...scan.errors, ...unclosed] };
+};
 
-const exports = blocks.map(({ line, info, body }) =>
+/** One block as a documented export whose doc comment carries it. */
+const renderBlock = (label: string, { line, info, body }: Block): string =>
   [
     "/**",
-    ` * README.md, line ${line}.`,
+    ` * ${label}, line ${line}.`,
     " *",
     ` * \`\`\`${info}`,
     ...body.map((text) => (text === "" ? " *" : ` * ${text}`)),
     " * ```",
     " */",
     `export const line${line} = ${line};`,
-  ].join("\n"),
-);
+  ].join("\n");
 
+/** Write one README's generated module into `outDir`, named after its label. */
+const writeReadme = ({ label, blocks }: Readme): void => {
+  const file = `${outDir}/${label.replaceAll("/", ".").replace(/\.md$/i, "")}.ts`;
+  writeFileSync(
+    file,
+    [
+      // docgen reads the first statement's doc as the module doc, so a block
+      // there would run twice: the first statement carries no block.
+      `/** The TypeScript blocks of ${label}, generated by scripts/readme-examples.ts. */`,
+      `export const source = "${label}";`,
+      ...blocks.map((block) => renderBlock(label, block)),
+      "",
+    ].join("\n\n"),
+  );
+  console.log(`${label}: ${blocks.length} TypeScript block(s) written to ${file}`);
+};
+
+const args = process.argv.slice(2);
+const readmes = (Arr.isReadonlyArrayNonEmpty(args) ? args : ["README.md"]).map(scanReadme);
+const errors = readmes.flatMap((readme) => readme.errors);
+if (Arr.isReadonlyArrayNonEmpty(errors)) {
+  console.error(errors.join("\n"));
+  process.exit(1);
+}
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
-writeFileSync(
-  `${outDir}/README.ts`,
-  [
-    // docgen reads the first statement's doc as the module doc, so a block
-    // there would run twice: the first statement carries no block.
-    "/** The TypeScript blocks of README.md, generated by scripts/readme-examples.ts. */",
-    'export const source = "README.md";',
-    ...exports,
-    "",
-  ].join("\n\n"),
-);
-console.log(`README.md: ${blocks.length} TypeScript block(s) written to ${outDir}/README.ts`);
+readmes.forEach(writeReadme);

@@ -20,6 +20,12 @@ import { defineConfig } from "vite-plus";
 export interface PackageConfigOptions {
   /** The package's `import.meta.url`, so paths resolve relative to it. */
   readonly url: string;
+  /**
+   * Also run the workspace root `README.md`'s TypeScript blocks in this
+   * package's `docgen` task (#178). Set on the one package whose dependencies
+   * resolve every import those blocks make (payments-stripe).
+   */
+  readonly rootReadme?: boolean | undefined;
 }
 
 /**
@@ -74,10 +80,11 @@ type Manifest = typeof Manifest.Type;
 /** Parse a `package.json`'s text as a {@link Manifest}, throwing when it is not one. */
 const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(Manifest));
 
-export const packageConfig = ({ url }: PackageConfigOptions) => {
+export const packageConfig = ({ url, rootReadme = false }: PackageConfigOptions) => {
   const manifest = decodeManifest(readFileSync(new URL("./package.json", url), "utf8"));
   const srcDir = new URL("./src/", url).pathname;
   const maxWorkers = process.env.VITEST_MAX_WORKERS;
+  const readmes = rootReadme ? "README.md ../../README.md" : "README.md";
   return defineConfig({
     run: {
       tasks: {
@@ -132,15 +139,16 @@ export const packageConfig = ({ url }: PackageConfigOptions) => {
         // own fence marker, `ts skip-type-checking`. The second run takes its
         // directories from DOCGEN_SRC / DOCGEN_OUT, not `--src` / `--out`:
         // docgen resolves a flag to an absolute path, then joins it onto the
-        // working directory.
+        // working directory. With `rootReadme`, the root README's blocks are
+        // written alongside (a module of their own) and run in the same pass.
         docgen: {
-          command:
-            "docgen && node ../../scripts/readme-examples.ts && DOCGEN_SRC=docs/readme/src DOCGEN_OUT=docs/readme docgen",
+          command: `docgen && node ../../scripts/readme-examples.ts ${readmes} && DOCGEN_SRC=docs/readme/src DOCGEN_OUT=docs/readme docgen`,
           dependsOn: ["build"],
           cache: {
             input: [
               ...cacheInputs,
               "README.md",
+              ...(rootReadme ? [{ pattern: "README.md", base: "workspace" as const }] : []),
               { pattern: "scripts/readme-examples.ts", base: "workspace" as const },
             ],
             output: ["docs/**"],
