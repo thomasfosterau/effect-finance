@@ -6,7 +6,8 @@
     "packages/payments-stripe/examples/*.ts",
     "tests/dist-consumer/src/*.ts",
     "**/vite.config.ts",
-    "vite.package.ts"
+    "vite.package.ts",
+    "scripts/*.ts"
   ],
   "ignorePatterns": ["**/dist/**", "**/docs/**", "**/coverage/**"],
   "ignoreDependencies": [
