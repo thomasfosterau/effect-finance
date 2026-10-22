@@ -78,7 +78,7 @@ Airwallex's payment-acceptance API maps onto a subset of the core capabilities:
 
 Because each capability is an independent Effect service, this provider simply doesn't supply layers for the capabilities Airwallex lacks. A program that only uses the supported capabilities is fully satisfied; one that needs, say, `Subscriptions` will not type-check against the Airwallex layer alone. The few individual operations without an Airwallex equivalent fail with a neutral `PaymentInvalidRequestError` rather than pretending to succeed.
 
-**Lists return one page.** `list` sends `limit` as `page_size` (and `PaymentIntent.list`'s `customer`, `Refund.list`'s `paymentIntent` as filters), and `hasMore` reports whether Airwallex has more; but `startingAfter` is not sent, so a following page cannot be requested yet, and `Customer.list`'s `email` and `Refund.list`'s `charge` filters are ignored.
+**Lists page by page number.** `list` sends `limit` as `page_size`, plus `PaymentIntent.list`'s `customer` and `Refund.list`'s `paymentIntent` as filters. `hasMore` reports whether Airwallex has more, and `nextCursor` then encodes the next `page_num` and the `limit`. Pass it back as `startingAfter`, with the same `limit` and filters, to list that page. An item id, or a cursor made for another `limit`, fails with `PaymentInvalidRequestError` (`param: "startingAfter"`). So do `Customer.list`'s `email` filter and `Refund.list`'s `charge` filter, which this provider cannot apply. Pages are numbered, so an item created or removed between two calls can shift a later page by one.
 
 ## Errors
 
