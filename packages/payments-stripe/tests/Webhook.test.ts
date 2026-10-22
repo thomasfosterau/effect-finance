@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
 import * as Clock from "effect/Clock";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -278,6 +279,66 @@ describe("Webhook", () => {
       expect(result.message).toBeDefined();
       expect(result.header).toBe(signature);
       expect(result.payload).toBe(payload);
+    });
+
+    // Each SDK wrapper maps whatever the SDK throws the same way: the thrown
+    // message (or the thrown value as a string), the header it was given, and
+    // the payload decoded as UTF-8.
+    const throwing = (thrown: unknown) => {
+      const fail = () => {
+        throw thrown;
+      };
+      const failAsync = () => Promise.reject(thrown);
+      // SAFETY: the fixture implements only the four `webhooks` methods the
+      // SDK wrappers call; nothing else on the client is reached.
+      return Layer.succeed(StripeService, {
+        webhooks: {
+          constructEvent: fail,
+          constructEventAsync: failAsync,
+          generateTestHeaderString: fail,
+          generateTestHeaderStringAsync: failAsync,
+        },
+      } as never);
+    };
+    const payload = Buffer.from('{"id":"evt_1"}', "utf8");
+    const wrappers: ReadonlyArray<
+      readonly [
+        string,
+        Effect.Effect<unknown, SignatureVerificationError, StripeService>,
+        string | undefined,
+      ]
+    > = [
+      ["constructEvent", Webhook.constructEvent(payload, "t=1,v1=x", "whsec_s"), "t=1,v1=x"],
+      [
+        "constructEventAsync",
+        Webhook.constructEventAsync(payload, "t=1,v1=x", "whsec_s"),
+        "t=1,v1=x",
+      ],
+      ["generateTestHeaderString", Webhook.generateTestHeaderString(payload, "whsec_s"), undefined],
+      [
+        "generateTestHeaderStringAsync",
+        Webhook.generateTestHeaderStringAsync(payload, "whsec_s"),
+        undefined,
+      ],
+    ];
+
+    Arr.forEach(wrappers, ([name, program, header]) => {
+      it(`${name} maps a thrown Error onto SignatureVerificationError`, async () => {
+        const error = await Effect.runPromise(
+          Effect.flip(program).pipe(Effect.provide(throwing(new Error("sdk refused")))),
+        );
+        expect(error).toBeInstanceOf(SignatureVerificationError);
+        expect(error.message).toBe("sdk refused");
+        expect(error.header).toBe(header);
+        expect(error.payload).toBe('{"id":"evt_1"}');
+      });
+
+      it(`${name} maps a thrown non-Error by its string form`, async () => {
+        const error = await Effect.runPromise(
+          Effect.flip(program).pipe(Effect.provide(throwing("plain"))),
+        );
+        expect(error.message).toBe("plain");
+      });
     });
   });
 });

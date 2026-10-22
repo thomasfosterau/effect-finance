@@ -512,15 +512,24 @@ const payloadText = (payload: string | Buffer): string =>
   Predicate.isString(payload) ? payload : payload.toString("utf8");
 
 /**
- * An SDK verifier failure as a {@link SignatureVerificationError}: the thrown
- * error's message, the header and the payload as text.
+ * The `SignatureVerificationError` an SDK-based wrapper fails with when the
+ * SDK throws: the thrown value's message, the header it was given (if any)
+ * and the payload as a string.
  */
 const sdkFailure = (
-  message: string,
-  header: string | undefined,
+  error: unknown,
   payload: string | Buffer,
+  header: string | undefined,
 ): SignatureVerificationError =>
-  new SignatureVerificationError({ message, header, payload: payloadText(payload) });
+  new SignatureVerificationError({
+    // The thrown error's message; the value as a string when it carries none.
+    message:
+      Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
+        ? error.message
+        : String(error),
+    header,
+    payload: payloadText(payload),
+  });
 
 /**
  * Construct an Event from a webhook payload and signature with the SDK's
@@ -573,15 +582,7 @@ export const constructEvent = (
     return yield* Effect.try({
       try: () =>
         stripe.webhooks.constructEvent(payload, signature, secret, sdkTolerance(tolerance)),
-      catch: (error) =>
-        sdkFailure(
-          // The thrown error's message; the value as a string when it carries none.
-          Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
-            ? error.message
-            : String(error),
-          signature,
-          payload,
-        ),
+      catch: (error) => sdkFailure(error, payload, signature),
     });
   });
 
@@ -643,15 +644,7 @@ export const constructEventAsync = (
           sdkTolerance(tolerance),
           cryptoProvider,
         ),
-      catch: (error) =>
-        sdkFailure(
-          // The thrown error's message; the value as a string when it carries none.
-          Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
-            ? error.message
-            : String(error),
-          signature,
-          payload,
-        ),
+      catch: (error) => sdkFailure(error, payload, signature),
     });
   });
 
@@ -702,15 +695,7 @@ export const generateTestHeaderString = (
             timestamp,
           }),
         ),
-      catch: (error) =>
-        sdkFailure(
-          // The thrown error's message; the value as a string when it carries none.
-          Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
-            ? error.message
-            : String(error),
-          undefined,
-          payload,
-        ),
+      catch: (error) => sdkFailure(error, payload, undefined),
     });
   });
 
@@ -771,15 +756,7 @@ export const generateTestHeaderStringAsync = (
             cryptoProvider,
           }),
         ),
-      catch: (error) =>
-        sdkFailure(
-          // The thrown error's message; the value as a string when it carries none.
-          Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
-            ? error.message
-            : String(error),
-          undefined,
-          payload,
-        ),
+      catch: (error) => sdkFailure(error, payload, undefined),
     });
   });
 
