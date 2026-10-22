@@ -72,9 +72,15 @@ import * as SubscriptionNS from "@thomasfosterau/effect-payments/Subscription";
 import {
   type PaymentConfigError,
   PaymentInvalidRequestError,
+  type Page,
   type PaymentsError,
 } from "@thomasfosterau/effect-payments";
-import { checkId, checkMinorUnits, omitUndefined } from "@thomasfosterau/effect-payments/internal";
+import {
+  checkId,
+  checkMinorUnits,
+  omitUndefined,
+  pageNumberedList,
+} from "@thomasfosterau/effect-payments/internal";
 import {
   DistilledClient,
   layer as clientLayer,
@@ -170,6 +176,27 @@ const refuseUnsupported = (
   Option.match(
     Arr.findFirst(options, ([set]) => set),
     { onNone: () => Effect.void, onSome: ([, operation]) => notSupported(operation) },
+  );
+
+/**
+ * One page of a PayPal list: `active`, which PayPal cannot filter by, is
+ * refused; `startingAfter` (a previous page's `nextCursor`) names the 1-based
+ * `page` to request (`list` gets `undefined` for the first page, which is
+ * PayPal's default), and the result carries the cursor of the page after it.
+ */
+const listPage = <A>(
+  params:
+    | {
+        readonly limit?: number | undefined;
+        readonly startingAfter?: string | undefined;
+        readonly active?: boolean | undefined;
+      }
+    | undefined,
+  what: string,
+  list: (page: number | undefined) => Effect.Effect<Page<A>, PaymentsError>,
+): Effect.Effect<Page<A>, PaymentsError> =>
+  refuseUnsupported([[params?.active !== undefined, `filtering ${what} by active`]]).pipe(
+    Effect.andThen(pageNumberedList(params, { provider: "PayPal", firstPage: 1 }, list)),
   );
 
 /** Whether `metadata` names any key: PayPal has nowhere to keep one. */
@@ -273,14 +300,17 @@ const products = /* @__PURE__ */ over(ProductNS.Products, (request) => {
       ),
     del: () => notSupported("deleting products"),
     list: (params) =>
-      request(listProducts, omitUndefined({ page_size: params?.limit }), decodeProductPage),
+      listPage(params, "products", (page) =>
+        request(listProducts, omitUndefined({ page_size: params?.limit, page }), decodeProductPage),
+      ),
   };
 });
 
 /**
  * PayPal Catalog Products as the {@link ProductNS.Products} capability. `del`
  * fails with {@link PaymentInvalidRequestError} (PayPal cannot delete a
- * product). `update` patches only the `description`, so one without a
+ * product). `list` pages by page number through `nextCursor` and refuses the
+ * `active` filter. `update` patches only the `description`, so one without a
  * `description`, or one that sets `name`, fails the same way. A PayPal product
  * is always active and keeps no metadata: a `create` or `update` with
  * `active: false` or a non-empty `metadata` fails too (`active: true` holds
@@ -351,10 +381,12 @@ const prices = /* @__PURE__ */ over(PriceNS.Prices, (request) => {
       ]).pipe(Effect.andThen(retrieve(id)));
     },
     list: (params) =>
-      request(
-        listPlans,
-        omitUndefined({ page_size: params?.limit, product_id: params?.product }),
-        decodePricePage,
+      listPage(params, "prices", (page) =>
+        request(
+          listPlans,
+          omitUndefined({ page_size: params?.limit, product_id: params?.product, page }),
+          decodePricePage,
+        ),
       ),
   };
 });
@@ -362,7 +394,8 @@ const prices = /* @__PURE__ */ over(PriceNS.Prices, (request) => {
 /**
  * PayPal Billing Plans as the {@link PriceNS.Prices} capability. A one-time
  * price fails `create` with {@link PaymentInvalidRequestError} (plans are
- * recurring only), and `update` can only toggle `active` (activate /
+ * recurring only); `list` pages by page number through `nextCursor` and refuses
+ * the `active` filter; and `update` can only toggle `active` (activate /
  * deactivate); any other update fails the same way. A `create` with
  * `active: false` makes the plan in PayPal's not-yet-active `CREATED` state. A
  * plan keeps no metadata, so a `create` or `update` with a non-empty
