@@ -31,7 +31,8 @@ const layer = StripePayments.layer({ apiKey: Redacted.make("sk_test_...") }).pip
   Layer.provide(FetchHttpClient.layer), // every provider speaks effect/http
 );
 
-const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+// Calls Stripe when invoked: `const customer = await createCustomer();`
+const createCustomer = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
 ```
 
 ## Providing the capabilities

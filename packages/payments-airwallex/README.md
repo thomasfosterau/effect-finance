@@ -34,7 +34,8 @@ const layer = AirwallexPayments.layer({
 // from AIRWALLEX_CLIENT_ID / AIRWALLEX_API_KEY / AIRWALLEX_ENV (required: live | sandbox):
 // const layer = AirwallexPayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 
-const customer = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+// Calls Airwallex when invoked: `const customer = await createCustomer();`
+const createCustomer = () => Effect.runPromise(program.pipe(Effect.provide(layer)));
 ```
 
 ## Supported capabilities

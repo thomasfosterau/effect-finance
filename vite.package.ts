@@ -110,11 +110,25 @@ export const packageConfig = ({ url }: PackageConfigOptions) => {
         // An example imports packages by name exactly as a consumer does,
         // which resolves through `exports` to `dist/`: this package's own
         // build edge (which carries the sibling builds with it).
+        //
+        // Then the same for every `ts` / `typescript` block of the package's
+        // README.md (#178): scripts/readme-examples.ts writes the blocks into
+        // a generated module under `docs/readme/src/`, and a second docgen run
+        // over it type-checks and runs them. A fragment opts out with docgen's
+        // own fence marker, `ts skip-type-checking`. The second run takes its
+        // directories from DOCGEN_SRC / DOCGEN_OUT, not `--src` / `--out`:
+        // docgen resolves a flag to an absolute path, then joins it onto the
+        // working directory.
         docgen: {
-          command: "docgen",
+          command:
+            "docgen && node ../../scripts/readme-examples.ts && DOCGEN_SRC=docs/readme/src DOCGEN_OUT=docs/readme docgen",
           dependsOn: ["build"],
           cache: {
-            input: cacheInputs,
+            input: [
+              ...cacheInputs,
+              "README.md",
+              { pattern: "scripts/readme-examples.ts", base: "workspace" as const },
+            ],
             output: ["docs/**"],
           },
         },
