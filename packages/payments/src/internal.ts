@@ -31,6 +31,10 @@
  *   {@link errorFromStatus} (an HTTP error status as the neutral error). Each
  *   provider keeps its wire schemas, its status spellings and the reading of
  *   its own error body.
+ * - The paging of a page-numbered list: {@link pageNumberedList} (a
+ *   `startingAfter` cursor as the vendor page to request, and the page's
+ *   `nextCursor`). Each provider keeps its first page number, its page
+ *   parameters and the filters it refuses.
  *
  * @module
  */
@@ -66,6 +70,7 @@ import {
   PaymentRateLimitError,
   type PaymentsError,
 } from "./PaymentsError.js";
+import type { Page } from "./Page.js";
 
 /**
  * What a leader publishes: the login's exit, or `None` when the leader was
@@ -718,3 +723,90 @@ export const errorFromStatus = (
     statusCode: status,
   });
 };
+
+// ---------------------------------------------------------------------------
+// Paging of a page-numbered list
+// ---------------------------------------------------------------------------
+
+/** A page cursor: the vendor page number, and the explicit `limit` it was made for. */
+const PAGE_CURSOR = /^page=(\d+)(?:&size=(\d+))?$/;
+
+/**
+ * The vendor page number `startingAfter` (a `nextCursor` from
+ * {@link pageNumberedList}) names, or `firstPage` without one.
+ */
+const readPageCursor = (
+  startingAfter: string | undefined,
+  options: {
+    readonly provider: string;
+    readonly firstPage: number;
+    readonly limit: number | undefined;
+  },
+): Effect.Effect<number, PaymentInvalidRequestError> => {
+  if (startingAfter === undefined) return Effect.succeed(options.firstPage);
+  const refuse = (message: string) =>
+    Effect.fail(new PaymentInvalidRequestError({ message, param: "startingAfter" }));
+  const match = PAGE_CURSOR.exec(startingAfter);
+  const page = match === null ? Number.NaN : Number(match[1]);
+  if (match === null || !Number.isSafeInteger(page) || page < options.firstPage) {
+    return refuse(
+      `${options.provider} startingAfter must be the nextCursor of a previous page, not an item id`,
+    );
+  }
+  const size = match[2];
+  const limit = options.limit === undefined ? undefined : String(options.limit);
+  return size === limit
+    ? Effect.succeed(page)
+    : refuse(
+        `${options.provider} startingAfter is a cursor for ${
+          size === undefined ? "no limit" : `limit ${size}`
+        }: list the next page with the same limit`,
+      );
+};
+
+/** `page`, vendor page `pageNumber`, with the cursor of the next one when it has more. */
+const withPageCursor = <A>(
+  page: Page<A>,
+  pageNumber: number,
+  limit: number | undefined,
+): Page<A> =>
+  page.hasMore
+    ? {
+        ...page,
+        nextCursor:
+          limit === undefined ? `page=${pageNumber + 1}` : `page=${pageNumber + 1}&size=${limit}`,
+      }
+    : { data: page.data, hasMore: false };
+
+/**
+ * One page of a vendor list that pages by page number, as a neutral page
+ * whose `nextCursor` encodes the next page number and the explicit `limit`.
+ *
+ * `startingAfter` must be such a cursor: it names the vendor page `list`
+ * requests. Without one, `list` gets `undefined` and requests the vendor's
+ * first page (`firstPage`) by default. An item id, a malformed cursor, one
+ * below `firstPage`, or one made for a different `limit` fails with
+ * {@link PaymentInvalidRequestError} (`param: "startingAfter"`) before `list`
+ * runs: a page number read with another page size would skip or repeat items.
+ *
+ * Internal, and exempt from semver: see the module documentation.
+ */
+export const pageNumberedList = <A, E>(
+  params:
+    | { readonly limit?: number | undefined; readonly startingAfter?: string | undefined }
+    | undefined,
+  options: {
+    /** The provider's name, for the message: `"Acme"`. */
+    readonly provider: string;
+    /** The vendor's first page number: `0` or `1`. */
+    readonly firstPage: number;
+  },
+  list: (page: number | undefined) => Effect.Effect<Page<A>, E>,
+): Effect.Effect<Page<A>, E | PaymentInvalidRequestError> =>
+  Effect.flatMap(
+    readPageCursor(params?.startingAfter, { ...options, limit: params?.limit }),
+    (page) =>
+      Effect.map(list(params?.startingAfter === undefined ? undefined : page), (result) =>
+        withPageCursor(result, page, params?.limit),
+      ),
+  );

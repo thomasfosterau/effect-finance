@@ -131,7 +131,7 @@ PayPal's billing suite and checkout APIs map onto a subset of the core capabilit
 
 Because each capability is an independent Effect service, a program that only uses the supported capabilities is fully satisfied; one that needs `Customers` will not type-check against the PayPal layer. Individual operations without a PayPal equivalent fail with a neutral `PaymentInvalidRequestError`.
 
-**Lists return one page.** `Product.list` and `Price.list` send `limit` as `page_size` (and `Price.list`'s `product` as a filter), and `hasMore` reports whether PayPal links a next page; but `startingAfter` is not sent, so that page cannot be requested yet, and the `active` filters are ignored.
+**Lists page by page number.** `Product.list` and `Price.list` send `limit` as `page_size` (and `Price.list`'s `product` as a filter). `hasMore` reports whether PayPal links a next page, and `nextCursor` then encodes that page's number and the `limit`. Pass it back as `startingAfter`, with the same `limit`, to list that page. An item id, or a cursor made for another `limit`, fails with `PaymentInvalidRequestError` (`param: "startingAfter"`), and so does the `active` filter, which PayPal cannot apply. Pages are numbered, so an item created or removed between two calls can shift a later page by one.
 
 ## Errors
 

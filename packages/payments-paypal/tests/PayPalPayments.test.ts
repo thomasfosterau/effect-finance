@@ -360,6 +360,67 @@ describe("PayPalPayments create and update options", () => {
   });
 });
 
+describe("PayPalPayments list paging", () => {
+  const product = (id: string) => ({ id, name: id, create_time: "2026-01-01T00:00:00Z" });
+  /** A two-page product collection, answered by the `page` query (1 when absent). */
+  const twoPages = (call: PayPalCall) =>
+    call.query.page === "2"
+      ? { products: [product("PROD-3")], links: [] }
+      : {
+          products: [product("PROD-1"), product("PROD-2")],
+          links: [{ rel: "next", href: "https://api-m.paypal.com/v1/catalogs/products?page=2" }],
+        };
+
+  it("lists the next page with the previous page's nextCursor", async () => {
+    const { client, calls } = makeFakeClient(twoPages);
+    const list = (startingAfter?: string) =>
+      Effect.runPromise(
+        Product.list({ limit: 2, startingAfter }).pipe(Effect.provide(provide(client))),
+      );
+
+    const first = await list();
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).toBe("page=2&size=2");
+    // The first page sends no `page`: PayPal starts at 1.
+    expect(calls[0].query).toEqual({ page_size: "2" });
+
+    const second = await list(first.nextCursor);
+    expect(calls[1].query).toEqual({ page_size: "2", page: "2" });
+    expect(second.data.map((item) => item.id)).toEqual(["PROD-3"]);
+    expect(second.hasMore).toBe(false);
+    expect(second).not.toHaveProperty("nextCursor");
+  });
+
+  it("pages prices (billing plans) the same way, keeping the product filter", async () => {
+    const { client, calls } = makeFakeClient(() => ({ plans: [], links: [] }));
+    await Effect.runPromise(
+      Price.list({ product: "PROD-1", startingAfter: "page=3" }).pipe(
+        Effect.provide(provide(client)),
+      ),
+    );
+    expect(calls[0].query).toEqual({ product_id: "PROD-1", page: "3" });
+  });
+
+  it.each<
+    readonly [
+      string,
+      Effect.Effect<unknown, unknown, Layer.Success<typeof PayPalPayments.capabilities>>,
+    ]
+  >([
+    ["an item id", Product.list({ startingAfter: "PROD-1" })],
+    ["a cursor for another limit", Product.list({ limit: 5, startingAfter: "page=2&size=2" })],
+    ["the active filter on products", Product.list({ active: true })],
+    ["the active filter on prices", Price.list({ active: false })],
+  ])("refuses %s, sending nothing", async (_name, effect) => {
+    const { client, calls } = makeFakeClient(twoPages);
+    const error = await Effect.runPromise(
+      Effect.flip(effect).pipe(Effect.provide(provide(client))),
+    );
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("PayPalPayments decoding", () => {
   /** Run `effect` against a client answering `body`, to its failure. */
 
