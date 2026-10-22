@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
 import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 import {
   exponent,
@@ -37,22 +38,24 @@ const CURRENCIES = [
 
 describe("PayPal money: currency exponents", () => {
   it("follows PayPal's table: HUF, JPY and TWD have no decimals", () => {
-    for (const { code, digits } of CURRENCIES) expect(exponent(code)).toBe(digits);
+    Arr.forEach(CURRENCIES, ({ code, digits }) => expect(exponent(code)).toBe(digits));
   });
 });
 
 describe("PayPal money: round trip", () => {
-  for (const { code, digits } of CURRENCIES) {
+  Arr.forEach(CURRENCIES, ({ code, digits }) => {
     it(`minor units -> string -> minor units is the identity for ${code}`, () => {
       const next = prng(0x5eed + digits);
-      for (let i = 0; i < 2000; i++) {
-        const minor = safeInteger(next);
-        const value = formatMinorUnits(minor, code);
-        expect(value).toMatch(digits === 0 ? /^-?\d+$/ : new RegExp(`^-?\\d+\\.\\d{${digits}}$`));
-        expect(parseMinorUnits(value ?? "", code)).toBe(minor);
-      }
+      Arr.forEach(
+        Arr.makeBy(2000, () => safeInteger(next)),
+        (minor) => {
+          const value = formatMinorUnits(minor, code);
+          expect(value).toMatch(digits === 0 ? /^-?\d+$/ : new RegExp(`^-?\\d+\\.\\d{${digits}}$`));
+          expect(parseMinorUnits(value ?? "", code)).toBe(minor);
+        },
+      );
     });
-  }
+  });
 
   it("formats fixed examples exactly", () => {
     expect(formatMinorUnits(1000, "usd")).toBe("10.00");
@@ -114,23 +117,24 @@ describe("PayPal money: rejection", () => {
   });
 
   it("rejects malformed strings", () => {
-    for (const value of [
-      "",
-      "ten",
-      "1.",
-      ".5",
-      "+1",
-      "1e3",
-      "1,000.00",
-      " 1.00",
-      "1.00 ",
-      "--1",
-      "0x10",
-      "Infinity",
-      "NaN",
-    ]) {
-      expect(parseMinorUnits(value, "usd"), value).toBeUndefined();
-    }
+    Arr.forEach(
+      [
+        "",
+        "ten",
+        "1.",
+        ".5",
+        "+1",
+        "1e3",
+        "1,000.00",
+        " 1.00",
+        "1.00 ",
+        "--1",
+        "0x10",
+        "Infinity",
+        "NaN",
+      ],
+      (value) => expect(parseMinorUnits(value, "usd"), value).toBeUndefined(),
+    );
   });
 
   it("toMinorUnits throws on a value the decoder would have rejected", () => {
@@ -139,9 +143,9 @@ describe("PayPal money: rejection", () => {
   });
 
   it("refuses to format an amount that is not a safe integer", () => {
-    for (const minor of [1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
-      expect(formatMinorUnits(minor, "usd")).toBeUndefined();
-    }
+    Arr.forEach([1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1], (minor) =>
+      expect(formatMinorUnits(minor, "usd")).toBeUndefined(),
+    );
   });
 
   it("toMajorString refuses a negative amount, which no request carries", async () => {

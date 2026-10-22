@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Product from "@thomasfosterau/effect-payments/Product";
 import * as Price from "@thomasfosterau/effect-payments/Price";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
@@ -21,6 +23,23 @@ const makeFakeClient = (responder: (req: PayPalCall) => unknown) => {
 
 const provide = capabilitiesOver;
 
+/** An RFC 3339 timestamp as whole epoch seconds, as the mapping reads it. */
+const epochSeconds = (timestamp: string): number =>
+  Math.floor(DateTime.toEpochMillis(DateTime.makeUnsafe(timestamp)) / 1000);
+
+/** Run `effect` against a stub answering `body`, and return its failure. */
+const failureOf = <A, E, Body>(
+  effect: Effect.Effect<A, E, Layer.Success<typeof PayPalPayments.capabilities>>,
+  body: (req: PayPalCall) => Body,
+): Effect.Effect<E, A> =>
+  Effect.flip(effect).pipe(Effect.provide(provide(makeFakeClient(body).client)));
+
+/** {@link failureOf}, run. */
+const failure = <A, E, Body>(
+  effect: Effect.Effect<A, E, Layer.Success<typeof PayPalPayments.capabilities>>,
+  body: (req: PayPalCall) => Body,
+): Promise<E> => Effect.runPromise(failureOf(effect, body));
+
 describe("PayPalPayments capabilities", () => {
   it("maps a catalog product", async () => {
     const { client } = makeFakeClient(() => ({
@@ -36,7 +55,7 @@ describe("PayPalPayments capabilities", () => {
     expect(product).toBeInstanceOf(Product.Product);
     expect(product.id).toBe("PROD-1");
     expect(product.active).toBe(true);
-    expect(product.created).toBe(Math.floor(Date.parse("2026-01-01T00:00:00Z") / 1000));
+    expect(product.created).toBe(epochSeconds("2026-01-01T00:00:00Z"));
   });
 
   it("maps a billing plan to a price, formatting the amount as a decimal string", async () => {
@@ -176,9 +195,7 @@ describe("PayPalPayments capabilities", () => {
     expect(subscription.items[0].priceId).toBe("P-1");
     expect(subscription.items[0].quantity).toBe(2);
     expect(subscription.customerId).toBe("cus_x");
-    expect(subscription.currentPeriodEnd).toBe(
-      Math.floor(Date.parse("2026-02-01T00:00:00Z") / 1000),
-    );
+    expect(subscription.currentPeriodEnd).toBe(epochSeconds("2026-02-01T00:00:00Z"));
   });
 
   it("refunds a capture, resolving the currency for a partial amount", async () => {
@@ -246,13 +263,6 @@ describe("PayPalPayments capabilities", () => {
 
 describe("PayPalPayments decoding", () => {
   /** Run `effect` against a client answering `body`, to its failure. */
-  const failure = <E>(
-    effect: Effect.Effect<unknown, E, Layer.Success<typeof PayPalPayments.capabilities>>,
-    body: (req: PayPalCall) => unknown,
-  ): Promise<E> =>
-    Effect.runPromise(
-      Effect.flip(effect).pipe(Effect.provide(provide(makeFakeClient(body).client))),
-    );
 
   it("fails a product missing its name with a provider error", async () => {
     const error = await failure(Product.retrieve("PROD-1"), () => ({ id: "PROD-1" }));
@@ -306,27 +316,41 @@ describe("PayPalPayments decoding", () => {
   });
 
   it("fails a plan whose interval count is not a positive integer with a provider error", async () => {
-    for (const interval_count of [0, -1, 1.5]) {
-      const error = await failure(Price.retrieve("P-1"), () => ({
-        id: "P-1",
-        billing_cycles: [
-          { tenure_type: "REGULAR", frequency: { interval_unit: "MONTH", interval_count } },
-        ],
-      }));
-      expect(error).toBeInstanceOf(PaymentProviderError);
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        [0, -1, 1.5],
+        (interval_count) =>
+          failureOf(Price.retrieve("P-1"), () => ({
+            id: "P-1",
+            billing_cycles: [
+              { tenure_type: "REGULAR", frequency: { interval_unit: "MONTH", interval_count } },
+            ],
+          })).pipe(Effect.map((error) => expect(error).toBeInstanceOf(PaymentProviderError))),
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 
   it("fails a subscription whose quantity is not a whole number with a provider error", async () => {
-    for (const quantity of ["2.5", "two", "-1"]) {
-      const error = await failure(Subscription.retrieve("I-1"), () => ({
-        id: "I-1",
-        status: "ACTIVE",
-        quantity,
-      }));
-      expect(error).toBeInstanceOf(PaymentProviderError);
-      expect(error).toMatchObject({ message: "PayPal returned a malformed subscription response" });
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        ["2.5", "two", "-1"],
+        (quantity) =>
+          failureOf(Subscription.retrieve("I-1"), () => ({
+            id: "I-1",
+            status: "ACTIVE",
+            quantity,
+          })).pipe(
+            Effect.map((error) => {
+              expect(error).toBeInstanceOf(PaymentProviderError);
+              expect(error).toMatchObject({
+                message: "PayPal returned a malformed subscription response",
+              });
+            }),
+          ),
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 
   it("fails a partial refund whose capture has no amount, rather than assuming USD", async () => {
@@ -395,15 +419,23 @@ describe("PayPalPayments money", () => {
   });
 
   it("formats HUF, TWD and JPY without decimals, as PayPal requires", async () => {
-    for (const currency of ["huf", "twd", "jpy"]) {
-      const { client, calls } = makeFakeClient(echoOrder);
-      const intent = await Effect.runPromise(
-        PaymentIntent.create({ amount: 1000, currency }).pipe(Effect.provide(provide(client))),
-      );
-      const body = calls[0].body as { purchase_units: { amount: { value: string } }[] };
-      expect(body.purchase_units[0].amount.value).toBe("1000");
-      expect(intent.amount).toBe(1000);
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        ["huf", "twd", "jpy"],
+        (currency) => {
+          const { client, calls } = makeFakeClient(echoOrder);
+          return PaymentIntent.create({ amount: 1000, currency }).pipe(
+            Effect.provide(provide(client)),
+            Effect.map((intent) => {
+              const body = calls[0].body as { purchase_units: { amount: { value: string } }[] };
+              expect(body.purchase_units[0].amount.value).toBe("1000");
+              expect(intent.amount).toBe(1000);
+            }),
+          );
+        },
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 
   it("formats and reads back a three-decimal currency exactly", async () => {
@@ -419,22 +451,29 @@ describe("PayPalPayments money", () => {
   });
 
   it("fails an order whose amount has more decimals than its currency allows", async () => {
-    for (const amount of [
-      { currency_code: "USD", value: "10.005" },
-      { currency_code: "HUF", value: "10.00" },
-      { currency_code: "USD", value: "90071992547409.93" },
-    ]) {
-      const { client } = makeFakeClient(() => ({
-        id: "ORD-1",
-        status: "COMPLETED",
-        purchase_units: [{ amount }],
-      }));
-      const error = await Effect.runPromise(
-        PaymentIntent.retrieve("ORD-1").pipe(Effect.provide(provide(client)), Effect.flip),
-      );
-      expect(error).toBeInstanceOf(PaymentProviderError);
-      expect(error).toMatchObject({ message: "PayPal returned a malformed order response" });
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        [
+          { currency_code: "USD", value: "10.005" },
+          { currency_code: "HUF", value: "10.00" },
+          { currency_code: "USD", value: "90071992547409.93" },
+        ],
+        (amount) =>
+          failureOf(PaymentIntent.retrieve("ORD-1"), () => ({
+            id: "ORD-1",
+            status: "COMPLETED",
+            purchase_units: [{ amount }],
+          })).pipe(
+            Effect.map((error) => {
+              expect(error).toBeInstanceOf(PaymentProviderError);
+              expect(error).toMatchObject({
+                message: "PayPal returned a malformed order response",
+              });
+            }),
+          ),
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 
   it("fails a refund whose amount has excess decimals with a provider error", async () => {

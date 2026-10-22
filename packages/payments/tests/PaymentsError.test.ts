@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 import {
   PaymentAuthenticationError,
   PaymentConfigError,

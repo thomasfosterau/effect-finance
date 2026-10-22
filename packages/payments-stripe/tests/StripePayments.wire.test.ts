@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vite-plus/test";
-import { ConfigProvider, Effect, Layer, Redacted } from "effect";
+import * as Arr from "effect/Array";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { FetchHttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { strict as strictValidation } from "@distilled.cloud/core/response-validation";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
@@ -69,12 +75,15 @@ const over = <A, E>(
   return { result, calls };
 };
 
+/** A value as `JSON.stringify` writes it. */
+const toJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
 /** The neutral failure of one `Customer.create` answered with `status` and `body`, not retried. */
 const failure = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   over(
     Effect.flip(Customer.create({ email: "a@example.com" })),
     () =>
-      typeof body === "string"
+      Predicate.isString(body)
         ? new Response(body, { status, headers })
         : jsonResponse(status, body, headers),
     { maxNetworkRetries: 0 },
@@ -199,11 +208,11 @@ describe("StripePayments request policy", () => {
     ["Refund.update", "refund", (id) => Refund.update(id, { metadata: { a: "b" } })],
   ];
   const badIds = pathIdCalls.flatMap(([name, resource, call]) =>
-    // `undefined` stands for an id from untyped code.
     (
       [
         ["an empty", ""],
-        ["an undefined", undefined as unknown as string],
+        // SAFETY: `undefined` stands for an id from untyped code.
+        ["an undefined", undefined as never],
       ] as const
     ).map(([label, id]) => [name, label, resource, call(id)] as const),
   );
@@ -237,7 +246,7 @@ describe("StripePayments request policy", () => {
     const keys = calls.map((call) => call.headers.get("idempotency-key"));
     expect(keys).toHaveLength(3);
     expect(keys[0]).toMatch(/^effect-payments-retry-/);
-    expect(new Set(keys).size).toBe(1);
+    expect(Arr.dedupe(keys)).toHaveLength(1);
   });
 
   it("gives up after maxNetworkRetries, failing with the last error", async () => {
@@ -410,15 +419,16 @@ describe("StripePayments maps every Distilled failure onto the neutral channel",
     expect(error).toMatchObject({ statusCode: 503, code: "StripeAPIError" });
   });
 
-  it("Unauthorized → PaymentAuthenticationError, whatever the body's type", async () => {
-    for (const type of ["authentication_error", "invalid_request_error"]) {
+  it.each(["authentication_error", "invalid_request_error"])(
+    "Unauthorized → PaymentAuthenticationError, whatever the body's type (%s)",
+    async (type) => {
       const error = await failure(401, {
         error: { type, message: "Invalid API Key provided: sk_test_****4242" },
       });
       expect(error).toBeInstanceOf(PaymentAuthenticationError);
       expect(error).toMatchObject({ statusCode: 401 });
-    }
-  });
+    },
+  );
 
   it("Forbidden → PaymentProviderError coded as a permission error", async () => {
     const error = await failure(403, {
@@ -494,17 +504,17 @@ describe("StripePayments maps every Distilled failure onto the neutral channel",
     ).result;
     expect(network).toBeInstanceOf(PaymentNetworkError);
     expect(timeout).toBeInstanceOf(PaymentNetworkError);
-    for (const error of [auth, card, network, timeout]) {
-      // `JSON.stringify` and `String` go through Effect's `Headers`
-      // redaction, so they would miss a request kept anywhere in the error;
-      // walk every value it holds instead.
+    Arr.forEach([auth, card, network, timeout], (error) => {
+      // `JSON.stringify` (which `toJson` runs) and `String` go through
+      // Effect's `Headers` redaction, so they would miss a request kept
+      // anywhere in the error; walk every value it holds instead.
       const reachable = reachableFrom(error);
       expect(reachable.strings.filter((value) => value.includes(TEST_KEY))).toEqual([]);
       expect(reachable.objects.filter(HttpClientError.isHttpClientError)).toEqual([]);
       expect(reachable.objects.filter(HttpClientRequest.isHttpClientRequest)).toEqual([]);
-      expect(JSON.stringify(error)).not.toContain(TEST_KEY);
+      expect(toJson(error)).not.toContain(TEST_KEY);
       expect(String(error)).not.toContain(TEST_KEY);
-    }
+    });
   });
 });
 
@@ -533,19 +543,25 @@ describe("StripePayments configuration", () => {
       ),
     );
     expect(calls[0]?.headers.get("authorization")).toBe(`Bearer ${TEST_KEY}`);
-    for (const values of [{}, { STRIPE_API_KEY: "" }]) {
-      const error = await Effect.runPromise(
-        Effect.flip(
-          Customer.retrieve("cus_1").pipe(
-            Effect.provide(StripePayments.layerFromEnv()),
-            Effect.provide(http),
-            withKey(values),
+    const errors = await Effect.runPromise(
+      Effect.forEach(
+        [{}, { STRIPE_API_KEY: "" }],
+        (values) =>
+          Effect.flip(
+            Customer.retrieve("cus_1").pipe(
+              Effect.provide(StripePayments.layerFromEnv()),
+              Effect.provide(http),
+              withKey(values),
+            ),
           ),
-        ),
-      );
+        { concurrency: 1 },
+      ),
+    );
+    expect(errors).toHaveLength(2);
+    Arr.forEach(errors, (error) => {
       expect(error).toBeInstanceOf(PaymentConfigError);
       expect(error.message).toBe("Environment variable STRIPE_API_KEY is not set");
-    }
+    });
   });
 
   it("maps an unreadable key variable for layerFromEnv to PaymentConfigError", async () => {

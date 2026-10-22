@@ -32,7 +32,8 @@
  * @module
  */
 
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
+import * as HashSet from "effect/HashSet";
 import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 import {
   checkMinorUnits,
@@ -50,7 +51,7 @@ import {
 // LYD keep their ISO 4217 exponent of 3, as no Airwallex page covers them.
 
 // Currencies with no minor unit (1 major unit == 1 minor unit).
-const ZERO_DECIMAL = new Set([
+const ZERO_DECIMAL = HashSet.make(
   "bif",
   "clp",
   "djf",
@@ -68,10 +69,10 @@ const ZERO_DECIMAL = new Set([
   "xaf",
   "xof",
   "xpf",
-]);
+);
 
 // Currencies with three decimal places.
-const THREE_DECIMAL = new Set(["bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd"]);
+const THREE_DECIMAL = HashSet.make("bhd", "iqd", "jod", "kwd", "lyd", "omr", "tnd");
 
 /** The number of fraction digits used for `currency` (case-insensitive). */
 export const exponent = exponentFrom(ZERO_DECIMAL, THREE_DECIMAL);

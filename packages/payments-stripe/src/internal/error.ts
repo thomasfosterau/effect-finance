@@ -6,7 +6,11 @@
  * @module
  */
 
-import { Match, Option, Predicate, Record, Schema } from "effect";
+import * as Match from "effect/Match";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Record from "effect/Record";
+import * as Schema from "effect/Schema";
 import {
   PaymentAuthenticationError,
   PaymentInvalidRequestError,

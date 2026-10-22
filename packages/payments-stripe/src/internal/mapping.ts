@@ -22,13 +22,15 @@
  * @module
  */
 
-import { Effect, Predicate, Redacted } from "effect";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 // `Schema` and the core's modules are imported by subpath, as namespaces, and
 // every top-level schema and decoder below is a `/* @__PURE__ */` call: a
 // bundler can then drop the decoders of every capability a program does not
 // use (a property access on a named import may run a getter, so it keeps the
 // whole call).
-import * as Schema from "effect/Schema";
 import * as BillingPortalNS from "@thomasfosterau/effect-payments/BillingPortal";
 import * as CheckoutSessionNS from "@thomasfosterau/effect-payments/CheckoutSession";
 import * as CustomerNS from "@thomasfosterau/effect-payments/Customer";

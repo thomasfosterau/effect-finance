@@ -15,12 +15,16 @@
  * @module
  */
 
+import * as Arr from "effect/Array";
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
+import * as R from "effect/Record";
+import * as Schema from "effect/Schema";
 // `Schema` and the core's modules are imported by subpath, as namespaces, and
 // every top-level schema and decoder below is a `/* @__PURE__ */` call: a
 // bundler can then drop the decoders of every capability a program does not
 // use (a property access on a named import may run a getter, so it keeps the
 // whole call).
-import * as Schema from "effect/Schema";
 import * as CustomerNS from "@thomasfosterau/effect-payments/Customer";
 import * as Enumeration from "@thomasfosterau/effect-payments/Enumeration";
 import * as PaymentIntentNS from "@thomasfosterau/effect-payments/PaymentIntent";
@@ -109,55 +113,36 @@ const composeName = (
   first: string | null | undefined,
   last: string | null | undefined,
 ): string | null => {
-  const name = [first, last].filter((part) => !!part).join(" ");
-  return name.length > 0 ? name : null;
+  const parts = Arr.filter([first, last], (part): part is string => !!part);
+  return Arr.match(parts, { onEmpty: () => null, onNonEmpty: (named) => named.join(" ") });
 };
 
 const metadataOf = (metadata: typeof Metadata.Type): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(metadata ?? {}).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
-  );
+  R.filter(metadata ?? {}, Predicate.isString);
 
 /** Normalize an Airwallex payment intent status to the neutral status. */
-export const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus => {
-  switch (status) {
-    case "REQUIRES_PAYMENT_METHOD":
-      return "requires_payment_method";
-    case "REQUIRES_CUSTOMER_ACTION":
-      return "requires_action";
-    case "REQUIRES_CAPTURE":
-      return "requires_capture";
-    case "SUCCEEDED":
-      return "succeeded";
-    case "CANCELLED":
-      return "canceled";
-    case "PENDING":
-    case "RECEIVED":
-      return "processing";
-    default:
-      return Enumeration.other(status);
-  }
-};
+const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus =>
+  Match.value(status).pipe(
+    Match.withReturnType<PaymentIntentNS.PaymentStatus>(),
+    Match.when("REQUIRES_PAYMENT_METHOD", () => "requires_payment_method"),
+    Match.when("REQUIRES_CUSTOMER_ACTION", () => "requires_action"),
+    Match.when("REQUIRES_CAPTURE", () => "requires_capture"),
+    Match.when("SUCCEEDED", () => "succeeded"),
+    Match.when("CANCELLED", () => "canceled"),
+    Match.when(Match.is("PENDING", "RECEIVED"), () => "processing"),
+    Match.orElse(Enumeration.other),
+  );
 
 /** Normalize an Airwallex refund status to the neutral status. */
-export const toRefundStatus = (status: string): RefundNS.RefundStatus => {
-  switch (status) {
-    case "SUCCEEDED":
-      return "succeeded";
-    case "FAILED":
-      return "failed";
-    case "CANCELLED":
-      return "canceled";
-    case "RECEIVED":
-    case "ACCEPTED":
-    case "PENDING":
-      return "pending";
-    default:
-      return Enumeration.other(status);
-  }
-};
+const toRefundStatus = (status: string): RefundNS.RefundStatus =>
+  Match.value(status).pipe(
+    Match.withReturnType<RefundNS.RefundStatus>(),
+    Match.when("SUCCEEDED", () => "succeeded"),
+    Match.when("FAILED", () => "failed"),
+    Match.when("CANCELLED", () => "canceled"),
+    Match.when(Match.is("RECEIVED", "ACCEPTED", "PENDING"), () => "pending"),
+    Match.orElse(Enumeration.other),
+  );
 
 // ---------------------------------------------------------------------------
 // Entity mappers

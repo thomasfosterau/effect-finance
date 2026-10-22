@@ -1,5 +1,14 @@
-import { describe, it, expect } from "vite-plus/test";
-import { Cause, ConfigProvider, Effect, Fiber, Layer, Predicate, Redacted } from "effect";
+import { assert, describe, it, expect } from "vite-plus/test";
+import * as Arr from "effect/Array";
+import * as Cause from "effect/Cause";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import {
   PaymentAuthenticationError,
@@ -16,10 +25,20 @@ import {
 } from "../../../tests/stubs.ts";
 
 const LOGIN_PATH = "/api/v1/authentication/login";
+
+/** An ISO-8601 timestamp `milliseconds` from now, as a login response's `expires_at`. */
+const isoIn = (milliseconds: number): string =>
+  DateTime.formatIso(DateTime.add(DateTime.nowUnsafe(), { milliseconds }));
+
+/** `JSON.stringify` through `Schema`. */
+const toJsonText = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
+/** `JSON.parse` through `Schema`. */
+const fromJsonText = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 const LOGIN_RESPONSE = () =>
   jsonResponse(201, {
     token: "tok_123",
-    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    expires_at: isoIn(30 * 60 * 1000),
   });
 
 /**
@@ -42,7 +61,7 @@ const config = (over: Partial<AirwallexConfig>): AirwallexConfig => ({
  * Every string reachable from `value` through its own properties, enumerable
  * or not — what a logger that walks the object could print.
  */
-const stringsIn = (value: unknown, seen = new Set<unknown>()): Array<string> => {
+const stringsIn = (value: unknown, seen = new WeakSet<object>()): Array<string> => {
   if (Predicate.isString(value)) return [value];
   if (!Predicate.isObject(value) || seen.has(value)) return [];
   seen.add(value);
@@ -55,7 +74,7 @@ describe("Airwallex client", () => {
   it("logs in once, caches the token, and authorizes requests", async () => {
     const { http, calls } = stubFetch(() => jsonResponse(200, { id: "cus_1", email: "a@b.com" }));
 
-    const program = Effect.gen(function* () {
+    const program = Effect.fn("program")(function* () {
       const client = yield* make(config({}));
       const first = yield* client.request({
         method: "GET",
@@ -68,13 +87,14 @@ describe("Airwallex client", () => {
       return { first, second };
     });
 
-    const result = await Effect.runPromise(program.pipe(Effect.provide(http)));
+    const result = await Effect.runPromise(program().pipe(Effect.provide(http)));
     expect(result.first).toMatchObject({ id: "cus_1" });
 
     // One login + two resource requests, and the token only fetched once.
     const logins = calls.filter((c) => c.url.href.endsWith(LOGIN_PATH));
     expect(logins).toHaveLength(1);
-    const resourceCall = calls.find((c) => c.url.href.includes("/pa/customers"))!;
+    const resourceCall = calls.find((c) => c.url.href.includes("/pa/customers"));
+    assert.isDefined(resourceCall);
     expect(resourceCall.headers.get("authorization")).toBe("Bearer tok_123");
   });
 
@@ -88,7 +108,8 @@ describe("Airwallex client", () => {
       }).pipe(Effect.provide(http)),
     );
 
-    const login = calls.find((c) => c.url.href.endsWith(LOGIN_PATH))!;
+    const login = calls.find((c) => c.url.href.endsWith(LOGIN_PATH));
+    assert.isDefined(login);
     expect(login.method).toBe("POST");
     expect(login.headers.get("x-client-id")).toBe("client_1");
     expect(login.headers.get("x-api-key")).toBe("key_1");
@@ -133,7 +154,8 @@ describe("Airwallex client", () => {
       }).pipe(Effect.provide(http)),
     );
 
-    const post = calls.find((c) => c.url.href.endsWith("/api/v1/pa/payment_intents/int_1/cancel"))!;
+    const post = calls.find((c) => c.url.href.endsWith("/api/v1/pa/payment_intents/int_1/cancel"));
+    assert.isDefined(post);
     expect(post.method).toBe("POST");
     expect(post.body).toBeUndefined();
     expect(post.headers.get("content-type")).toBe("application/json");
@@ -207,11 +229,11 @@ describe("Airwallex client", () => {
         return logins === 1
           ? jsonResponse(200, {
               token: "tok_1",
-              expires_at: new Date(Date.now() + 30_000).toISOString(),
+              expires_at: isoIn(30_000),
             })
           : jsonResponse(200, {
               token: "tok_2",
-              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+              expires_at: isoIn(3_600_000),
             });
       }
       if (url.endsWith("/api/v1/pa/customers/SLOW")) {
@@ -242,9 +264,9 @@ describe("Airwallex client", () => {
     expect(logins).toBe(2);
     const fast = seen.filter((c) => c.url.endsWith("/api/v1/pa/customers/FAST"));
     expect(fast.map((c) => c.authorization)).toEqual(["Bearer tok_2", "Bearer tok_2"]);
-    expect(seen.find((c) => c.url.endsWith("/api/v1/pa/customers/SLOW"))!.authorization).toBe(
-      "Bearer tok_1",
-    );
+    const slow = seen.find((c) => c.url.endsWith("/api/v1/pa/customers/SLOW"));
+    assert.isDefined(slow);
+    expect(slow.authorization).toBe("Bearer tok_1");
   });
 });
 
@@ -337,7 +359,7 @@ describe("Airwallex client timeouts", () => {
     expect(pendingBefore).toBe(true);
     expect(errors).toHaveLength(5);
     // One login attempt, and every caller sees its very error.
-    for (const error of errors) expect(error).toBe(errors[0]);
+    Arr.forEach(errors, (error) => expect(error).toBe(errors[0]));
     expect(errors[0]).toBeInstanceOf(PaymentNetworkError);
     expect(errors[0]?.message).toBe("Airwallex login timed out after 10000 ms");
     expect(after).toMatchObject({ id: "x" });
@@ -362,7 +384,7 @@ describe("Airwallex client timeouts", () => {
     );
 
     expect(errors).toHaveLength(5);
-    for (const error of errors) expect(error).toBe(errors[0]);
+    Arr.forEach(errors, (error) => expect(error).toBe(errors[0]));
     expect(errors[0]).toBeInstanceOf(PaymentAuthenticationError);
     expect(after).toMatchObject({ id: "x" });
     // One refused login for the five, then one fresh login; nothing cached on failure.
@@ -435,13 +457,17 @@ describe("Airwallex client timeouts", () => {
       { timeout: -5_000 },
       { timeout: Number.NEGATIVE_INFINITY },
     ];
-    for (const over of invalid) {
-      const error = await Effect.runPromise(
-        make(config(over)).pipe(Effect.flip, Effect.provide(http)),
-      );
+    const errors = await Effect.runPromise(
+      Effect.forEach(
+        invalid,
+        (over) => make(config(over)).pipe(Effect.flip, Effect.provide(http)),
+        { concurrency: 1 },
+      ),
+    );
+    Arr.forEach(errors, (error) => {
       expect(error).toBeInstanceOf(PaymentConfigError);
       expect(error.message).toMatch(/^Airwallex (loginTimeout|timeout) must be a positive number/);
-    }
+    });
     const result = await Effect.runPromise(
       Effect.flatMap(
         make(config({ loginTimeout: Number.POSITIVE_INFINITY, timeout: Number.POSITIVE_INFINITY })),
@@ -492,7 +518,8 @@ describe("Airwallex client secrets", () => {
         ),
       ),
     );
-    const login = calls.find((c) => c.url.href.endsWith(LOGIN_PATH))!;
+    const login = calls.find((c) => c.url.href.endsWith(LOGIN_PATH));
+    assert.isDefined(login);
     expect(login.headers.get("x-client-id")).toBe("client_env");
     expect(login.headers.get("x-api-key")).toBe("secret_env");
   });
@@ -521,7 +548,7 @@ describe("Airwallex client secrets", () => {
   it("keeps the apiKey out of the config's string and JSON forms", () => {
     const { apiKey } = config({});
     expect(String(apiKey)).not.toContain(SECRET);
-    expect(JSON.stringify(config({}))).not.toContain(SECRET);
+    expect(toJsonText(config({}))).not.toContain(SECRET);
   });
 
   it("never carries the apiKey in an error", async () => {
@@ -533,23 +560,29 @@ describe("Airwallex client secrets", () => {
       () => jsonResponse(201, { token: 42 }),
       () => jsonResponse(201, { token: "tok_leak", expires_at: 5 }),
     ];
-    for (const answer of answers) {
-      const { http } = stubSharedFetch(answer);
-      const error = await Effect.runPromise(
-        Effect.flatMap(make(config({})), (client) => Effect.flip(client.request(get))).pipe(
-          Effect.provide(http),
-        ),
-      );
+    const errors = await Effect.runPromise(
+      Effect.forEach(
+        answers,
+        (answer) => {
+          const { http } = stubSharedFetch(answer);
+          return Effect.flatMap(make(config({})), (client) =>
+            Effect.flip(client.request(get)),
+          ).pipe(Effect.provide(http));
+        },
+        { concurrency: 1 },
+      ),
+    );
+    Arr.forEach(errors, (error) => {
       // The request (whose headers carry the credentials) is never kept.
       expect(Predicate.hasProperty(error.cause, "request")).toBe(false);
-      for (const leak of [SECRET, "tok_leak"]) {
-        expect(JSON.stringify(error)).not.toContain(leak);
+      Arr.forEach([SECRET, "tok_leak"], (leak) => {
+        expect(toJsonText(error)).not.toContain(leak);
         expect(String(error)).not.toContain(leak);
         // Anywhere in the error's object graph, not just its serialised forms.
         expect(stringsIn(error).filter((text) => text.includes(leak))).toEqual([]);
-        expect(JSON.stringify(error.cause ?? null)).not.toContain(leak);
-      }
-    }
+        expect(toJsonText(error.cause ?? null)).not.toContain(leak);
+      });
+    });
   });
 });
 
@@ -559,7 +592,7 @@ describe("Airwallex client requestId (request_id)", () => {
     path: "/api/v1/pa/customers/create",
     body: { request_id: "fresh-per-call", email: "a@b.com" },
   } as const;
-  const bodyOf = (call: CapturedRequest | undefined) => JSON.parse(call?.body ?? "null");
+  const bodyOf = (call: CapturedRequest | undefined) => fromJsonText(call?.body ?? "null");
 
   it("writes the requestId into the body, replacing the layer's request_id", async () => {
     const { http, calls } = stubFetch(() => jsonResponse(201, { id: "cus_1" }));
@@ -568,7 +601,8 @@ describe("Airwallex client requestId (request_id)", () => {
         client.request({ ...create, requestId: "signup-7" }),
       ).pipe(Effect.provide(http)),
     );
-    const post = calls.find((c) => c.url.href.endsWith("/customers/create"))!;
+    const post = calls.find((c) => c.url.href.endsWith("/customers/create"));
+    assert.isDefined(post);
     expect(bodyOf(post)).toEqual({ request_id: "signup-7", email: "a@b.com" });
   });
 
@@ -619,7 +653,10 @@ describe("Airwallex client requestId (request_id)", () => {
     expect(outcome.first).toBeInstanceOf(PaymentNetworkError);
     expect(outcome.second).toMatchObject({ id: "cus_1" });
     const posts = calls.filter((c) => c.url.href.endsWith("/customers/create"));
-    expect(posts.map((c) => bodyOf(c).request_id)).toEqual(["signup-8", "signup-8"]);
+    expect(posts.map((c) => bodyOf(c))).toMatchObject([
+      { request_id: "signup-8" },
+      { request_id: "signup-8" },
+    ]);
   });
 
   it("refuses an empty id, a non-POST, or a non-object body, before sending anything", async () => {
@@ -635,7 +672,7 @@ describe("Airwallex client requestId (request_id)", () => {
         ]);
       }).pipe(Effect.provide(http)),
     );
-    for (const error of errors) expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    Arr.forEach(errors, (error) => expect(error).toBeInstanceOf(PaymentInvalidRequestError));
     expect(calls).toEqual([]);
   });
 });
@@ -798,20 +835,23 @@ describe("Airwallex make validates baseUrl", () => {
     return { program, calls };
   };
 
-  for (const bad of ["", "   ", "api.example.test", "/v1", "ftp://example.test", "not a url"]) {
-    it(`rejects ${JSON.stringify(bad)} with PaymentConfigError and sends nothing`, async () => {
+  Arr.forEach(["", "   ", "api.example.test", "/v1", "ftp://example.test", "not a url"], (bad) => {
+    it(`rejects ${toJsonText(bad)} with PaymentConfigError and sends nothing`, async () => {
       const { program, calls } = attempt(bad);
       const error = await Effect.runPromise(Effect.flip(program));
       expect(error).toBeInstanceOf(PaymentConfigError);
       expect(error.message).toContain("baseUrl");
       expect(calls).toHaveLength(0);
     });
-  }
+  });
 
   it("accepts an absolute https URL and an http one (a local mock)", async () => {
-    for (const ok of ["https://sandbox.example.test", "http://localhost:8080"]) {
-      const { program } = attempt(ok);
-      await Effect.runPromise(program);
-    }
+    await Effect.runPromise(
+      Effect.forEach(
+        ["https://sandbox.example.test", "http://localhost:8080"],
+        (ok) => attempt(ok).program,
+        { concurrency: 1, discard: true },
+      ),
+    );
   });
 });

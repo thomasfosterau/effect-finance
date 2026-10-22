@@ -18,7 +18,13 @@
  * @module
  */
 
-import { Clock, Context, Effect, Option, Redacted, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import type Stripe from "stripe";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
 import { omitUndefined } from "@thomasfosterau/effect-payments/internal";
@@ -295,7 +301,7 @@ const decodeEventJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Webhook
 export const decodeEvent = (
   payload: string | Uint8Array,
 ): Effect.Effect<WebhookEvent, Schema.SchemaError> =>
-  decodeEventJson(typeof payload === "string" ? payload : new TextDecoder().decode(payload));
+  decodeEventJson(Predicate.isString(payload) ? payload : new TextDecoder().decode(payload));
 
 /**
  * The event types a subscription billing system acts on:
@@ -501,6 +507,10 @@ export interface WebhookConfig {
 const sdkTolerance = (tolerance: number | undefined): number | undefined =>
   tolerance === 0 ? DEFAULT_TOLERANCE : tolerance;
 
+/** A payload the SDK takes as text: a `Buffer` is read as UTF-8. */
+const payloadText = (payload: string | Buffer): string =>
+  Predicate.isString(payload) ? payload : payload.toString("utf8");
+
 /**
  * The `SignatureVerificationError` an SDK-based wrapper fails with when the
  * SDK throws: the thrown value's message, the header it was given (if any)
@@ -512,9 +522,13 @@ const sdkFailure = (
   header: string | undefined,
 ): SignatureVerificationError =>
   new SignatureVerificationError({
-    message: error instanceof Error ? error.message : String(error),
+    // The thrown error's message; the value as a string when it carries none.
+    message:
+      Predicate.hasProperty(error, "message") && Predicate.isString(error.message)
+        ? error.message
+        : String(error),
     header,
-    payload: typeof payload === "string" ? payload : payload.toString("utf8"),
+    payload: payloadText(payload),
   });
 
 /**
@@ -676,7 +690,7 @@ export const generateTestHeaderString = (
       try: () =>
         stripe.webhooks.generateTestHeaderString(
           omitUndefined({
-            payload: typeof payload === "string" ? payload : payload.toString("utf8"),
+            payload: payloadText(payload),
             secret,
             timestamp,
           }),
@@ -736,7 +750,7 @@ export const generateTestHeaderStringAsync = (
       try: () =>
         stripe.webhooks.generateTestHeaderStringAsync(
           omitUndefined({
-            payload: typeof payload === "string" ? payload : payload.toString("utf8"),
+            payload: payloadText(payload),
             secret,
             timestamp,
             cryptoProvider,

@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import { assert, describe, it, expect } from "vite-plus/test";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as BillingPortal from "../src/BillingPortal.ts";
 import * as CheckoutSession from "../src/CheckoutSession.ts";
 import * as Customer from "../src/Customer.ts";
@@ -81,9 +82,9 @@ describe("Stub", () => {
 
   it("unavailable constructs a fresh error for each call", async () => {
     const [first, second] = await Effect.runPromise(
-      Effect.all([Effect.flip(Customer.retrieve("a")), Effect.flip(Customer.retrieve("b"))]).pipe(
-        Effect.provide(Stub.unavailable("stripe")),
-      ),
+      Effect.all([Effect.flip(Customer.retrieve("a")), Effect.flip(Customer.retrieve("b"))], {
+        concurrency: 1,
+      }).pipe(Effect.provide(Stub.unavailable("stripe"))),
     );
     expect(first).toBeInstanceOf(PaymentsUnavailable);
     expect(first).not.toBe(second);
@@ -95,6 +96,7 @@ describe("Stub", () => {
     );
     expect(error).toBeInstanceOf(PaymentsUnavailable);
     expect(error).toMatchObject({ message: "Payments are not configured in this environment" });
-    expect((error as PaymentsUnavailable).provider).toBeUndefined();
+    assert(error instanceof PaymentsUnavailable);
+    expect(error.provider).toBeUndefined();
   });
 });

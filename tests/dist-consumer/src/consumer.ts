@@ -7,7 +7,9 @@
  * executed; type-checked only.
  */
 
-import { type Effect, type Layer, Redacted } from "effect";
+import type * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import type { HttpClient } from "effect/http";
 import type { Credentials as PayPalCredentials } from "@distilled.cloud/paypal/Credentials";
 import type { Credentials } from "@distilled.cloud/stripe/Credentials";

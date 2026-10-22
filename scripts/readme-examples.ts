@@ -15,26 +15,54 @@
  * docgen puts in the name of the example file it reports a failure in.
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import * as Arr from "effect/Array";
 
 const outDir = "docs/readme/src";
 const lines = readFileSync("README.md", "utf8").split("\n");
 
-const blocks: Array<{ readonly line: number; readonly info: string; readonly body: string[] }> = [];
-let open: { readonly line: number; readonly info: string; readonly body: string[] } | undefined;
-for (const [index, line] of lines.entries()) {
-  if (open === undefined) {
-    const fence = /^```\s*((?:ts|typescript)\b.*)$/i.exec(line);
-    if (fence !== null) open = { line: index + 1, info: fence[1] ?? "", body: [] };
-  } else if (/^```\s*$/.test(line)) {
-    blocks.push(open);
-    open = undefined;
-  } else if (line.includes("*/")) {
-    throw new Error(`README.md:${index + 1}: "*/" would end the generated doc comment`);
-  } else {
-    open.body.push(line);
-  }
+interface Block {
+  readonly line: number;
+  readonly info: string;
+  readonly body: ReadonlyArray<string>;
 }
-if (open !== undefined) throw new Error(`README.md:${open.line}: unclosed code fence`);
+interface Scan {
+  readonly blocks: ReadonlyArray<Block>;
+  readonly open: Block | undefined;
+  readonly errors: ReadonlyArray<string>;
+}
+
+/** Outside a block: an opening `ts` / `typescript` fence starts one. */
+const outside = (scan: Scan, line: string, index: number): Scan => {
+  const fence = /^```\s*((?:ts|typescript)\b.*)$/i.exec(line);
+  return fence === null
+    ? scan
+    : { ...scan, open: { line: index + 1, info: fence[1] ?? "", body: [] } };
+};
+
+/** Inside a block: a bare fence closes it, and any other line joins its body. */
+const inside = (scan: Scan, open: Block, line: string, index: number): Scan => {
+  if (/^```\s*$/.test(line)) return { ...scan, blocks: [...scan.blocks, open], open: undefined };
+  if (line.includes("*/")) {
+    const error = `README.md:${index + 1}: "*/" would end the generated doc comment`;
+    return { ...scan, errors: [...scan.errors, error] };
+  }
+  return { ...scan, open: { ...open, body: [...open.body, line] } };
+};
+
+const scan = lines.reduce<Scan>(
+  (state, line, index) =>
+    state.open === undefined ? outside(state, line, index) : inside(state, state.open, line, index),
+  { blocks: [], open: undefined, errors: [] },
+);
+const errors =
+  scan.open === undefined
+    ? scan.errors
+    : [...scan.errors, `README.md:${scan.open.line}: unclosed code fence`];
+if (Arr.isReadonlyArrayNonEmpty(errors)) {
+  console.error(errors.join("\n"));
+  process.exit(1);
+}
+const { blocks } = scan;
 
 const exports = blocks.map(({ line, info, body }) =>
   [

@@ -6,6 +6,7 @@
  * @module
  */
 
+import * as Predicate from "effect/Predicate";
 import { HttpBody, HttpClientRequest } from "effect/http";
 
 const FORM = "application/x-www-form-urlencoded";
@@ -32,7 +33,11 @@ export const deleteParamsToQuery = (
   request: HttpClientRequest.HttpClientRequest,
 ): HttpClientRequest.HttpClientRequest => {
   const { body } = request;
-  if (request.method !== "DELETE" || body._tag !== "Uint8Array" || body.contentType !== FORM) {
+  if (
+    request.method !== "DELETE" ||
+    !Predicate.isTagged(body, "Uint8Array") ||
+    body.contentType !== FORM
+  ) {
     return request;
   }
   const query = [...new URLSearchParams(body.text ?? new TextDecoder().decode(body.body))]

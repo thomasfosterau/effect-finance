@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Price from "@thomasfosterau/effect-payments/Price";
 import * as PaymentIntent from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as Subscription from "@thomasfosterau/effect-payments/Subscription";
@@ -11,11 +12,37 @@ import { capabilitiesOver, stubPayPal } from "./support.ts";
  * A value PayPal sends that the neutral model does not cover must decode to
  * `Other` carrying the raw string, never fail the object or the page (#58).
  */
-const run = <A, E>(
+const answering = <A, E, Body>(
   effect: Effect.Effect<A, E, Layer.Success<typeof PayPalPayments.capabilities>>,
-  body: unknown,
-): Promise<A> =>
-  Effect.runPromise(effect.pipe(Effect.provide(capabilitiesOver(stubPayPal(() => body).layer))));
+  body: Body,
+): Effect.Effect<A, E> =>
+  effect.pipe(Effect.provide(capabilitiesOver(stubPayPal(() => body).layer)));
+
+const run = <A, E, Body>(
+  effect: Effect.Effect<A, E, Layer.Success<typeof PayPalPayments.capabilities>>,
+  body: Body,
+): Promise<A> => Effect.runPromise(answering(effect, body));
+
+/** Check, one case at a time, that each wire status maps onto its neutral one. */
+const expectStatuses = <E, Body>(
+  cases: ReadonlyArray<readonly [string, string]>,
+  retrieve: Effect.Effect<
+    { readonly status: unknown },
+    E,
+    Layer.Success<typeof PayPalPayments.capabilities>
+  >,
+  body: (wire: string) => Body,
+): Promise<void> =>
+  Effect.runPromise(
+    Effect.forEach(
+      cases,
+      ([wire, neutral]) =>
+        answering(retrieve, body(wire)).pipe(
+          Effect.map((entity) => expect(entity.status).toBe(neutral)),
+        ),
+      { concurrency: 1, discard: true },
+    ),
+  );
 
 const other = (raw: string) => ({ _tag: "Other", raw });
 
@@ -88,9 +115,7 @@ describe("PayPalPayments lenient enumerations", () => {
       ["COMPLETED", "succeeded"],
       ["VOIDED", "canceled"],
     ];
-    for (const [wire, neutral] of orders) {
-      expect((await run(PaymentIntent.retrieve("ORD-1"), order(wire))).status).toBe(neutral);
-    }
+    await expectStatuses(orders, PaymentIntent.retrieve("ORD-1"), order);
     const subscriptions: Array<[string, string]> = [
       ["ACTIVE", "active"],
       ["SUSPENDED", "paused"],
@@ -99,18 +124,14 @@ describe("PayPalPayments lenient enumerations", () => {
       ["APPROVAL_PENDING", "incomplete"],
       ["APPROVED", "incomplete"],
     ];
-    for (const [wire, neutral] of subscriptions) {
-      expect((await run(Subscription.retrieve("SUB-1"), subscription(wire))).status).toBe(neutral);
-    }
+    await expectStatuses(subscriptions, Subscription.retrieve("SUB-1"), subscription);
     const refunds: Array<[string, string]> = [
       ["COMPLETED", "succeeded"],
       ["FAILED", "failed"],
       ["CANCELLED", "canceled"],
       ["PENDING", "pending"],
     ];
-    for (const [wire, neutral] of refunds) {
-      expect((await run(Refund.retrieve("REF-1"), refund(wire))).status).toBe(neutral);
-    }
+    await expectStatuses(refunds, Refund.retrieve("REF-1"), refund);
     const intervals: Array<[string, string]> = [
       ["DAY", "day"],
       ["WEEK", "week"],

@@ -5,7 +5,7 @@
  * contract, not a consumer-facing promise. Never executed; type-checked only.
  */
 
-import type { Duration, Effect, Option, Schema } from "effect";
+import type { Duration, Effect, HashSet, Option, Schema } from "effect";
 import type { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import type {
   PaymentConfigError,
@@ -58,10 +58,9 @@ export const checked: Effect.Effect<void, PaymentInvalidRequestError> = checkMin
   1,
   "amount",
 );
-export const exponent: (currency: string) => 0 | 2 | 3 = exponentFrom(
-  new Set(["jpy"]),
-  new Set(["kwd"]),
-);
+declare const zeroDecimal: HashSet.HashSet<string>;
+declare const threeDecimal: HashSet.HashSet<string>;
+export const exponent: (currency: string) => 0 | 2 | 3 = exponentFrom(zeroDecimal, threeDecimal);
 
 declare const http: HttpClient.HttpClient;
 declare const request: HttpClientRequest.HttpClientRequest;

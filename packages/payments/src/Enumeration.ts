@@ -15,7 +15,9 @@
  * @module
  */
 
-import { Predicate, Schema, SchemaGetter } from "effect";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 
 /**
  * The catch-all member of every neutral enumeration: a value the provider sent

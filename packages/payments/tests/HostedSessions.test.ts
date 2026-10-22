@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as CheckoutSession from "../src/CheckoutSession.ts";
 import * as BillingPortal from "../src/BillingPortal.ts";
 

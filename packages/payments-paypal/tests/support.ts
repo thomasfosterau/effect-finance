@@ -6,7 +6,11 @@
  * re-exported here). No test reaches `api-m.paypal.com`.
  */
 
-import { Effect, Layer, Redacted } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Record from "effect/Record";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { Credentials } from "@distilled.cloud/paypal/Credentials";
 import * as PayPalPayments from "../src/PayPalPayments.ts";
 import { type CapturedRequest, stubApi } from "../../../tests/stubs.ts";
@@ -36,12 +40,22 @@ export interface PayPalCall {
   readonly headers: Headers;
 }
 
+const JsonText = Schema.fromJsonString(Schema.Unknown);
+const decodeJson = Schema.decodeUnknownSync(JsonText);
+const encodeJson = Schema.encodeSync(JsonText);
+
+/** Parse a JSON text (a request body, say); throws on malformed JSON. */
+const parseJson = (text: string) => decodeJson(text);
+
+/** Serialise a value as JSON text, honouring `toJSON` as `JSON.stringify` does. */
+export const toJson = <A>(value: A): string => encodeJson(value);
+
 /** A captured request as a {@link PayPalCall}. */
 export const callOf = (request: CapturedRequest): PayPalCall => ({
   method: request.method,
   path: request.url.pathname,
-  query: Object.fromEntries(request.url.searchParams),
-  body: request.body === undefined || request.body === "" ? undefined : JSON.parse(request.body),
+  query: Record.fromEntries(request.url.searchParams),
+  body: request.body === undefined || request.body === "" ? undefined : parseJson(request.body),
   requestId: request.headers.get("paypal-request-id") ?? undefined,
   headers: request.headers,
 });

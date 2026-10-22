@@ -13,7 +13,8 @@
  * @module
  */
 
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import { BillingPortalSessions } from "./BillingPortal.js";
 import { CheckoutSessions } from "./CheckoutSession.js";
 import { Customers } from "./Customer.js";

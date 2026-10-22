@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vite-plus/test";
-import { ConfigProvider, Effect, Layer } from "effect";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Rec from "effect/Record";
 import * as BillingPortal from "@thomasfosterau/effect-payments/BillingPortal";
 import * as CheckoutSession from "@thomasfosterau/effect-payments/CheckoutSession";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
@@ -90,7 +93,7 @@ describe("StripePayments.layerConfig", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it.each(Object.entries<Effect.Effect<unknown, unknown, Capabilities>>(everyCall))(
+  it.each(Rec.toEntries<string, Effect.Effect<unknown, unknown, Capabilities>>(everyCall))(
     "fails %s with PaymentsUnavailable while the key is absent",
     async (_, call) => {
       const { http, calls } = stubFetch(customer);
@@ -113,14 +116,14 @@ describe("StripePayments.layerConfig", () => {
 
   it("reads the key at call time: absent, then present, then absent again", async () => {
     const { http, calls } = stubFetch(customer);
-    const program = Effect.gen(function* () {
+    const program = Effect.fn("program")(function* () {
       const before = yield* Effect.flip(Customer.retrieve("cus_1").pipe(withConfig({})));
       const during = yield* Customer.retrieve("cus_1").pipe(withConfig({ STRIPE_API_KEY: KEY }));
       const after = yield* Effect.flip(Customer.retrieve("cus_1").pipe(withConfig({})));
       return { before, during, after };
     });
     const { before, during, after } = await Effect.runPromise(
-      program.pipe(Effect.provide(StripePayments.layerConfig()), Effect.provide(http)),
+      program().pipe(Effect.provide(StripePayments.layerConfig()), Effect.provide(http)),
     );
     expect(before).toBeInstanceOf(PaymentsUnavailable);
     expect(during).toBeInstanceOf(Customer.Customer);

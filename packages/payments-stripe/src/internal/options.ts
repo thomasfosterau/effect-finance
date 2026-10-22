@@ -1,4 +1,6 @@
-import { Effect } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import { PaymentInvalidRequestError } from "@thomasfosterau/effect-payments";
 
 /**
@@ -13,13 +15,17 @@ export const checkOptions = (options: {
   readonly idempotencyKey?: string | undefined;
   readonly stripeAccount?: string | undefined;
   readonly apiVersion?: string | undefined;
-}): Effect.Effect<void, PaymentInvalidRequestError> => {
-  for (const name of ["idempotencyKey", "stripeAccount", "apiVersion"] as const) {
-    if (options[name] === "") {
-      return Effect.fail(
-        new PaymentInvalidRequestError({ message: `${name} must not be empty`, param: name }),
-      );
-    }
-  }
-  return Effect.void;
-};
+}): Effect.Effect<void, PaymentInvalidRequestError> =>
+  Option.match(
+    Arr.findFirst(
+      ["idempotencyKey", "stripeAccount", "apiVersion"] as const,
+      (name) => options[name] === "",
+    ),
+    {
+      onNone: () => Effect.void,
+      onSome: (name) =>
+        Effect.fail(
+          new PaymentInvalidRequestError({ message: `${name} must not be empty`, param: name }),
+        ),
+    },
+  );

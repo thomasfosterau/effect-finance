@@ -1,4 +1,6 @@
-import { Console, Effect, Layer } from "effect";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import { FetchHttpClient } from "effect/http";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
 import * as Product from "@thomasfosterau/effect-payments/Product";
@@ -19,7 +21,7 @@ import * as StripePayments from "@thomasfosterau/effect-payments-stripe/StripePa
  * effects (`tests/examples.test.ts` runs it over a stubbed `fetch`).
  */
 
-export const program = Effect.gen(function* () {
+const createSubscription = Effect.fn("createSubscription")(function* () {
   yield* Console.log("Creating customer...");
   const customer = yield* Customer.create({
     email: "subscriber@example.com",
@@ -53,6 +55,9 @@ export const program = Effect.gen(function* () {
 
   return { customer, product, price, subscription };
 });
+
+/** The example's program: the four steps above, in order. */
+export const program = createSubscription();
 
 // The key comes from STRIPE_API_KEY, read through `Config` as a `Redacted`;
 // the capabilities need an `HttpClient`.

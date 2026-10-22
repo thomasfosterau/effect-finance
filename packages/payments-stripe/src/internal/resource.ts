@@ -11,7 +11,10 @@
  * @module
  */
 
-import { Effect, Predicate } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Record from "effect/Record";
 import { PaymentInvalidRequestError, type PaymentsError } from "@thomasfosterau/effect-payments";
 import { type Method, type Operation, type RequestOptions, StripeHttp } from "../StripeHttp.js";
 
@@ -73,7 +76,7 @@ const fieldsOf = (key: string, value: unknown): ReadonlyArray<readonly [string, 
     ? value.map((item, index) => [String(index), item] as const)
     : isFile(value) || !Predicate.isObject(value)
       ? undefined
-      : Object.entries(value);
+      : Record.toEntries(value);
   if (entries === undefined) return [[key, value]];
   return entries.flatMap(([name, item]) => fieldsOf(`${key}[${name}]`, item));
 };
@@ -87,7 +90,7 @@ const fieldsOf = (key: string, value: unknown): ReadonlyArray<readonly [string, 
 const flattenUpload = (
   params: Readonly<Record<string, unknown>>,
 ): Readonly<Record<string, unknown>> =>
-  Object.fromEntries(Object.entries(params).flatMap(([key, value]) => fieldsOf(key, value)));
+  Record.fromEntries(Arr.flatMap(Record.toEntries(params), ([key, value]) => fieldsOf(key, value)));
 
 /**
  * One resource-module operation: `(…ids, params?, options?)` calling
@@ -104,8 +107,8 @@ export const operation = <F>(distilled: Operation<never, unknown, unknown>, rout
     // signature; `pickOptions` reads only its three fields.
     const options = args[route.ids.length + (route.params ? 1 : 0)] as RequestOptions | undefined;
     const given = paramsOf(params);
-    const input = Object.fromEntries([
-      ...Object.entries(route.upload ? flattenUpload(given) : given),
+    const input = Record.fromEntries([
+      ...Record.toEntries(route.upload ? flattenUpload(given) : given),
       ...route.ids.map((name, index) => [name, ids[index]] as const),
     ]);
     return Effect.andThen(

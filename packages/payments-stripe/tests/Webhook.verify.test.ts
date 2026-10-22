@@ -11,8 +11,13 @@
  * weakening the check. "Now" comes from `TestClock`.
  */
 
-import { describe, expect, it, vi } from "vite-plus/test";
-import { Effect, Option, Redacted, Schema } from "effect";
+import { assert, describe, expect, it, onTestFinished, vi } from "vite-plus/test";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import { SignatureVerificationError } from "@thomasfosterau/effect-payments";
 import * as Webhook from "../src/Webhook.ts";
@@ -67,12 +72,15 @@ const refusal = async (
   options?: Options,
 ): Promise<string | undefined> => {
   const result = await verifySignature(payload, header, options);
-  if (result._tag === "Success") return undefined;
+  if (Result.isSuccess(result)) return undefined;
   expect(result.failure).toBeInstanceOf(SignatureVerificationError);
   return result.failure.message;
 };
 
-const BODY = JSON.stringify({
+/** A test event's body: the event serialised as `JSON.stringify` does. */
+const toJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
+const BODY = toJson({
   id: "evt_1",
   type: "customer.subscription.updated",
   data: { object: { id: "sub_1" } },
@@ -197,7 +205,7 @@ describe("Webhook.verifySignature", () => {
     const bytes = new TextEncoder().encode(BODY);
     expect(await refusal(bytes, await sign(BODY, NOW))).toBeUndefined();
     // Multi-byte UTF-8 must be signed as bytes, not UTF-16 code units.
-    const unicode = JSON.stringify({ id: "evt_ü", type: "x", data: { object: {} } });
+    const unicode = toJson({ id: "evt_ü", type: "x", data: { object: {} } });
     expect(
       await refusal(new TextEncoder().encode(unicode), await sign(unicode, NOW)),
     ).toBeUndefined();
@@ -241,12 +249,11 @@ describe("Webhook.verifySignature", () => {
     const header = await sign(BODY, NOW, "whsec_other");
     const result = await verifySignature(BODY, header);
     expect(result._tag).toBe("Failure");
-    const serialised = JSON.stringify(result) + String(result);
+    const serialised = toJson(result) + String(result);
     expect(serialised).not.toContain(SECRET);
-    if (result._tag === "Failure") {
-      expect(result.failure.header).toBe(header);
-      expect(result.failure.payload).toBeUndefined();
-    }
+    assert(Result.isFailure(result));
+    expect(result.failure.header).toBe(header);
+    expect(result.failure.payload).toBeUndefined();
   });
 });
 
@@ -296,33 +303,32 @@ describe("Webhook.verify", () => {
 
   it("never decodes an unverified body", async () => {
     const decode = vi.spyOn(TextDecoder.prototype, "decode");
-    try {
-      const bytes = new TextEncoder().encode(BODY);
-      const error = await at(
-        NOW,
-        Effect.flip(
-          Webhook.verify({
-            payload: bytes,
-            header: await sign(BODY, NOW, "whsec_other"),
-            secret: Redacted.make(SECRET),
-          }),
-        ),
-      );
-      expect(error.message).toBe(Webhook.SIGNATURE_MISMATCH_MESSAGE);
-      expect(decode).not.toHaveBeenCalled();
-      // …and does decode once the body verifies.
-      await at(
-        NOW,
+    onTestFinished(() => {
+      decode.mockRestore();
+    });
+    const bytes = new TextEncoder().encode(BODY);
+    const error = await at(
+      NOW,
+      Effect.flip(
         Webhook.verify({
           payload: bytes,
-          header: await sign(BODY, NOW),
+          header: await sign(BODY, NOW, "whsec_other"),
           secret: Redacted.make(SECRET),
         }),
-      );
-      expect(decode).toHaveBeenCalledTimes(1);
-    } finally {
-      decode.mockRestore();
-    }
+      ),
+    );
+    expect(error.message).toBe(Webhook.SIGNATURE_MISMATCH_MESSAGE);
+    expect(decode).not.toHaveBeenCalled();
+    // …and does decode once the body verifies.
+    await at(
+      NOW,
+      Webhook.verify({
+        payload: bytes,
+        header: await sign(BODY, NOW),
+        secret: Redacted.make(SECRET),
+      }),
+    );
+    expect(decode).toHaveBeenCalledTimes(1);
   });
 
   it("fails, rather than throwing, on a signed body that is not an event", async () => {
@@ -362,8 +368,9 @@ describe("Webhook.verify", () => {
 
 describe("the event vocabulary", () => {
   it("recognises exactly the handled types", () => {
-    for (const type of Webhook.handledEventTypes)
+    Arr.forEach(Webhook.handledEventTypes, (type) => {
       expect(Webhook.isHandledEventType(type)).toBe(true);
+    });
     expect(Webhook.isHandledEventType("customer.created")).toBe(false);
     expect(Webhook.isHandledEventType("")).toBe(false);
   });
@@ -371,7 +378,7 @@ describe("the event vocabulary", () => {
   it("decodes an envelope from the raw string without looking inside data.object", async () => {
     const event = await Effect.runPromise(
       Webhook.decodeEvent(
-        JSON.stringify({
+        toJson({
           id: "evt_123",
           type: "customer.created",
           data: { object: { whatever: [1, 2, 3] } },
@@ -464,9 +471,8 @@ describe("the event vocabulary", () => {
       }),
     );
     expect(Option.isSome(handled)).toBe(true);
-    if (Option.isSome(handled) && handled.value.type === "customer.subscription.deleted") {
-      expect(handled.value.data.object.customer).toBe("cus_1");
-    }
+    assert(Option.isSome(handled) && handled.value.type === "customer.subscription.deleted");
+    expect(handled.value.data.object.customer).toBe("cus_1");
     const checkout = await Effect.runPromise(
       Webhook.decodeHandledEvent({
         id: "evt_2",
@@ -474,7 +480,8 @@ describe("the event vocabulary", () => {
         data: { object: { id: "cs_1", metadata: { account: "a_1" } } },
       }),
     );
-    expect(Option.getOrThrow(checkout).data.object).toStrictEqual({
+    assert(Option.isSome(checkout));
+    expect(checkout.value.data.object).toStrictEqual({
       id: "cs_1",
       metadata: { account: "a_1" },
     });

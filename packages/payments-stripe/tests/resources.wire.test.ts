@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vite-plus/test";
-import { Effect, Redacted } from "effect";
+import { assert, describe, it, expect } from "vite-plus/test";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as R from "effect/Record";
+import * as Schema from "effect/Schema";
+import * as Redacted from "effect/Redacted";
 import {
   PaymentInvalidRequestError,
   PaymentProviderError,
@@ -66,14 +70,15 @@ const run = (
 
 const BODY = { id: "obj_1", object: "stub", livemode: false };
 
-describe.each([...modules])("%s", (subpath, operations) => {
+describe.each(R.toEntries(modules))("%s", (subpath, operations) => {
   it.each(operations.map((operation) => [operation.exported, operation] as const))(
     "%s reaches its route with the pinned Stripe-Version",
     async (exported, operation) => {
       const module = await load(subpath);
       const call = module[exported];
       expect(call, `${subpath}.${exported}`).toBeTypeOf("function");
-      const { exit, calls } = run(call!(...argsOf(operation)), () => jsonResponse(200, BODY));
+      assert.isDefined(call, `${subpath}.${exported}`);
+      const { exit, calls } = run(call(...argsOf(operation)), () => jsonResponse(200, BODY));
       expect(await exit).toEqual(expect.objectContaining({ _tag: "Success", value: BODY }));
       expect(calls).toHaveLength(1);
       const [request] = calls;
@@ -90,27 +95,33 @@ describe.each([...modules])("%s", (subpath, operations) => {
   const [first] = operations;
 
   it(`maps a Stripe error from ${first?.exported} onto PaymentInvalidRequestError`, async () => {
+    assert.isDefined(first, `${subpath} has no operation`);
     const module = await load(subpath);
-    const { exit } = run(module[first!.exported]!(...argsOf(first!)), () =>
+    const call = module[first.exported];
+    assert.isDefined(call, `${subpath}.${first.exported}`);
+    const { exit } = run(call(...argsOf(first)), () =>
       jsonResponse(400, {
         error: { type: "invalid_request_error", message: "No such thing", param: "id" },
       }),
     );
     const result = await exit;
     expect(result._tag).toBe("Failure");
-    const error = result._tag === "Failure" ? result.cause.reasons[0] : undefined;
+    const error = Exit.isFailure(result) ? result.cause.reasons[0] : undefined;
     expect(error).toMatchObject({ _tag: "Fail", error: expect.any(PaymentInvalidRequestError) });
     expect(error).toMatchObject({ error: { message: "No such thing", param: "id" } });
   });
 
   it(`fails a malformed 2xx from ${first?.exported} with PaymentProviderError`, async () => {
+    assert.isDefined(first, `${subpath} has no operation`);
     const module = await load(subpath);
+    const call = module[first.exported];
+    assert.isDefined(call, `${subpath}.${first.exported}`);
     const { exit } = run(
-      module[first!.exported]!(...argsOf(first!)),
+      call(...argsOf(first)),
       () => new Response("<html>not json</html>", { status: 200 }),
     );
     const result = await exit;
-    const error = result._tag === "Failure" ? result.cause.reasons[0] : undefined;
+    const error = Exit.isFailure(result) ? result.cause.reasons[0] : undefined;
     expect(error).toMatchObject({
       _tag: "Fail",
       error: expect.any(PaymentProviderError),
@@ -131,7 +142,7 @@ describe("the resources published for every remaining operation (#154)", () => {
     const [request] = calls;
     expect(request?.url.pathname).toBe("/v1/credit_notes");
     expect(request?.headers.get("content-type")).toBe("application/x-www-form-urlencoded");
-    expect(Object.fromEntries(new URLSearchParams(request?.body))).toEqual({
+    expect(R.fromEntries(new URLSearchParams(request?.body))).toEqual({
       invoice: "in_1",
       memo: "Goodwill",
       "metadata[order]": "42",
@@ -152,7 +163,9 @@ describe("the resources published for every remaining operation (#154)", () => {
     expect(request?.method).toBe("POST");
     expect(request?.url.pathname).toBe("/v2/core/accounts/acct_1");
     expect(request?.headers.get("content-type")).toBe("application/json");
-    expect(JSON.parse(request?.body ?? "null")).toEqual({
+    expect(
+      Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(request?.body ?? "null"),
+    ).toEqual({
       display_name: "Jenny Rosen",
       metadata: { order: "42" },
     });

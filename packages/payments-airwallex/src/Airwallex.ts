@@ -13,18 +13,19 @@
  * @module
  */
 
-import {
-  Clock,
-  Config,
-  Context,
-  type Duration,
-  DateTime,
-  Effect,
-  Layer,
-  Option,
-  Redacted,
-  Schema,
-} from "effect";
+import * as Arr from "effect/Array";
+import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
+import * as Context from "effect/Context";
+import type * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as R from "effect/Record";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import {
   PaymentConfigError,
@@ -141,11 +142,9 @@ export class AirwallexClient extends Context.Service<
 
 const buildUrl = (baseUrl: string, path: string, query: AirwallexRequest["query"]): string => {
   const url = new URL(path, baseUrl);
-  if (query) {
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined) url.searchParams.set(key, String(value));
-    }
-  }
+  Arr.forEach(R.toEntries(query ?? {}), ([key, value]) => {
+    if (value !== undefined) url.searchParams.set(key, String(value));
+  });
   return url.toString();
 };
 
@@ -184,7 +183,7 @@ const withRequestId = (
       }),
     );
   }
-  if (req.body != null && (typeof req.body !== "object" || Array.isArray(req.body))) {
+  if (req.body != null && !Predicate.isObject(req.body)) {
     return Effect.fail(
       new PaymentInvalidRequestError({
         message: "Airwallex requestId needs a JSON object body to carry request_id",
@@ -236,7 +235,7 @@ export const make = (
       what: string,
     ) => sendWithin(http, request, { provider: NAME, what, limit });
 
-    const login: Effect.Effect<string, PaymentsError> = Effect.gen(function* () {
+    const login = Effect.fn("Airwallex.login")(function* () {
       const reply = yield* send(
         HttpClientRequest.post(`${baseUrl}/api/v1/authentication/login`).pipe(
           HttpClientRequest.setHeaders({
@@ -277,7 +276,7 @@ export const make = (
     // first calls (or calls racing an expiry) await the in-flight login and
     // reuse its token — or all fail with its error, after which the next call
     // retries.
-    const getToken = yield* shareLogin(cache.cached, login);
+    const getToken = yield* shareLogin(cache.cached, login());
 
     const request = (req: AirwallexRequest): Effect.Effect<unknown, PaymentsError> =>
       Effect.gen(function* () {
@@ -335,22 +334,26 @@ export const layerFromEnv = (
   clientIdVar = "AIRWALLEX_CLIENT_ID",
   apiKeyVar = "AIRWALLEX_API_KEY",
 ): Layer.Layer<AirwallexClient, PaymentConfigError, HttpClient.HttpClient> =>
-  Layer.effect(
-    AirwallexClient,
-    Effect.gen(function* () {
-      const clientId = yield* Config.String(clientIdVar).pipe(Config.withDefault(""));
-      const apiKey = yield* Config.Redacted(apiKeyVar).pipe(Config.withDefault(Redacted.make("")));
-      const environment = yield* Config.Literals(["live", "sandbox"], "AIRWALLEX_ENV");
-      const baseUrl = yield* Config.option(Config.String("AIRWALLEX_BASE_URL"));
-      return yield* make({
-        clientId,
-        apiKey,
-        environment,
-        baseUrl: Option.getOrUndefined(baseUrl),
-      });
-    }).pipe(
-      Effect.catchTag("ConfigError", (error) =>
-        Effect.fail(new PaymentConfigError({ message: error.message })),
-      ),
-    ),
-  );
+  Layer.effect(AirwallexClient, makeFromEnv(clientIdVar, apiKeyVar));
+
+/**
+ * Read the client configuration through `Config` and build the client, as
+ * {@link layerFromEnv} describes; a `ConfigError` becomes {@link PaymentConfigError}.
+ */
+const makeFromEnv = Effect.fn("Airwallex.makeFromEnv")(
+  function* (clientIdVar: string, apiKeyVar: string) {
+    const clientId = yield* Config.String(clientIdVar).pipe(Config.withDefault(""));
+    const apiKey = yield* Config.Redacted(apiKeyVar).pipe(Config.withDefault(Redacted.make("")));
+    const environment = yield* Config.Literals(["live", "sandbox"], "AIRWALLEX_ENV");
+    const baseUrl = yield* Config.option(Config.String("AIRWALLEX_BASE_URL"));
+    return yield* make({
+      clientId,
+      apiKey,
+      environment,
+      baseUrl: Option.getOrUndefined(baseUrl),
+    });
+  },
+  Effect.catchTag("ConfigError", (error) =>
+    Effect.fail(new PaymentConfigError({ message: error.message })),
+  ),
+);

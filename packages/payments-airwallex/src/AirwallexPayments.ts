@@ -15,7 +15,8 @@
  * @module
  */
 
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 // The capability modules are imported by subpath, as namespaces: a bundler can
 // then tell that the tags passed to the pure layer constructions below are
 // side-effect free, and drop every capability (and its decoders) a program
@@ -49,6 +50,15 @@ import { toMajorNumber } from "./internal/money.js";
 
 /** A fresh idempotency key for a write request. */
 const requestId = (): string => globalThis.crypto.randomUUID();
+
+/**
+ * The body of a payment intent confirmation: a fresh `request_id`, plus the
+ * `payment_method` only when the caller names one.
+ */
+const confirmBody = (paymentMethod: string | undefined) => {
+  const request_id = requestId();
+  return paymentMethod ? { request_id, payment_method: { id: paymentMethod } } : { request_id };
+};
 
 /**
  * `client.request` for a neutral write: the caller's idempotency key, checked,
@@ -190,10 +200,7 @@ export const paymentIntentsLayer: Layer.Layer<
           {
             method: "POST",
             path: `/api/v1/pa/payment_intents/${id}/confirm`,
-            body: {
-              request_id: requestId(),
-              ...(params?.paymentMethod ? { payment_method: { id: params.paymentMethod } } : {}),
-            },
+            body: confirmBody(params?.paymentMethod),
           },
           params?.idempotencyKey,
         ).pipe(Effect.flatMap(decodePaymentIntent)),
@@ -231,45 +238,47 @@ export const refundsLayer: Layer.Layer<RefundNS.Refunds, never, AirwallexClient>
     RefundNS.Refunds,
     /* @__PURE__ */ Effect.map(AirwallexClient, (client) =>
       RefundNS.Refunds.of({
-        create: (params) =>
-          Effect.gen(function* () {
-            if (!params.paymentIntent) {
-              return yield* notSupported(
-                "refunds without a payment intent (charges are not supported)",
-              );
-            }
-            // Refuse a bad key, or a negative or fractional amount, before the
-            // currency lookup.
-            const idempotencyKey = yield* IdempotencyKeyNS.validate(params.idempotencyKey);
-            if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
-            // The neutral amount is in minor units; Airwallex needs major units,
-            // and the conversion depends on the currency, so resolve it from the
-            // payment intent when a partial amount is requested.
-            let amount: number | undefined;
-            if (params.amount != null) {
-              const currency = yield* client
-                .request({
-                  method: "GET",
-                  path: `/api/v1/pa/payment_intents/${params.paymentIntent}`,
-                })
-                .pipe(Effect.flatMap(decodePaymentIntentCurrency));
-              amount = yield* toMajorNumber(params.amount, currency, "amount");
-            }
-            return yield* client
-              .request({
-                method: "POST",
-                path: "/api/v1/pa/refunds",
-                body: {
-                  request_id: requestId(),
-                  payment_intent_id: params.paymentIntent,
-                  amount,
-                  reason: params.reason,
-                  metadata: params.metadata,
-                },
-                requestId: idempotencyKey,
-              })
-              .pipe(Effect.flatMap(decodeRefund));
-          }),
+        create: Effect.fn("AirwallexPayments.Refunds.create")(function* (params) {
+          if (!params.paymentIntent) {
+            return yield* notSupported(
+              "refunds without a payment intent (charges are not supported)",
+            );
+          }
+          // Refuse a bad key, or a negative or fractional amount, before the
+          // currency lookup.
+          const idempotencyKey = yield* IdempotencyKeyNS.validate(params.idempotencyKey);
+          if (params.amount != null) yield* checkMinorUnits(params.amount, "amount");
+          // The neutral amount is in minor units; Airwallex needs major units,
+          // and the conversion depends on the currency, so resolve it from the
+          // payment intent when a partial amount is requested.
+          const minor = params.amount;
+          const amount =
+            minor == null
+              ? undefined
+              : yield* client
+                  .request({
+                    method: "GET",
+                    path: `/api/v1/pa/payment_intents/${params.paymentIntent}`,
+                  })
+                  .pipe(
+                    Effect.flatMap(decodePaymentIntentCurrency),
+                    Effect.flatMap((currency) => toMajorNumber(minor, currency, "amount")),
+                  );
+          return yield* client
+            .request({
+              method: "POST",
+              path: "/api/v1/pa/refunds",
+              body: {
+                request_id: requestId(),
+                payment_intent_id: params.paymentIntent,
+                amount,
+                reason: params.reason,
+                metadata: params.metadata,
+              },
+              requestId: idempotencyKey,
+            })
+            .pipe(Effect.flatMap(decodeRefund));
+        }),
         retrieve: (id) =>
           client
             .request({

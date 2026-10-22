@@ -15,7 +15,8 @@
  * @module
  */
 
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import { PaymentInvalidRequestError } from "./PaymentsError.js";
 
 /** The shape a key must have: 1 to 64 characters of `A-Z a-z 0-9 _ -`. */

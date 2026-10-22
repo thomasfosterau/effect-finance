@@ -20,12 +20,13 @@
  * @module
  */
 
+import * as Match from "effect/Match";
+import * as Schema from "effect/Schema";
 // `Schema` and the core's modules are imported by subpath, as namespaces, and
 // every top-level schema and decoder below is a `/* @__PURE__ */` call: a
 // bundler can then drop the decoders of every capability a program does not
 // use (a property access on a named import may run a getter, so it keeps the
 // whole call).
-import * as Schema from "effect/Schema";
 import * as Enumeration from "@thomasfosterau/effect-payments/Enumeration";
 import * as PaymentIntentNS from "@thomasfosterau/effect-payments/PaymentIntent";
 import * as PriceNS from "@thomasfosterau/effect-payments/Price";
@@ -173,77 +174,50 @@ const PayPalPlanList = /* @__PURE__ */ Schema.Struct({
 // Helpers
 // ---------------------------------------------------------------------------
 
-const toInterval = (unit: string | null | undefined): PriceNS.RecurringInterval => {
-  switch ((unit ?? "").toUpperCase()) {
-    case "DAY":
-      return "day";
-    case "WEEK":
-      return "week";
-    case "YEAR":
-      return "year";
-    case "MONTH":
-    case "":
-      return "month";
-    default:
-      return Enumeration.other(unit ?? "");
-  }
-};
+const toInterval = (unit: string | null | undefined): PriceNS.RecurringInterval =>
+  Match.value((unit ?? "").toUpperCase()).pipe(
+    Match.withReturnType<PriceNS.RecurringInterval>(),
+    Match.when("DAY", () => "day"),
+    Match.when("WEEK", () => "week"),
+    Match.when("YEAR", () => "year"),
+    Match.whenOr("MONTH", "", () => "month"),
+    Match.orElse(() => Enumeration.other(unit ?? "")),
+  );
 
 /** Normalize a PayPal order status to the neutral payment status. */
-export const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus => {
-  switch (status) {
-    case "CREATED":
-    case "SAVED":
-      return "requires_confirmation";
-    case "PAYER_ACTION_REQUIRED":
-      return "requires_action";
-    case "APPROVED":
-      return "requires_capture";
-    case "COMPLETED":
-      return "succeeded";
-    case "VOIDED":
-      return "canceled";
-    default:
-      return Enumeration.other(status);
-  }
-};
+const toPaymentStatus = (status: string): PaymentIntentNS.PaymentStatus =>
+  Match.value(status).pipe(
+    Match.withReturnType<PaymentIntentNS.PaymentStatus>(),
+    Match.whenOr("CREATED", "SAVED", () => "requires_confirmation"),
+    Match.when("PAYER_ACTION_REQUIRED", () => "requires_action"),
+    Match.when("APPROVED", () => "requires_capture"),
+    Match.when("COMPLETED", () => "succeeded"),
+    Match.when("VOIDED", () => "canceled"),
+    Match.orElse(Enumeration.other),
+  );
 
 /** Normalize a PayPal subscription status to the neutral status. */
-export const toSubscriptionStatus = (status: string): SubscriptionNS.SubscriptionStatus => {
-  switch (status) {
-    case "ACTIVE":
-      return "active";
-    case "SUSPENDED":
-      return "paused";
-    case "CANCELLED":
-      return "canceled";
-    case "EXPIRED":
-      return "incomplete_expired";
-    case "APPROVAL_PENDING":
-    case "APPROVED":
-      return "incomplete";
-    default:
-      return Enumeration.other(status);
-  }
-};
+const toSubscriptionStatus = (status: string): SubscriptionNS.SubscriptionStatus =>
+  Match.value(status).pipe(
+    Match.withReturnType<SubscriptionNS.SubscriptionStatus>(),
+    Match.when("ACTIVE", () => "active"),
+    Match.when("SUSPENDED", () => "paused"),
+    Match.when("CANCELLED", () => "canceled"),
+    Match.when("EXPIRED", () => "incomplete_expired"),
+    Match.whenOr("APPROVAL_PENDING", "APPROVED", () => "incomplete"),
+    Match.orElse(Enumeration.other),
+  );
 
 /** Normalize a PayPal refund status to the neutral status. */
-export const toRefundStatus = (status: string | null | undefined): RefundNS.RefundStatus => {
-  switch (status) {
-    case "COMPLETED":
-      return "succeeded";
-    case "FAILED":
-      return "failed";
-    case "CANCELLED":
-      return "canceled";
-    case "PENDING":
-    case null:
-    case undefined:
-      return "pending";
-    default:
-      return Enumeration.other(status);
-  }
-};
+const toRefundStatus = (status: string | null | undefined): RefundNS.RefundStatus =>
+  Match.value(status).pipe(
+    Match.withReturnType<RefundNS.RefundStatus>(),
+    Match.when("COMPLETED", () => "succeeded"),
+    Match.when("FAILED", () => "failed"),
+    Match.when("CANCELLED", () => "canceled"),
+    Match.whenOr("PENDING", Match.null, Match.undefined, () => "pending"),
+    Match.orElse(Enumeration.other),
+  );
 
 // ---------------------------------------------------------------------------
 // Entity mappers

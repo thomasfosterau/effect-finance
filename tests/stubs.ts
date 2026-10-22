@@ -10,7 +10,12 @@
  * Nothing here names a vendor; no test reaches a live API.
  */
 
-import { Effect, Fiber, Layer, Predicate } from "effect";
+import * as Arr from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 
@@ -27,11 +32,14 @@ export interface CapturedRequest {
 }
 
 const textOf = (raw: BodyInit | null | undefined): string | undefined =>
-  typeof raw === "string"
+  Predicate.isString(raw)
     ? raw
     : raw instanceof Uint8Array
       ? new TextDecoder().decode(raw)
       : undefined;
+
+/** Encode a value as JSON text, as `JSON.stringify` would. */
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 /** A JSON response with `status`, plus any extra headers. */
 export const jsonResponse = (
@@ -39,7 +47,8 @@ export const jsonResponse = (
   body: unknown,
   headers: Record<string, string> = {},
 ): Response =>
-  new Response(JSON.stringify(body), {
+  // An `undefined` body has no JSON text: the response is sent without one.
+  new Response(body === undefined ? undefined : encodeJson(body), {
     status,
     headers: { "content-type": "application/json", ...headers },
   });
@@ -108,10 +117,17 @@ export const macrotask = Effect.callback<void>((resume) => {
 export const withTestClock = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> =>
   Effect.gen(function* () {
     const fiber = yield* Effect.forkChild(effect);
-    for (let step = 0; step < 1000 && fiber.pollUnsafe() === undefined; step++) {
-      yield* macrotask;
-      yield* TestClock.adjust("1 second");
-    }
+    /** Advance the clock a second at a time, at most `remaining` times, until `fiber` is done. */
+    const advance = (remaining: number): Effect.Effect<void> =>
+      Effect.suspend(() =>
+        remaining === 0 || fiber.pollUnsafe() !== undefined
+          ? Effect.void
+          : macrotask.pipe(
+              Effect.andThen(TestClock.adjust("1 second")),
+              Effect.andThen(advance(remaining - 1)),
+            ),
+      );
+    yield* advance(1000);
     return yield* Fiber.join(fiber);
   }).pipe(Effect.provide(TestClock.layer()));
 
@@ -141,16 +157,23 @@ const childrenOf = (value: unknown): Array<unknown> => {
 export const reachableFrom = (root: unknown) => {
   const strings: Array<string> = [];
   const objects: Array<object> = [];
-  const seen = new Set<object>();
-  const pending: Array<unknown> = [root];
-  while (pending.length > 0) {
-    const value = pending.pop();
-    if (Predicate.isString(value)) strings.push(value);
-    if (Predicate.isObjectKeyword(value) && !seen.has(value)) {
-      seen.add(value);
-      objects.push(value);
-      pending.push(...childrenOf(value));
-    }
-  }
+  // Identity, not structural equality: each distinct object is visited once.
+  const seen = new WeakSet<object>();
+  /** Visit one breadth-first level of values, then the level below it. */
+  const visit = (level: ReadonlyArray<unknown>): void =>
+    Arr.match(level, {
+      onEmpty: () => undefined,
+      onNonEmpty: (values) =>
+        visit(
+          Arr.flatMap(values, (value) => {
+            if (Predicate.isString(value)) strings.push(value);
+            if (!Predicate.isObjectKeyword(value) || seen.has(value)) return [];
+            seen.add(value);
+            objects.push(value);
+            return childrenOf(value);
+          }),
+        ),
+    });
+  visit([root]);
   return { strings, objects };
 };

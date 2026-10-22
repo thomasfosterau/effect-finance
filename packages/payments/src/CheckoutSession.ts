@@ -15,7 +15,9 @@
  * @module
  */
 
-import { Context, Effect, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import type { IdempotencyKey } from "./IdempotencyKey.js";
 import type { PaymentsError } from "./PaymentsError.js";
 

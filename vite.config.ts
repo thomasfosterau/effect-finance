@@ -74,37 +74,6 @@ export default defineConfig({
       // "effect/Option"`) this family shares with its consumers.
       "effect/prefer-namespace-imports": "off",
 
-      // ---- Effect preset: ported-code allowances ---------------------------
-      // The modules under packages/*/src predate the Effect oxlint preset
-      // (first written against Effect 3 and the Stripe SDK, ported to Effect 4
-      // in #38). The rules below sit at `warn`
-      // so the code stays committable while each site stays reported; a new
-      // site is a defect, not headroom.
-      "effect/imperative-loops": "warn",
-      "effect/avoid-native-object-helpers": "warn",
-      "effect/avoid-non-null-assertion": "warn",
-      "effect/avoid-any": "warn",
-      "effect/avoid-untagged-errors": "warn",
-      "effect/avoid-direct-json": "warn",
-      "effect/prefer-arr-match": "warn",
-      "effect/no-length-comparison": "warn",
-      "effect/prefer-arr-sort": "warn",
-      "effect/avoid-try-catch": "warn",
-      "effect/yield-in-for-loop": "warn",
-      "effect/prefer-effect-is": "warn",
-      "effect/avoid-expect-in-if": "warn",
-      "effect/effect-run-in-body": "warn",
-      "effect/prefer-effect-fn": "warn",
-      "effect/avoid-direct-tag-checks": "warn",
-      "effect/avoid-option-getorthrow": "warn",
-      "effect/no-barrel-imports": "warn",
-      "effect/throw-in-effect-gen": "warn",
-      "effect/prefer-match-over-switch": "warn",
-      "effect/avoid-mutable-state": "warn",
-      "effect/no-conditional-empty-object-spread": "warn",
-      // Fires on `new Date(vendorTimestamp)` / `Date.parse` in the mappers,
-      // which parse a vendor value rather than read the clock.
-      "effect/use-clock-service": "warn",
       // ---- Effect preset: rules this workspace's conventions cut across ----
       // `prefer-option-over-null` fires on `?: T | undefined`, which is the
       // ONLY spelling of an optional member `exactOptionalPropertyTypes` lets
@@ -188,22 +157,17 @@ export default defineConfig({
       // Test suites ARE the runtime boundary: `Effect.runPromise` in a test
       // body is the harness running the effect under test, and a bare
       // `new Error("boom")` there is a fixture standing in for whatever a
-      // vendor SDK would have thrown. Fixture casts (a fake SDK client), a
-      // wall-clock `Date` for a token expiry and a stubbed `fetch` stay
-      // visible as warnings.
+      // vendor SDK would have thrown. Fixture casts and a wall-clock read for
+      // a token expiry stay visible as warnings.
       {
         files: ["**/tests/**/*.ts"],
         rules: {
           "effect/effect-run-in-body": "off",
           "effect/avoid-untagged-errors": "off",
-          "effect/avoid-native-fetch": "warn",
-          // A fake SDK client is `{ … } as unknown as Stripe`: the fixture is
-          // deliberately a partial shape.
-          "effect/no-chained-type-assertions": "warn",
+          "effect/require-safety-comment-for-type-assertion": "warn",
           // The webhook suite exercises the `Buffer` payload the SDK-based
           // verifier accepts; the WebCrypto verifier (#41) drops it.
           "eslint/no-restricted-globals": "warn",
-          "effect/require-safety-comment-for-type-assertion": "warn",
           "effect/use-clock-service": "warn",
           "effect/avoid-process-env": "warn",
           "effect/require-effect-concurrency": "warn",

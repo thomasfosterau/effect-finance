@@ -5,7 +5,8 @@
  * @module
  */
 
-import { Option, Schema } from "effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import type { PaymentsError } from "@thomasfosterau/effect-payments";
 import { errorFromStatus } from "@thomasfosterau/effect-payments/internal";
 
@@ -13,7 +14,7 @@ import { errorFromStatus } from "@thomasfosterau/effect-payments/internal";
 export const PROVIDER = "paypal";
 
 /** The shape of a PayPal API error body (every member optional). */
-export const PayPalErrorBody = Schema.Struct({
+const PayPalErrorBody = Schema.Struct({
   name: Schema.optional(Schema.String),
   message: Schema.optional(Schema.String),
   details: Schema.optional(
@@ -25,7 +26,7 @@ export const PayPalErrorBody = Schema.Struct({
     ),
   ),
 });
-export type PayPalErrorBody = typeof PayPalErrorBody.Type;
+type PayPalErrorBody = typeof PayPalErrorBody.Type;
 
 /** A vendor error body, decoded leniently: an unexpected shape maps as absent. */
 export const errorBodyOf = (json: unknown): PayPalErrorBody | undefined =>

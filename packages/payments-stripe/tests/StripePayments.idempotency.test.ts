@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vite-plus/test";
-import { Effect, type Layer, Redacted } from "effect";
+import * as Effect from "effect/Effect";
+import * as HashMap from "effect/HashMap";
+import type * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
 import type { HttpClient } from "effect/http";
 import type { Credentials } from "@distilled.cloud/stripe/Credentials";
 import * as Customer from "@thomasfosterau/effect-payments/Customer";
@@ -81,44 +86,33 @@ const operations = (
 ];
 
 describe("Stripe maps the neutral idempotencyKey to Idempotency-Key", () => {
-  it.each(operations(KEY).map(([name]) => name))("%s", async (name) => {
-    const op = operations(KEY).find(([candidate]) => candidate === name)![1];
+  it.each(operations(KEY))("%s", async (_name, op) => {
     expect(await requestOf(op)).toEqual({ idempotencyKey: KEY, count: 1 });
   });
 
-  it.each(operations(undefined).map(([name]) => name))(
-    "%s sends none without a key",
-    async (name) => {
-      const op = operations(undefined).find(([candidate]) => candidate === name)![1];
-      expect(await requestOf(op)).toEqual({ idempotencyKey: undefined, count: 1 });
-    },
-  );
+  it.each(operations(undefined))("%s sends none without a key", async (_name, op) => {
+    expect(await requestOf(op)).toEqual({ idempotencyKey: undefined, count: 1 });
+  });
 
-  it.each(operations(undefined).map(([name]) => name))(
+  it.each(operations(undefined))(
     "%s sends a generated retry key without a caller's key, when it may be retried",
-    async (name) => {
-      const op = operations(undefined).find(([candidate]) => candidate === name)![1];
+    async (_name, op) => {
       const { idempotencyKey } = await requestOf(op, StripePayments.capabilities);
       expect(idempotencyKey).toMatch(/^effect-payments-retry-[0-9a-f-]{36}$/);
     },
   );
 
-  it.each(operations(undefined).map(([name]) => name))(
-    "%s refuses a raw string before sending anything",
-    async (name) => {
-      // Untyped code can still pass a string the brand would have refused.
-      const bad = "not a valid key" as IdempotencyKey.IdempotencyKey;
-      const op = operations(bad).find(([candidate]) => candidate === name)![1];
-      const stub = stubStripe(() => ({}));
-      const error = await Effect.runPromise(
-        Effect.flip(
-          op.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(stub.layer)),
-        ),
-      );
-      expect(error).toBeInstanceOf(PaymentInvalidRequestError);
-      expect(stub.calls).toEqual([]);
-    },
-  );
+  // SAFETY: untyped code can still pass a string the brand would have refused.
+  const bad = "not a valid key" as IdempotencyKey.IdempotencyKey;
+
+  it.each(operations(bad))("%s refuses a raw string before sending anything", async (_name, op) => {
+    const stub = stubStripe(() => ({}));
+    const error = await Effect.runPromise(
+      Effect.flip(op.pipe(Effect.provide(StripePayments.capabilities), Effect.provide(stub.layer))),
+    );
+    expect(error).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(stub.calls).toEqual([]);
+  });
 
   it("sends none on the cancel operations", async () => {
     const stub = stubStripe(() => ({}));
@@ -156,17 +150,20 @@ describe("a retried write after a lost response is one logical write (#66)", () 
    * attempt, as a timeout would: the write happened, the caller never saw it.
    */
   const dedupingStripe = (loseFirstResponse: boolean, answerFirstWith500 = false) => {
-    const seen = new Map<string, Response>();
+    let seen = HashMap.empty<string, Response>();
     let writes = 0;
     let attempts = 0;
     const stub = stubFetch((request) => {
       attempts += 1;
       const key = request.headers.get("idempotency-key");
-      const remembered = key === null ? undefined : seen.get(key);
-      const response =
-        remembered ??
-        (() => ((writes += 1), jsonResponse(200, { ...customer, id: `cus_${writes}` })))();
-      if (key !== null && remembered === undefined) seen.set(key, response.clone());
+      const remembered = key === null ? Option.none<Response>() : HashMap.get(seen, key);
+      const response = Option.getOrElse(
+        remembered,
+        () => ((writes += 1), jsonResponse(200, { ...customer, id: `cus_${writes}` })),
+      );
+      if (key !== null && Option.isNone(remembered)) {
+        seen = HashMap.set(seen, key, response.clone());
+      }
       if (loseFirstResponse && attempts === 1) throw new TypeError("fetch failed");
       // The write was applied, but the caller is told the server failed.
       if (answerFirstWith500 && attempts === 1) {
@@ -180,7 +177,10 @@ describe("a retried write after a lost response is one logical write (#66)", () 
   /** Create a customer, retrying once on a network error, with `key` for every attempt. */
   const createWithRetry = (key: IdempotencyKey.IdempotencyKey | undefined) =>
     Customer.create({ email: "a@example.com", idempotencyKey: key }).pipe(
-      Effect.retry({ while: (error) => error._tag === "PaymentNetworkError", times: 1 }),
+      Effect.retry({
+        while: (error) => Predicate.isTagged(error, "PaymentNetworkError"),
+        times: 1,
+      }),
     );
 
   it("with one key reused on the retry, the provider applies it once", async () => {
@@ -212,7 +212,8 @@ describe("a retried write after a lost response is one logical write (#66)", () 
     const created = await Effect.runPromise(
       Customer.create({ email: "a@example.com", idempotencyKey: key }).pipe(
         Effect.retry({
-          while: (error) => error._tag === "PaymentProviderError" && (error.statusCode ?? 0) >= 500,
+          while: (error) =>
+            Predicate.isTagged(error, "PaymentProviderError") && (error.statusCode ?? 0) >= 500,
           times: 1,
         }),
         Effect.provide(

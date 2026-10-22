@@ -56,7 +56,36 @@ const layer = StripePayments.layer({
 const fromEnv = StripePayments.layerFromEnv().pipe(Layer.provide(FetchHttpClient.layer));
 ```
 
+`layer` (and `StripeHttp.layer` / `make`) takes a `StripeHttpConfig`:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `apiKey` | required | The secret or restricted key (`sk_…` / `rk_…`), a `Redacted<string>`; an empty one fails the build with `PaymentConfigError`. |
+| `apiVersion` | `DISTILLED_API_VERSION` | The `Stripe-Version` every request pins. |
+| `maxNetworkRetries` | 2 | Retries after a retryable failure, as in the SDK. |
+| `timeout` | 80 000 | Per-attempt timeout in milliseconds, as in the SDK. |
+| `stripeAccount` | none | A connected account to act as on every call (`Stripe-Account`). |
+| `baseUrl` | `https://api.stripe.com` | The API origin (a `stripe-mock` server, say). |
+| `uploadsBaseUrl` | `https://files.stripe.com` | The file-uploads origin (`File.create`; unused by the capabilities). |
+
+`layerFromEnv(envVar?)` reads only the key, from `STRIPE_API_KEY` by default, while the layer is built, and keeps every other default. `layerConfig(options?)` takes the same fields as `StripeHttpConfig` minus `apiKey`, plus `envVar` (default `STRIPE_API_KEY`), and reads the key at call time (["Not configured ≡ down"](#not-configured--down)).
+
 Each capability call is one of Distilled's generated operations (`CreateCustomer`, `GetSubscription`, …), which form-encode the request with Stripe's bracketed nesting and send the key as a bearer token. Around every call the layers apply this package's request policy: `Stripe-Version` pinned to `DISTILLED_API_VERSION` (`2026-09-30.endive`) unless configured, since Distilled sends none of its own and the account's dashboard default would otherwise decide the wire shape; the SDK's retry policy (connection failures, `409`, `5xx`, `Stripe-Should-Retry`, `Retry-After`) with one `Idempotency-Key` across the attempts of a `POST` (and of a `/v2` `DELETE`), in place of Distilled's own; a per-attempt timeout; redirects refused; and every failure (Distilled's `CardError`, `InvalidRequestError`, …, an HTTP status error or a connection failure) mapped onto the neutral errors, from the response's status and Stripe's error envelope. Responses are decoded with `Schema` over the fields the layers read; a malformed one fails with `PaymentProviderError`. The layers keep Distilled's response validation lenient even under its `ResponseValidation.strict`, so a response is never refused over a field they do not read (Distilled's schemas mark fields required that a response at an older configured `apiVersion` lacks).
+
+### Errors
+
+Every capability and resource-module call fails with the core's `PaymentsError` and nothing else; Distilled's error classes never escape. A failure is classified from the response's status and Stripe's error envelope (`{ error: { type, code, message, param } }`), the status winning for 401, 403 and 429 as in the SDK:
+
+| Stripe failure | Neutral error |
+| --- | --- |
+| 401, or `type: "authentication_error"` | `PaymentAuthenticationError` |
+| 429, or `type: "rate_limit_error"` | `PaymentRateLimitError` (`retryAfter` from `Retry-After`) |
+| `type: "invalid_request_error"` | `PaymentInvalidRequestError` (`param` from the envelope) |
+| a connection failure or timeout | `PaymentNetworkError` |
+| anything else: a card error, 403 (permission), an idempotency error, an API error, a non-Stripe error page | `PaymentProviderError` (`provider: "stripe"`, `code` Stripe's `code`, or the kind when it sent none: `StripeCardError`, `StripePermissionError`, `StripeIdempotencyError`, `StripeAPIError`, …) |
+| a 2xx a capability cannot decode | `PaymentProviderError` |
+
+A failure the client retries (a connection failure, `409`, a `5xx`, `Stripe-Should-Retry: true`) surfaces only after the last attempt. The key never reaches an error or a log line.
 
 ### API versions
 
@@ -167,7 +196,7 @@ Two operations stay unwrapped, because `StripeHttp`'s request policy cannot run 
 
 ## Webhooks
 
-`Webhook.verify` is a Workers-safe WebCrypto verifier (HMAC-SHA256, constant-time compare, ±300 s tolerance by default, "now" from `Clock`) that needs neither the SDK nor any Node API. Pass the raw body bytes; nothing is decoded until the signature verifies, and every refusal is a `SignatureVerificationError` that never carries the secret. `decodeHandledEvent` narrows a verified event to the handled event types.
+`Webhook.verify` is a Workers-safe WebCrypto verifier (HMAC-SHA256, constant-time compare, ±300 s tolerance by default, "now" from `Clock`) that needs neither the SDK nor any Node API. Pass the raw body bytes; nothing is decoded until the signature verifies, and every refusal is a `SignatureVerificationError` that never carries the secret. `decodeHandledEvent` narrows a verified event to the handled event types (`handledEventTypes`: `checkout.session.completed`, `customer.subscription.created` / `updated` / `deleted` and `invoice.payment_failed`), decoding the fields of its `data.object` a handler reads; any other type is `Option.none()`.
 
 Stripe treats every non-2xx answer as a failed delivery and retries it for a limited period (see [Stripe's webhook docs](https://docs.stripe.com/webhooks)), so the status mostly tells the operator which side is at fault: a 400 for a bad delivery (an unreadable body, a signature refusal, a signed body that is not an event envelope), a 500 for breakage on this side (a handled event that fails to decode, say after a field moved in a new API version). A fix that ships after the retries stop needs the event resent from the Dashboard.
 
@@ -229,11 +258,11 @@ The SDK-based `Webhook.constructEvent` / `constructEventAsync` remain as an opti
 | Module | Purpose |
 | --- | --- |
 | `StripePayments` | `layer` / `layerFromEnv` / `layerConfig` (every capability, from configuration), `capabilities` (every capability over Distilled's `Credentials` and an `HttpClient`), the individual capability layers, and `DISTILLED_API_VERSION` (the `Stripe-Version` they pin). |
-| `StripeHttp` | The client the resource modules run on: `layer` / `layerFromEnv` / `layerConfig` / `layerFromContext` / `make`, `RequestOptions` and `DISTILLED_API_VERSION`. |
-| `Webhook` | `verify`, `decodeHandledEvent`, `SIGNATURE_HEADER`; the SDK-based `constructEvent` / `constructEventAsync` and the `StripeService` they need. |
+| `StripeHttp` | The client the resource modules run on: the `StripeHttp` service (`call`), `layer` / `layerFromEnv` / `layerConfig` / `layerFromContext` / `make`, the `StripeHttpConfig` / `LayerConfigOptions` / `RequestOptions` types and `DISTILLED_API_VERSION`. |
+| `Webhook` | `verify` (and `verifySignature`, the check alone), `decodeEvent`, `decodeHandledEvent` with `handledEventTypes` / `HandledEvent` and the per-object decoders, `SIGNATURE_HEADER`, `DEFAULT_TOLERANCE`, `signatureHeader` (signs a test delivery); the SDK-based `constructEvent` / `constructEventAsync`, `generateTestHeaderString` / `generateTestHeaderStringAsync` and the `StripeService` they need. |
 | `Customer`, `Invoice`, `CheckoutSession`, `BillingPortal.Session`, `Treasury`, `Billing.*`, `Tax.*`, `Issuing.*`, `Terminal.*`, `V2.Core.*`, … | Raw resource modules, one per Stripe API resource, 131 in all (listed under [The Stripe escape hatch](#the-stripe-escape-hatch)), generated from Distilled's operations. |
 
-The root entry re-exports the core (`Payments`), `StripeHttp`, `StripePayments`, `Webhook` and the raw modules as namespaces; it never loads the SDK.
+The root entry re-exports the core (`Payments`), `StripeHttp`, `StripePayments`, `Webhook` and the raw modules as namespaces (flattened: `BillingMeter`, `V2CoreAccount`, …; the ten `Treasury.*` modules under `Treasury`), plus the `StripeErrors` (= `PaymentsError`), `RequestOptions` and `StripeHttpConfig` types; it never loads the SDK. Its declarations reach Distilled's whole operations module, so import a subpath when you need only part of it.
 
 ## License
 

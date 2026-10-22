@@ -51,18 +51,16 @@
  * @module
  */
 
-import {
-  Config,
-  ConfigProvider,
-  Context,
-  Data,
-  Duration,
-  Effect,
-  Layer,
-  Option,
-  Random,
-  Redacted,
-} from "effect";
+import * as Config from "effect/Config";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Context from "effect/Context";
+import * as Data from "effect/Data";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Random from "effect/Random";
+import * as Redacted from "effect/Redacted";
 import { FetchHttpClient, HttpClient, HttpClientError } from "effect/http";
 import { ResponseValidation } from "@distilled.cloud/core/response-validation";
 import { Credentials, type Config as StripeCredentials } from "@distilled.cloud/stripe/Credentials";
@@ -470,7 +468,7 @@ export const layerFromEnv = (
 ): Layer.Layer<StripeHttp, PaymentConfigError, HttpClient.HttpClient> =>
   Layer.effect(
     StripeHttp,
-    Effect.gen(function* () {
+    Effect.fn("StripeHttp.layerFromEnv")(function* () {
       const apiKey = yield* Config.Redacted(envVar).pipe(Config.withDefault(Redacted.make("")));
       if (Redacted.value(apiKey) === "") {
         return yield* new PaymentConfigError({
@@ -478,7 +476,7 @@ export const layerFromEnv = (
         });
       }
       return yield* make({ apiKey });
-    }).pipe(
+    })().pipe(
       Effect.catchTag("ConfigError", (error) =>
         Effect.fail(new PaymentConfigError({ message: error.message })),
       ),

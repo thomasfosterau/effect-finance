@@ -9,7 +9,15 @@
 // oxlint-disable-next-line effect/use-filesystem-service -- a test listing the examples on disk, outside any Effect runtime
 import { readdirSync } from "node:fs";
 import { afterAll, afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { ConfigProvider, Console, Effect, Exit, Layer, Option } from "effect";
+import * as Arr from "effect/Array";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Order from "effect/Order";
+import * as Rec from "effect/Record";
 import { FetchHttpClient } from "effect/http";
 import * as basic from "../examples/basic.ts";
 import * as subscription from "../examples/subscription.ts";
@@ -34,9 +42,11 @@ const EXAMPLES = new URL("../examples/", import.meta.url);
 
 /** Every runnable example on disk. */
 // oxlint-disable-next-line effect/avoid-sync-fs -- see the import
-const exampleFiles = readdirSync(EXAMPLES)
-  .filter((name) => /\.(m|c)?tsx?$/.test(name))
-  .sort();
+const onDisk = readdirSync(EXAMPLES);
+const exampleFiles = Arr.sort(
+  Arr.filter(onDisk, (name) => /\.(m|c)?tsx?$/.test(name)),
+  Order.String,
+);
 
 /**
  * Run an example's program with its console captured and `fetch` stubbed, as
@@ -322,7 +332,7 @@ describe("examples", () => {
 
   it("examples covered: every file in examples/ has a suite here", () => {
     expect(exampleFiles.length).toBeGreaterThan(0);
-    expect(Object.keys(suites).sort()).toEqual(exampleFiles);
+    expect(Arr.sort(Rec.keys(suites), Order.String)).toEqual(exampleFiles);
   });
 
   it.each(exampleFiles)("importing %s runs nothing", async (file) => {
@@ -348,7 +358,7 @@ describe("examples", () => {
     expect(error).not.toHaveBeenCalled();
   });
 
-  for (const [file, suite] of Object.entries(suites)) {
+  Arr.forEach(Rec.toEntries(suites), ([file, suite]) => {
     describe(`examples/${file}`, suite);
-  }
+  });
 });

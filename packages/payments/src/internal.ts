@@ -35,18 +35,22 @@
  * @module
  */
 
-import {
-  Clock,
-  Deferred,
-  Duration,
-  Effect,
-  Exit,
-  Fiber,
-  Option,
-  Predicate,
-  Ref,
-  Schema,
-} from "effect";
+import * as Arr from "effect/Array";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as HashSet from "effect/HashSet";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as R from "effect/Record";
+import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 import {
   HttpClient,
   type HttpClientError,
@@ -148,7 +152,7 @@ export const shareLogin = <E>(
         Option.isSome(current) ? [current, current] : [Option.none(), Option.some(fresh)],
       );
 
-    const getToken: Effect.Effect<string, E> = Effect.gen(function* () {
+    const getToken: () => Effect.Effect<string, E> = Effect.fnUntraced(function* () {
       const token = yield* cached;
       if (Option.isSome(token)) return token.value;
       const fresh = yield* Deferred.make<Outcome<E>>();
@@ -160,11 +164,11 @@ export const shareLogin = <E>(
           if (Option.isNone(running)) return yield* lead(fresh, restore);
           const outcome = yield* restore(Deferred.await(running.value));
           // `None`: the leader gave up, so try again (as leader or waiter).
-          return yield* Option.isSome(outcome) ? outcome.value : restore(getToken);
+          return yield* Option.isSome(outcome) ? outcome.value : restore(getToken());
         }),
       );
     });
-    return getToken;
+    return getToken();
   });
 
 /** The `restore` an `Effect.uninterruptibleMask` body receives. */
@@ -179,11 +183,11 @@ type Restore = <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, 
  * Internal, and exempt from semver: see the module documentation.
  */
 export const exponentFrom =
-  (zeroDecimal: ReadonlySet<string>, threeDecimal: ReadonlySet<string>) =>
+  (zeroDecimal: HashSet.HashSet<string>, threeDecimal: HashSet.HashSet<string>) =>
   (currency: string): 0 | 2 | 3 => {
     const code = currency.toLowerCase();
-    if (zeroDecimal.has(code)) return 0;
-    if (threeDecimal.has(code)) return 3;
+    if (HashSet.has(zeroDecimal, code)) return 0;
+    if (HashSet.has(threeDecimal, code)) return 3;
     return 2;
   };
 
@@ -291,14 +295,14 @@ export const isOk = (status: number): boolean => status >= 200 && status < 300;
  *
  * Internal, and exempt from semver: see the module documentation.
  */
-export const isAbsoluteHttpUrl = (value: string): boolean => {
-  try {
-    const { protocol } = new URL(value);
-    return protocol === "https:" || protocol === "http:";
-  } catch {
-    return false;
-  }
-};
+export const isAbsoluteHttpUrl = (value: string): boolean =>
+  Result.match(
+    Result.try(() => new URL(value)),
+    {
+      onFailure: () => false,
+      onSuccess: ({ protocol }) => protocol === "https:" || protocol === "http:",
+    },
+  );
 
 /**
  * A configured timeout as a `Duration`: a positive, finite number of
@@ -482,8 +486,11 @@ export type OmitUndefined<T> = {
 export const omitUndefined = <T extends object>(record: T): OmitUndefined<T> =>
   // SAFETY: the filter removes exactly the `undefined`-valued keys, which is
   // what `OmitUndefined<T>` describes.
-  Object.fromEntries(
-    Object.entries(record).filter(([, value]) => value !== undefined),
+  R.fromEntries(
+    Arr.map(
+      Arr.filter(Struct.keys(record), (key) => record[key] !== undefined),
+      (key): readonly [string, unknown] => [key, record[key]],
+    ),
   ) as OmitUndefined<T>;
 
 /**
@@ -631,15 +638,19 @@ export const responseDecoder =
 /**
  * An ISO-8601 timestamp as Unix seconds (rounded down), or `0` when it is
  * absent, empty or does not parse: a neutral entity's timestamps are always a
- * number.
+ * number. A timestamp without a zone is read as UTC.
  *
  * Internal, and exempt from semver: see the module documentation.
  */
-export const epochSecondsOf = (value: string | null | undefined): number => {
-  if (!value) return 0;
-  const ms = Date.parse(value);
-  return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
-};
+export const epochSecondsOf = (value: string | null | undefined): number =>
+  Option.fromNullishOr(value).pipe(
+    Option.filter((text) => text !== ""),
+    Option.flatMap(DateTime.make),
+    Option.match({
+      onNone: () => 0,
+      onSome: (dateTime) => Math.floor(DateTime.toEpochMillis(dateTime) / 1000),
+    }),
+  );
 
 /**
  * Classify a provider's HTTP error `status` onto the neutral error channel.

@@ -7,6 +7,9 @@
  * @module
  */
 
+import * as Arr from "effect/Array";
+import * as HashMap from "effect/HashMap";
+import * as Option from "effect/Option";
 import { HttpClientRequest } from "effect/http";
 import { escapeQuery } from "./deleteQuery.js";
 
@@ -24,15 +27,19 @@ const indexArrayQuery = (
   if (at === -1) return request;
   const entries = [...new URLSearchParams(request.url.slice(at + 1))];
   if (!entries.some(([key]) => key.endsWith("[]"))) return request;
-  const counts = new Map<string, number>();
-  const query = entries
-    .map(([key, value]) => {
-      if (!key.endsWith("[]")) return `${escapeQuery(key)}=${escapeQuery(value)}`;
-      const index = counts.get(key) ?? 0;
-      counts.set(key, index + 1);
-      return `${escapeQuery(`${key.slice(0, -2)}[${index}]`)}=${escapeQuery(value)}`;
-    })
-    .join("&");
+  const [, pairs] = Arr.mapAccum(
+    entries,
+    HashMap.empty<string, number>(),
+    (counts, [key, value]): readonly [HashMap.HashMap<string, number>, string] => {
+      if (!key.endsWith("[]")) return [counts, `${escapeQuery(key)}=${escapeQuery(value)}`];
+      const index = Option.getOrElse(HashMap.get(counts, key), () => 0);
+      return [
+        HashMap.set(counts, key, index + 1),
+        `${escapeQuery(`${key.slice(0, -2)}[${index}]`)}=${escapeQuery(value)}`,
+      ];
+    },
+  );
+  const query = pairs.join("&");
   return HttpClientRequest.setUrl(request, `${request.url.slice(0, at)}?${query}`);
 };
 
