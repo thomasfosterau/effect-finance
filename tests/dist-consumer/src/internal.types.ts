@@ -85,6 +85,7 @@ export const reply: Effect.Effect<Reply, PaymentNetworkError> = send(http, reque
 declare const answered: Reply;
 export const replyStatus: number = answered.status;
 export const replyJson: unknown = answered.json;
+export const replyHeaders: Readonly<Record<string, string | undefined>> = answered.headers;
 export const cache: Effect.Effect<TokenCache> = tokenCache;
 declare const cacheValue: TokenCache;
 export const cachedToken: Effect.Effect<Option.Option<string>> = cacheValue.cached;
@@ -129,4 +130,5 @@ export const classified: PaymentsError = errorFromStatus(500, {
   message: "m",
   code: undefined,
   param: undefined,
+  retryAfter: undefined,
 });

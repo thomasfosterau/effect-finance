@@ -148,7 +148,11 @@ export const sessionOf = (
         "login",
       );
       if (!isOk(reply.status)) {
-        return yield* handlePayPalError(reply.status, errorBodyOf(reply.json));
+        return yield* handlePayPalError(
+          reply.status,
+          errorBodyOf(reply.json),
+          reply.headers["retry-after"],
+        );
       }
       const body = yield* Schema.decodeUnknownEffect(TokenResponse)(reply.json).pipe(
         Effect.mapError(

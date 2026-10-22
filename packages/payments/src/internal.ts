@@ -364,6 +364,8 @@ export const timedOut = (
  */
 export interface Reply {
   readonly status: number;
+  /** The response headers, keyed in lower case. */
+  readonly headers: Readonly<Record<string, string | undefined>>;
   /** The JSON body, or `{}` when it is empty or not JSON. */
   readonly json: unknown;
 }
@@ -394,7 +396,11 @@ export const send = (
 ): Effect.Effect<Reply, PaymentNetworkError> =>
   http.execute(request).pipe(
     Effect.flatMap((response) =>
-      Effect.map(readJson(response), (json): Reply => ({ status: response.status, json })),
+      Effect.map(readJson(response), (json): Reply => ({
+        status: response.status,
+        headers: response.headers,
+        json,
+      })),
     ),
     // The error's request carries the credentials in its headers: keep only
     // the underlying failure.
@@ -652,12 +658,18 @@ export const epochSecondsOf = (value: string | null | undefined): number =>
     }),
   );
 
+/** A `Retry-After` header given in whole seconds, or `undefined`. */
+const retryAfterSeconds = (header: string | undefined): number | undefined =>
+  header !== undefined && /^\d+$/.test(header.trim())
+    ? Number.parseInt(header.trim(), 10)
+    : undefined;
+
 /**
  * Classify a provider's HTTP error `status` onto the neutral error channel.
  * The status alone decides the class:
  *
  * - 401 / 403: {@link PaymentAuthenticationError};
- * - 429: {@link PaymentRateLimitError};
+ * - 429: {@link PaymentRateLimitError}, carrying `retryAfter`;
  * - 400 / 404 / 422: {@link PaymentInvalidRequestError}, carrying `param`;
  * - anything else: {@link PaymentProviderError} tagged `provider`, carrying
  *   `code`.
@@ -678,6 +690,12 @@ export const errorFromStatus = (
     readonly code?: string | undefined;
     /** The offending parameter, for a {@link PaymentInvalidRequestError}. */
     readonly param?: string | undefined;
+    /**
+     * The response's `Retry-After` header, for a {@link PaymentRateLimitError}:
+     * read as whole seconds, and left out when it is absent or not a number
+     * of seconds (an HTTP date, say).
+     */
+    readonly retryAfter?: string | undefined;
   },
 ): PaymentsError => {
   const { message } = details;
@@ -685,7 +703,10 @@ export const errorFromStatus = (
     return new PaymentAuthenticationError({ message, statusCode: status });
   }
   if (status === 429) {
-    return new PaymentRateLimitError({ message });
+    return new PaymentRateLimitError({
+      message,
+      retryAfter: retryAfterSeconds(details.retryAfter),
+    });
   }
   if (status === 400 || status === 404 || status === 422) {
     return new PaymentInvalidRequestError({ message, param: details.param, statusCode: status });

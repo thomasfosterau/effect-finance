@@ -587,7 +587,11 @@ describe("PayPalPayments errors", () => {
             Duration.infinity,
             "request",
           );
-          return yield* handlePayPalError(reply.status, errorBodyOf(reply.json));
+          return yield* handlePayPalError(
+            reply.status,
+            errorBodyOf(reply.json),
+            reply.headers["retry-after"],
+          );
         }).pipe(Effect.provide(paypal(response).http)),
       ),
     );
@@ -666,7 +670,16 @@ describe("PayPalPayments errors", () => {
     const limited = await viaCapability(() =>
       jsonResponse(429, body("RATE_LIMIT_REACHED", "Slow down")),
     );
-    expect(limited).toMatchObject({ message: "Slow down" });
+    expect(limited).toMatchObject({ message: "Slow down", retryAfter: undefined });
+  });
+
+  it("carries a 429's Retry-After, in whole seconds, as the session reads it", async () => {
+    const response = () =>
+      jsonResponse(429, body("RATE_LIMIT_REACHED", "Slow down"), { "Retry-After": "30" });
+    const capability = await viaCapability(response);
+    expect(capability).toBeInstanceOf(PaymentRateLimitError);
+    expect(capability).toMatchObject({ message: "Slow down", retryAfter: 30 });
+    expect(fieldsOf(capability)).toEqual(fieldsOf(await viaSession(response)));
   });
 
   it("a non-JSON error body maps as PayPalClient mapped it", async () => {

@@ -134,8 +134,10 @@ const REJECTED = { message: "The PayPal request failed", code: "UnknownPaypalErr
 const settle = (outcome: Outcome): Effect.Effect<unknown, PaymentsError> =>
   Outcome.$match(outcome, {
     Success: ({ body }) => Effect.succeed(body),
-    Response: ({ status, body }) =>
-      Effect.fail(handlePayPalError(status, errorBodyOf(Option.getOrUndefined(body)))),
+    Response: ({ status, headers, body }) =>
+      Effect.fail(
+        handlePayPalError(status, errorBodyOf(Option.getOrUndefined(body)), headers["retry-after"]),
+      ),
     Transport: ({ error }) => Effect.fail(networkError(error)),
     TimedOut: ({ after }) => Effect.fail(timedOut("request", after)),
     Rejected: ({ error }) => Effect.fail(rejectedError(error, PROVIDER, REJECTED)),
