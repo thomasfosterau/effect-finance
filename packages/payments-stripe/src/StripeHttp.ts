@@ -21,6 +21,9 @@
  * - **sends a `DELETE`'s params in the query string**, as the Stripe SDKs
  *   do (`Subscription.cancel(id, { invoice_now: true })`), where Distilled
  *   would form-encode them into a body;
+ * - **indexes a `/v2` request's array query params**
+ *   (`include[0]=a&include[1]=b`), as the SDKs send them, where Distilled
+ *   repeats `include[]`;
  * - **pins lenient response validation**, so a response is never refused
  *   over a field nobody reads: Distilled's schemas mark fields required that
  *   a response at an older configured `apiVersion` lacks. The capability
@@ -29,7 +32,7 @@
  * - **owns retries**: Distilled's are switched off, and an attempt that failed
  *   to connect, or answered `409` / `5xx` (as `Stripe-Should-Retry` allows),
  *   is retried with the SDK's backoff, reusing one `Idempotency-Key` across
- *   the attempts of a `POST`;
+ *   the attempts of a `POST`, and of a `/v2` `DELETE` (as the SDK keys them);
  * - **times out** each attempt and **refuses redirects**, which would replay
  *   the `Authorization` header to whatever host they named;
  * - **classifies failures** onto the neutral {@link PaymentsError} channel with
@@ -81,6 +84,7 @@ import { DISTILLED_API_VERSION } from "./internal/apiVersion.js";
 import { classifyResponse, PROVIDER, retryAfterOf, toPaymentsError } from "./internal/error.js";
 import { deleteParamsToQuery } from "./internal/deleteQuery.js";
 import { checkOptions } from "./internal/options.js";
+import { v2RequestPolicy } from "./internal/v2Request.js";
 
 export { DISTILLED_API_VERSION };
 
@@ -127,9 +131,9 @@ export interface RequestOptions {
    * the Airwallex client, which refuses a key on a non-`POST`. An
    * empty key, like an empty `stripeAccount` or `apiVersion`, fails with
    * `PaymentInvalidRequestError` before anything is sent. Without one, a
-   * `POST` that may be retried by the client gets a generated key shared by
-   * all of its attempts (which covers the client's retries only, never a
-   * caller's). The client sends the value verbatim; Stripe accepts up to 255
+   * `POST` or a `/v2` `DELETE` that may be retried by the client gets a
+   * generated key shared by all of its attempts (which covers the client's
+   * retries only, never a caller's). The client sends the value verbatim; Stripe accepts up to 255
    * characters (unverified, #93) and rejects the same key reused with
    * different parameters.
    */
@@ -151,8 +155,9 @@ export interface CallOptions extends RequestOptions {
 }
 
 /**
- * An operation's HTTP method. A `POST` sent without a caller's key gets a
- * generated one when it may be retried, so its attempts are one write.
+ * An operation's HTTP method. A `POST` (or a `DELETE` to a `/v2` path) sent
+ * without a caller's key gets a generated one when it may be retried, so its
+ * attempts are one write.
  */
 export type Method = "GET" | "POST" | "DELETE";
 
@@ -329,17 +334,24 @@ const makeWith = (
       cause: undefined,
     });
 
-    /** One attempt of `operation`, reduced to an {@link Outcome}; fails only by defect. */
+    /**
+     * One attempt of `operation`, reduced to an {@link Outcome}; fails only by
+     * defect. `generatedKey` is the call's key for a `/v2` `DELETE`.
+     */
     const attempt = <I, O, E>(
       operation: Operation<I, O, E>,
       input: I,
       requestOptions: StripeRequestOptions,
       credentials: StripeCredentials,
+      generatedKey: string | undefined,
     ): Effect.Effect<Outcome> =>
       Effect.gen(function* () {
+        const v2 = v2RequestPolicy(credentials.apiBaseUrl, generatedKey);
         // Keep what the classification needs of the response, read before
         // Distilled reads it.
-        const watched = yield* observeResponses(HttpClient.mapRequest(http, deleteParamsToQuery));
+        const watched = yield* observeResponses(
+          HttpClient.mapRequest(http, (request) => v2(deleteParamsToQuery(request))),
+        );
         const init = yield* Effect.serviceOption(FetchHttpClient.RequestInit);
         const outcome = yield* operation(input).pipe(
           // Every typed failure becomes an outcome to judge; defects stay defects.
@@ -388,17 +400,19 @@ const makeWith = (
       const credentials = callOptions.upload
         ? { ...resolved, apiBaseUrl: uploadsBaseUrl }
         : resolved;
-      const key =
-        callOptions.idempotencyKey ??
-        (method === "POST" && maxRetries > 0
+      // One key for every attempt of a retryable write: a `POST`'s goes out
+      // as a request option; a `DELETE`'s only on a `/v2` path, which the
+      // request's URL tells (`v2RequestPolicy`), as in the SDK.
+      const generated =
+        method !== "GET" && maxRetries > 0
           ? `effect-payments-retry-${yield* Effect.sync(() => globalThis.crypto.randomUUID())}`
-          : undefined);
+          : undefined;
       const requestOptions: StripeRequestOptions = {
         apiVersion: callOptions.apiVersion ?? apiVersion,
-        idempotencyKey: key,
+        idempotencyKey: callOptions.idempotencyKey ?? (method === "POST" ? generated : undefined),
         stripeAccount,
       };
-      return yield* run(attempt(operation, input, requestOptions, credentials), 0);
+      return yield* run(attempt(operation, input, requestOptions, credentials, generated), 0);
     });
 
     return StripeHttp.of({ call });
