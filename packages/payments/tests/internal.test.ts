@@ -385,7 +385,7 @@ describe("send", () => {
         (http) => send(http, request, options),
         () => jsonResponse(402, { a: 1 }),
       ),
-    ).toEqual({
+    ).toMatchObject({
       status: 402,
       json: { a: 1 },
     });
@@ -394,7 +394,15 @@ describe("send", () => {
         (http) => send(http, request, options),
         () => new Response("<html>", { status: 502 }),
       ),
-    ).toEqual({ status: 502, json: {} });
+    ).toMatchObject({ status: 502, json: {} });
+  });
+
+  it("keeps the response headers, keyed in lower case", async () => {
+    const reply = await run(
+      (http) => send(http, request, options),
+      () => new Response("{}", { status: 429, headers: { "Retry-After": "7" } }),
+    );
+    expect(reply.headers["retry-after"]).toBe("7");
   });
 
   it("fails a connection failure with PaymentNetworkError, never carrying the request", async () => {
@@ -633,7 +641,24 @@ describe("errorFromStatus", () => {
   it("classifies 429 as a rate limit", () => {
     const error = errorFromStatus(429, details);
     expect(error).toBeInstanceOf(PaymentRateLimitError);
-    expect(error).toMatchObject({ message: "boom" });
+    expect(error).toMatchObject({ message: "boom", retryAfter: undefined });
+  });
+
+  it("reads a rate limit's Retry-After as whole seconds", () => {
+    expect(errorFromStatus(429, { ...details, retryAfter: "30" })).toMatchObject({
+      retryAfter: 30,
+    });
+    expect(errorFromStatus(429, { ...details, retryAfter: " 0 " })).toMatchObject({
+      retryAfter: 0,
+    });
+  });
+
+  it("leaves retryAfter out for a Retry-After that is not whole seconds", () => {
+    Arr.forEach(["Wed, 21 Oct 2026 07:28:00 GMT", "1.5", "-3", "", "soon"], (retryAfter) => {
+      expect(errorFromStatus(429, { ...details, retryAfter })).toMatchObject({
+        retryAfter: undefined,
+      });
+    });
   });
 
   it("classifies 400, 404 and 422 as invalid requests carrying the param", () => {
