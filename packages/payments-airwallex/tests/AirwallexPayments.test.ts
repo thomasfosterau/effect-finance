@@ -142,6 +142,28 @@ describe("AirwallexPayments capabilities", () => {
     );
     expect(updateError).toBeInstanceOf(PaymentInvalidRequestError);
   });
+
+  it("refuses a customer description on create and update, sending nothing", async () => {
+    const { client, calls } = makeFakeClient(() => ({ id: "cus_aw" }));
+
+    const createError = await Effect.runPromise(
+      Customer.create({ email: "jane@example.com", description: "VIP" }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(createError).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(createError.message).toBe("Airwallex does not support customer descriptions");
+
+    const updateError = await Effect.runPromise(
+      Customer.update("cus_aw", { description: "VIP" }).pipe(
+        Effect.provide(provide(client)),
+        Effect.flip,
+      ),
+    );
+    expect(updateError).toBeInstanceOf(PaymentInvalidRequestError);
+    expect(calls).toEqual([]);
+  });
 });
 
 describe("AirwallexPayments decoding", () => {

@@ -70,7 +70,7 @@ Airwallex's payment-acceptance API maps onto a subset of the core capabilities:
 
 | Capability | Status |
 | --- | --- |
-| `Customers` | ✅ (no `del` — Airwallex has no delete-customer endpoint; `name` is sent as `first_name`, and `description` is not sent) |
+| `Customers` | ✅ (no `del` — Airwallex has no delete-customer endpoint; `name` is sent as `first_name`; a `create` or `update` that sets `description` fails with `PaymentInvalidRequestError`, since this provider maps no Airwallex field to it) |
 | `PaymentIntents` | ✅ (no `update` — confirm/cancel instead; `confirm`'s `paymentMethod` becomes `payment_method.id`) |
 | `Refunds` | ✅ (no `update`; a refund needs a `paymentIntent`, and one with only a `charge` fails; a partial `amount` first reads the payment intent for its currency) |
 | `Products` / `Prices` / `Subscriptions` | ❌ not provided |
@@ -87,7 +87,7 @@ Every capability call fails with the core's `PaymentsError` and nothing else. Ai
 | Airwallex answer | Neutral error |
 | --- | --- |
 | 401, 403 | `PaymentAuthenticationError` (and a 401 forgets the cached token, so the next call logs in again) |
-| 429 | `PaymentRateLimitError` |
+| 429 | `PaymentRateLimitError`, with `retryAfter` from a `Retry-After` header given in whole seconds |
 | 400, 404, 422 | `PaymentInvalidRequestError` (`param` from the body's `source`) |
 | any other non-2xx | `PaymentProviderError` (`provider: "airwallex"`, `code` from the body's `code`) |
 | a 2xx that does not decode | `PaymentProviderError` |
