@@ -116,6 +116,55 @@ write_shim() {
   fi
 }
 
+# Both shims below share this preamble (#177, #189). It resolves the project
+# and $PWD to physical paths (`pwd -P`, so a symlink cannot smuggle a foreign
+# directory past a prefix check) and sets `tree` to the live, registered
+# `.claude/worktrees/<name>` worktree that $PWD is inside, or leaves it empty.
+# "Live" means both directions agree: the project's
+# `git worktree list --porcelain -z` names the directory exactly (NUL-split,
+# so a newline in a directory name cannot forge a match), and the directory's
+# `.git` file still points into $PROJECT_DIR/.git/worktrees/ (so a registered
+# worktree whose directory was replaced by another repository does not count).
+# It only reads paths and asks the project's own git for its worktree list, so
+# it never runs git inside a foreign checkout. The body is a quoted heredoc,
+# pasted into each shim verbatim; only `project=` and `bin=` are baked in.
+SHIM_PREAMBLE="$(
+  cat <<'PREAMBLE'
+root="$(cd "$project" 2>/dev/null && pwd -P)" || root=""
+here="$(pwd -P 2>/dev/null)" || here=""
+# Is $1 a live worktree of $root? The project's git must list it exactly, and
+# its .git file must still point into $root/.git/worktrees/.
+live_worktree() {
+  listed=""
+  while IFS= read -r -d '' entry; do
+    [ "$entry" = "worktree $1" ] && listed=1
+  done < <(git -C "$root" worktree list --porcelain -z 2>/dev/null)
+  [ -n "$listed" ] && [ -f "$1/.git" ] || return 1
+  # Read the whole file: the path it names may itself contain a newline.
+  line=""
+  IFS= read -r -d '' line <"$1/.git"
+  line="${line%$'\n'}"
+  gitdir="${line#gitdir: }"
+  [ "$gitdir" != "$line" ] || return 1
+  case "$gitdir" in /*) ;; *) gitdir="$1/$gitdir" ;; esac
+  gitdir="$(cd "$gitdir" 2>/dev/null && pwd -P)" || return 1
+  case "${gitdir#"$root/.git/worktrees/"}" in
+    "$gitdir" | "" | */*) return 1 ;;
+  esac
+}
+tree=""
+if [ -n "$root" ] && [ -n "$here" ]; then
+  case "$here/" in
+    "$root/.claude/worktrees/"?*/*)
+      rest="${here#"$root/.claude/worktrees/"}"
+      candidate="$root/.claude/worktrees/${rest%%/*}"
+      live_worktree "$candidate" && tree="$candidate"
+      ;;
+  esac
+fi
+PREAMBLE
+)"
+
 # `vp` gets a re-exec shim rather than a plain symlink. A symlink always
 # resolves to $PROJECT_DIR's node_modules/vite-plus, even when invoked with
 # cwd inside a `.claude/worktrees/*` checkout — so the CLI process loads the
@@ -123,21 +172,69 @@ write_shim() {
 # worktree's own copy. Two physical instances of the same vitest version
 # corrupt its module-level suite-collector state, and every describe() in the
 # worktree throws `Cannot read properties of undefined (reading 'config')`
-# (gardeneria #1663). The shim instead walks up from $PWD for the nearest
-# project-local vite-plus and re-execs that, falling back to the primary
-# checkout's when none is found above cwd.
+# (gardeneria #1663). So the shim runs the vite-plus of the tree it is invoked
+# in, but only inside an allowed root (#189), so a foreign checkout's
+# `node_modules` is never executed:
+#
+# - inside a live `.claude/worktrees/<name>` (the preamble's `tree`) with its
+#   own install, that install;
+# - inside a session scratchpad, the nearest `node_modules/vite-plus` found
+#   walking up from $PWD, stopping at the scratchpad directory itself. This
+#   keeps a PR clone under the scratchpad on its own pinned vite-plus;
+# - anywhere else (the primary checkout, a worktree without an install, a
+#   foreign repository nested in the project, or outside every allowed root),
+#   $PROJECT_DIR's install. Only the project's root installs vite-plus, so the
+#   primary checkout needs no walk.
+#
+# The scratchpad root: no environment variable names it, and the hook writes
+# one shim for every session in the container, so a path baked in at session
+# start would be wrong for the next session anyway. Claude Code puts each
+# session's scratchpad at /tmp/claude-<uid>/<project-slug>/<session-id>/scratchpad,
+# so the shim matches exactly that shape at run time, for the invoking user:
+# $PWD must lie in a directory named `scratchpad` exactly two levels below
+# /tmp/claude-<uid>. /tmp is world-writable, so that prefix alone proves
+# nothing (another local user could create /tmp/claude-<uid> first): the
+# directory must also be owned by the invoking user and writable by nobody
+# else, as Claude Code creates it (mode 0700), so everything under it was
+# written by this user. The project slug is not pinned: Claude Code derives it
+# from the launch directory (a session started in a worktree has its own), and
+# a mismatch would silently send a clone back to the project's vite-plus, the
+# failure the shim exists to prevent.
 VP_SHIM_MARKER="# generated-by: .claude/hooks/session-start.sh (vp re-exec shim, gardeneria issue #1663)"
 write_vp_shim() {
+  project_q="$(printf '%q' "$PROJECT_DIR")"
   write_shim vp "$VP_SHIM_MARKER" <<SHIM
-dir="\$PWD"
-while [ -n "\$dir" ]; do
-  if [ -x "\$dir/node_modules/vite-plus/bin/vp" ]; then
-    exec "\$dir/node_modules/vite-plus/bin/vp" "\$@"
-  fi
-  [ "\$dir" = "/" ] && break
-  dir="\$(dirname "\$dir")"
-done
-exec "$PROJECT_DIR/node_modules/vite-plus/bin/vp" "\$@"
+project=$project_q
+bin=node_modules/vite-plus/bin/vp
+$SHIM_PREAMBLE
+if [ -n "\$tree" ] && [ -x "\$tree/\$bin" ]; then
+  exec "\$tree/\$bin" "\$@"
+fi
+# A session scratchpad: \$here inside /tmp/claude-<uid>/<slug>/<session>/scratchpad,
+# with /tmp/claude-<uid> owned by this user and writable by nobody else.
+scratch="\$(cd "/tmp/claude-\$(id -u)" 2>/dev/null && pwd -P)" || scratch=""
+if [ -n "\$scratch" ] && [ -n "\$here" ] && [ -O "\$scratch" ] \\
+  && [ -z "\$(find "\$scratch" -maxdepth 0 \\( -perm -020 -o -perm -002 \\) -print 2>/dev/null)" ]; then
+  case "\$here/" in
+    "\$scratch/"?*/?*/scratchpad/*)
+      rest="\${here#"\$scratch/"}"
+      slug="\${rest%%/*}" && rest="\${rest#*/}"
+      session="\${rest%%/*}" && rest="\${rest#*/}"
+      if [ "\${rest%%/*}" = scratchpad ]; then
+        pad="\$scratch/\$slug/\$session/scratchpad"
+        dir="\$here"
+        while :; do
+          if [ -x "\$dir/\$bin" ]; then
+            exec "\$dir/\$bin" "\$@"
+          fi
+          [ "\$dir" = "\$pad" ] && break
+          dir="\$(dirname "\$dir")"
+        done
+      fi
+      ;;
+  esac
+fi
+exec "\$project/\$bin" "\$@"
 SHIM
 }
 
@@ -146,56 +243,21 @@ SHIM
 # the `fallow` on PATH, audited a `.claude/worktrees/*` checkout with whatever
 # version the primary checkout happened to have installed rather than the one
 # the worktree pins. The shim runs the install of the tree it is invoked in,
-# but unlike the `vp` walk it never leaves this project, so another
-# repository's `node_modules` is never executed (#176): with $PWD inside a
-# `.claude/worktrees/<name>` that is a live worktree of $PROJECT_DIR and has
-# its own install, it runs that install; anywhere else (the primary checkout,
-# a foreign repository nested in it, or outside the project) it runs
-# $PROJECT_DIR's. "Live" means both directions agree: the project's
-# `git worktree list --porcelain -z` names the directory exactly (NUL-split,
-# so a newline in a directory name cannot forge a match), and the directory's
-# `.git` file still points into $PROJECT_DIR/.git/worktrees/ (so a registered
-# worktree whose directory was replaced by another repository does not count).
-# It only reads paths and asks the project's own git for its worktree list, so
-# it never runs git inside a foreign checkout either.
+# but, stricter than `vp`, it never leaves this project (not even for the
+# scratchpad), so another repository's `node_modules` is never executed
+# (#176): with $PWD inside a live `.claude/worktrees/<name>` (the preamble's
+# `tree`) that has its own install, it runs that install; anywhere else (the
+# primary checkout, a foreign repository nested in it, or outside the project)
+# it runs $PROJECT_DIR's.
 FALLOW_SHIM_MARKER="# generated-by: .claude/hooks/session-start.sh (fallow re-exec shim, issue #177)"
 write_fallow_shim() {
   project_q="$(printf '%q' "$PROJECT_DIR")"
   write_shim fallow "$FALLOW_SHIM_MARKER" <<SHIM
 project=$project_q
 bin=node_modules/.bin/fallow
-root="\$(cd "\$project" 2>/dev/null && pwd -P)" || root=""
-here="\$(pwd -P 2>/dev/null)" || here=""
-# Is \$1 a live worktree of \$root? The project's git must list it exactly, and
-# its .git file must still point into \$root/.git/worktrees/.
-live_worktree() {
-  listed=""
-  while IFS= read -r -d '' entry; do
-    [ "\$entry" = "worktree \$1" ] && listed=1
-  done < <(git -C "\$root" worktree list --porcelain -z 2>/dev/null)
-  [ -n "\$listed" ] && [ -f "\$1/.git" ] || return 1
-  # Read the whole file: the path it names may itself contain a newline.
-  line=""
-  IFS= read -r -d '' line <"\$1/.git"
-  line="\${line%\$'\\n'}"
-  gitdir="\${line#gitdir: }"
-  [ "\$gitdir" != "\$line" ] || return 1
-  case "\$gitdir" in /*) ;; *) gitdir="\$1/\$gitdir" ;; esac
-  gitdir="\$(cd "\$gitdir" 2>/dev/null && pwd -P)" || return 1
-  case "\${gitdir#"\$root/.git/worktrees/"}" in
-    "\$gitdir" | "" | */*) return 1 ;;
-  esac
-}
-if [ -n "\$root" ] && [ -n "\$here" ]; then
-  case "\$here/" in
-    "\$root/.claude/worktrees/"?*/*)
-      rest="\${here#"\$root/.claude/worktrees/"}"
-      tree="\$root/.claude/worktrees/\${rest%%/*}"
-      if [ -x "\$tree/\$bin" ] && live_worktree "\$tree"; then
-        exec "\$tree/\$bin" "\$@"
-      fi
-      ;;
-  esac
+$SHIM_PREAMBLE
+if [ -n "\$tree" ] && [ -x "\$tree/\$bin" ]; then
+  exec "\$tree/\$bin" "\$@"
 fi
 if [ -x "\$project/\$bin" ]; then
   exec "\$project/\$bin" "\$@"
