@@ -22,15 +22,18 @@
 
 import * as Match from "effect/Match";
 import * as Schema from "effect/Schema";
-import {
-  Enumeration,
-  Product as ProductNS,
-  Price as PriceNS,
-  PaymentIntent as PaymentIntentNS,
-  Subscription as SubscriptionNS,
-  Refund as RefundNS,
-  type Page,
-} from "@thomasfosterau/effect-payments";
+// `Schema` and the core's modules are imported by subpath, as namespaces, and
+// every top-level schema and decoder below is a `/* @__PURE__ */` call: a
+// bundler can then drop the decoders of every capability a program does not
+// use (a property access on a named import may run a getter, so it keeps the
+// whole call).
+import * as Enumeration from "@thomasfosterau/effect-payments/Enumeration";
+import * as PaymentIntentNS from "@thomasfosterau/effect-payments/PaymentIntent";
+import * as PriceNS from "@thomasfosterau/effect-payments/Price";
+import * as ProductNS from "@thomasfosterau/effect-payments/Product";
+import * as RefundNS from "@thomasfosterau/effect-payments/Refund";
+import * as SubscriptionNS from "@thomasfosterau/effect-payments/Subscription";
+import type { Page } from "@thomasfosterau/effect-payments";
 import { epochSecondsOf, responseDecoder } from "@thomasfosterau/effect-payments/internal";
 import { PROVIDER } from "./error.js";
 import { exponent, parseMinorUnits, toMinorUnits } from "./money.js";
@@ -46,7 +49,9 @@ const TRUSTED: Schema.MakeOptions = { disableChecks: true };
 const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema));
 
 /** A major-unit decimal string, e.g. `"10.00"`. */
-const Decimal = Schema.String.check(Schema.isPattern(/^-?\d+(\.\d+)?$/));
+const Decimal = /* @__PURE__ */ Schema.String.check(
+  /* @__PURE__ */ Schema.isPattern(/^-?\d+(\.\d+)?$/),
+);
 
 /**
  * A PayPal `Money` object. The value is checked against its currency: more
@@ -54,11 +59,11 @@ const Decimal = Schema.String.check(Schema.isPattern(/^-?\d+(\.\d+)?$/));
  * HUF), or an amount beyond the safe-integer range in minor units, fails the
  * decode rather than being rounded.
  */
-const PayPalMoney = Schema.Struct({
+const PayPalMoney = /* @__PURE__ */ Schema.Struct({
   currency_code: Schema.String,
   value: Decimal,
 }).check(
-  Schema.makeFilter(
+  /* @__PURE__ */ Schema.makeFilter(
     (money) =>
       parseMinorUnits(money.value, money.currency_code) !== undefined ||
       `value must have at most ${exponent(money.currency_code)} fraction digits for ${money.currency_code} and fit a safe integer in minor units`,
@@ -71,83 +76,97 @@ const PayPalMoney = Schema.Struct({
   ),
 );
 
-const PayPalProduct = Schema.Struct({
+const PayPalProduct = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
   name: Schema.String,
-  description: Maybe(Schema.String),
-  create_time: Maybe(Schema.String),
+  description: /* @__PURE__ */ Maybe(Schema.String),
+  create_time: /* @__PURE__ */ Maybe(Schema.String),
 });
 
-const PayPalBillingCycle = Schema.Struct({
-  tenure_type: Maybe(Schema.String),
-  frequency: Maybe(
-    Schema.Struct({
-      interval_unit: Maybe(Schema.String),
-      interval_count: Maybe(Schema.Int.check(Schema.isGreaterThan(0))),
+const PayPalBillingCycle = /* @__PURE__ */ Schema.Struct({
+  tenure_type: /* @__PURE__ */ Maybe(Schema.String),
+  frequency: /* @__PURE__ */ Maybe(
+    /* @__PURE__ */ Schema.Struct({
+      interval_unit: /* @__PURE__ */ Maybe(Schema.String),
+      interval_count: /* @__PURE__ */ Maybe(
+        /* @__PURE__ */ Schema.Int.check(/* @__PURE__ */ Schema.isGreaterThan(0)),
+      ),
     }),
   ),
-  pricing_scheme: Maybe(Schema.Struct({ fixed_price: Maybe(PayPalMoney) })),
+  pricing_scheme: /* @__PURE__ */ Maybe(
+    /* @__PURE__ */ Schema.Struct({ fixed_price: /* @__PURE__ */ Maybe(PayPalMoney) }),
+  ),
 });
 
-const PayPalPlan = Schema.Struct({
+const PayPalPlan = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
-  product_id: Maybe(Schema.String),
-  status: Maybe(Schema.String),
-  billing_cycles: Maybe(Schema.Array(PayPalBillingCycle)),
-  create_time: Maybe(Schema.String),
+  product_id: /* @__PURE__ */ Maybe(Schema.String),
+  status: /* @__PURE__ */ Maybe(Schema.String),
+  billing_cycles: /* @__PURE__ */ Maybe(/* @__PURE__ */ Schema.Array(PayPalBillingCycle)),
+  create_time: /* @__PURE__ */ Maybe(Schema.String),
 });
 
-const PayPalCapture = Schema.Struct({
+const PayPalCapture = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
-  amount: Maybe(PayPalMoney),
-  status: Maybe(Schema.String),
+  amount: /* @__PURE__ */ Maybe(PayPalMoney),
+  status: /* @__PURE__ */ Maybe(Schema.String),
 });
 
-const PayPalPurchaseUnit = Schema.Struct({
-  amount: Maybe(PayPalMoney),
-  description: Maybe(Schema.String),
-  custom_id: Maybe(Schema.String),
-  payments: Maybe(Schema.Struct({ captures: Maybe(Schema.Array(PayPalCapture)) })),
+const PayPalPurchaseUnit = /* @__PURE__ */ Schema.Struct({
+  amount: /* @__PURE__ */ Maybe(PayPalMoney),
+  description: /* @__PURE__ */ Maybe(Schema.String),
+  custom_id: /* @__PURE__ */ Maybe(Schema.String),
+  payments: /* @__PURE__ */ Maybe(
+    /* @__PURE__ */ Schema.Struct({
+      captures: /* @__PURE__ */ Maybe(/* @__PURE__ */ Schema.Array(PayPalCapture)),
+    }),
+  ),
 });
 
-const PayPalOrder = Schema.Struct({
+const PayPalOrder = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
   status: Schema.String,
-  purchase_units: Maybe(Schema.Array(PayPalPurchaseUnit)),
-  create_time: Maybe(Schema.String),
+  purchase_units: /* @__PURE__ */ Maybe(/* @__PURE__ */ Schema.Array(PayPalPurchaseUnit)),
+  create_time: /* @__PURE__ */ Maybe(Schema.String),
 });
 
-const PayPalSubscription = Schema.Struct({
+const PayPalSubscription = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
   status: Schema.String,
-  plan_id: Maybe(Schema.String),
-  custom_id: Maybe(Schema.String),
+  plan_id: /* @__PURE__ */ Maybe(Schema.String),
+  custom_id: /* @__PURE__ */ Maybe(Schema.String),
   /** A whole number, sent by PayPal as a string. */
-  quantity: Maybe(Schema.String.check(Schema.isPattern(/^\d+$/))),
-  start_time: Maybe(Schema.String),
-  create_time: Maybe(Schema.String),
-  billing_info: Maybe(Schema.Struct({ next_billing_time: Maybe(Schema.String) })),
+  quantity: /* @__PURE__ */ Maybe(
+    /* @__PURE__ */ Schema.String.check(/* @__PURE__ */ Schema.isPattern(/^\d+$/)),
+  ),
+  start_time: /* @__PURE__ */ Maybe(Schema.String),
+  create_time: /* @__PURE__ */ Maybe(Schema.String),
+  billing_info: /* @__PURE__ */ Maybe(
+    /* @__PURE__ */ Schema.Struct({ next_billing_time: /* @__PURE__ */ Maybe(Schema.String) }),
+  ),
 });
 
-const PayPalRefund = Schema.Struct({
+const PayPalRefund = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
-  status: Maybe(Schema.String),
-  amount: Maybe(PayPalMoney),
-  create_time: Maybe(Schema.String),
+  status: /* @__PURE__ */ Maybe(Schema.String),
+  amount: /* @__PURE__ */ Maybe(PayPalMoney),
+  create_time: /* @__PURE__ */ Maybe(Schema.String),
 });
 
 /** A PayPal list link, used to detect further pages. */
-const PayPalLinks = Maybe(Schema.Array(Schema.Struct({ rel: Schema.String })));
+const PayPalLinks = /* @__PURE__ */ Maybe(
+  /* @__PURE__ */ Schema.Array(/* @__PURE__ */ Schema.Struct({ rel: Schema.String })),
+);
 
-const PayPalProductList = Schema.Struct({
+const PayPalProductList = /* @__PURE__ */ Schema.Struct({
   /** Absent on an empty page. */
-  products: Maybe(Schema.Array(PayPalProduct)),
+  products: /* @__PURE__ */ Maybe(/* @__PURE__ */ Schema.Array(PayPalProduct)),
   links: PayPalLinks,
 });
 
-const PayPalPlanList = Schema.Struct({
+const PayPalPlanList = /* @__PURE__ */ Schema.Struct({
   /** Absent on an empty page. */
-  plans: Maybe(Schema.Array(PayPalPlan)),
+  plans: /* @__PURE__ */ Maybe(/* @__PURE__ */ Schema.Array(PayPalPlan)),
   links: PayPalLinks,
 });
 
@@ -336,21 +355,23 @@ const toPage = <A>(
 const decoder = /* @__PURE__ */ responseDecoder({ provider: PROVIDER, name: "PayPal" });
 
 /** A catalog product. */
-export const decodeProduct = decoder("product", PayPalProduct, toProduct);
+export const decodeProduct = /* @__PURE__ */ decoder("product", PayPalProduct, toProduct);
 /** A page of catalog products. */
-export const decodeProductPage = decoder("product list", PayPalProductList, (list) =>
-  toPage((list.products ?? []).map(toProduct), list.links),
+export const decodeProductPage = /* @__PURE__ */ decoder(
+  "product list",
+  PayPalProductList,
+  (list) => toPage((list.products ?? []).map(toProduct), list.links),
 );
 /** A billing plan, as a neutral price. */
-export const decodePrice = decoder("plan", PayPalPlan, toPrice);
+export const decodePrice = /* @__PURE__ */ decoder("plan", PayPalPlan, toPrice);
 /** A page of billing plans, as neutral prices. */
-export const decodePricePage = decoder("plan list", PayPalPlanList, (list) =>
+export const decodePricePage = /* @__PURE__ */ decoder("plan list", PayPalPlanList, (list) =>
   toPage((list.plans ?? []).map(toPrice), list.links),
 );
 /** An order, as a neutral payment intent. */
-export const decodePaymentIntent = decoder("order", PayPalOrder, toPaymentIntent);
+export const decodePaymentIntent = /* @__PURE__ */ decoder("order", PayPalOrder, toPaymentIntent);
 /** The id of an order's first capture, if it has been captured. */
-export const decodeOrderCaptureId = decoder(
+export const decodeOrderCaptureId = /* @__PURE__ */ decoder(
   "order",
   PayPalOrder,
   (order) => order.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? null,
@@ -359,12 +380,16 @@ export const decodeOrderCaptureId = decoder(
  * The currency of a capture. A partial refund needs it to format the amount,
  * so a capture without an amount is malformed rather than defaulted.
  */
-export const decodeCaptureCurrency = decoder(
+export const decodeCaptureCurrency = /* @__PURE__ */ decoder(
   "capture",
-  Schema.Struct({ id: Schema.String, amount: PayPalMoney }),
+  /* @__PURE__ */ Schema.Struct({ id: Schema.String, amount: PayPalMoney }),
   (capture) => capture.amount.currency_code,
 );
 /** A subscription. */
-export const decodeSubscription = decoder("subscription", PayPalSubscription, toSubscription);
+export const decodeSubscription = /* @__PURE__ */ decoder(
+  "subscription",
+  PayPalSubscription,
+  toSubscription,
+);
 /** A capture refund. */
-export const decodeRefund = decoder("refund", PayPalRefund, toRefund);
+export const decodeRefund = /* @__PURE__ */ decoder("refund", PayPalRefund, toRefund);

@@ -26,19 +26,21 @@ import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import {
-  Enumeration,
-  Customer as CustomerNS,
-  Product as ProductNS,
-  Price as PriceNS,
-  PaymentIntent as PaymentIntentNS,
-  Subscription as SubscriptionNS,
-  Refund as RefundNS,
-  CheckoutSession as CheckoutSessionNS,
-  BillingPortal as BillingPortalNS,
-  PaymentProviderError,
-  type Page,
-} from "@thomasfosterau/effect-payments";
+// `Schema` and the core's modules are imported by subpath, as namespaces, and
+// every top-level schema and decoder below is a `/* @__PURE__ */` call: a
+// bundler can then drop the decoders of every capability a program does not
+// use (a property access on a named import may run a getter, so it keeps the
+// whole call).
+import * as BillingPortalNS from "@thomasfosterau/effect-payments/BillingPortal";
+import * as CheckoutSessionNS from "@thomasfosterau/effect-payments/CheckoutSession";
+import * as CustomerNS from "@thomasfosterau/effect-payments/Customer";
+import * as Enumeration from "@thomasfosterau/effect-payments/Enumeration";
+import * as PaymentIntentNS from "@thomasfosterau/effect-payments/PaymentIntent";
+import * as PriceNS from "@thomasfosterau/effect-payments/Price";
+import * as ProductNS from "@thomasfosterau/effect-payments/Product";
+import * as RefundNS from "@thomasfosterau/effect-payments/Refund";
+import * as SubscriptionNS from "@thomasfosterau/effect-payments/Subscription";
+import { PaymentProviderError, type Page } from "@thomasfosterau/effect-payments";
 import { PROVIDER } from "./error.js";
 
 /**
@@ -61,20 +63,23 @@ const TRUSTED: Schema.MakeOptions = { disableChecks: true };
 // ---------------------------------------------------------------------------
 
 /** A reference Stripe may return as an id or, when expanded, as the object. */
-const Ref = Schema.Union([Schema.String, Schema.Struct({ id: Schema.String })]);
+const Ref = /* @__PURE__ */ Schema.Union([
+  Schema.String,
+  /* @__PURE__ */ Schema.Struct({ id: Schema.String }),
+]);
 
 /** An optional, nullable field. */
 const Maybe = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema));
 
-const Metadata = Maybe(Schema.Record(Schema.String, Schema.String));
+const Metadata = /* @__PURE__ */ Maybe(/* @__PURE__ */ Schema.Record(Schema.String, Schema.String));
 
 /**
  * A secret Distilled hands back wrapped in `Redacted` (it marks a payment
  * intent's `client_secret` sensitive), or the plain string the wire carried.
  */
-const Secret = Schema.Union([
+const Secret = /* @__PURE__ */ Schema.Union([
   Schema.String,
-  Schema.declare(
+  /* @__PURE__ */ Schema.declare(
     (value): value is Redacted.Redacted<string> =>
       Redacted.isRedacted(value) && Predicate.isString(Redacted.value(value)),
   ),
@@ -87,41 +92,44 @@ const revealed = (secret: typeof Secret.Type | null | undefined): string | null 
 };
 
 /** `{ id, deleted: true }` — Stripe's answer to a delete, and to reading a deleted object. */
-const StripeDeleted = Schema.Struct({ id: Schema.String, deleted: Schema.Literal(true) });
-
-const StripeCustomer = Schema.Struct({
+const StripeDeleted = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
-  email: Maybe(Schema.String),
-  name: Maybe(Schema.String),
-  phone: Maybe(Schema.String),
-  description: Maybe(Schema.String),
+  deleted: /* @__PURE__ */ Schema.Literal(true),
+});
+
+const StripeCustomer = /* @__PURE__ */ Schema.Struct({
+  id: Schema.String,
+  email: /* @__PURE__ */ Maybe(Schema.String),
+  name: /* @__PURE__ */ Maybe(Schema.String),
+  phone: /* @__PURE__ */ Maybe(Schema.String),
+  description: /* @__PURE__ */ Maybe(Schema.String),
   metadata: Metadata,
   created: Schema.Number,
   livemode: Schema.Boolean,
 });
 
 /** A customer read back may be the deleted stub. */
-const StripeCustomerOrDeleted = Schema.Union([StripeDeleted, StripeCustomer]);
+const StripeCustomerOrDeleted = /* @__PURE__ */ Schema.Union([StripeDeleted, StripeCustomer]);
 
-const StripeProduct = Schema.Struct({
+const StripeProduct = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
   name: Schema.String,
-  description: Maybe(Schema.String),
+  description: /* @__PURE__ */ Maybe(Schema.String),
   active: Schema.Boolean,
   metadata: Metadata,
   created: Schema.Number,
 });
 
-const StripePrice = Schema.Struct({
+const StripePrice = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
-  product: Maybe(Ref),
+  product: /* @__PURE__ */ Maybe(Ref),
   active: Schema.Boolean,
   currency: Schema.String,
-  unit_amount: Maybe(Schema.Number),
-  type: Enumeration.fromWire(PriceNS.KnownPriceType),
-  recurring: Maybe(
-    Schema.Struct({
-      interval: Enumeration.fromWire(PriceNS.KnownRecurringInterval),
+  unit_amount: /* @__PURE__ */ Maybe(Schema.Number),
+  type: /* @__PURE__ */ Enumeration.fromWire(PriceNS.KnownPriceType),
+  recurring: /* @__PURE__ */ Maybe(
+    /* @__PURE__ */ Schema.Struct({
+      interval: /* @__PURE__ */ Enumeration.fromWire(PriceNS.KnownRecurringInterval),
       interval_count: Schema.Number,
     }),
   ),
@@ -129,15 +137,15 @@ const StripePrice = Schema.Struct({
   created: Schema.Number,
 });
 
-const StripePaymentIntent = Schema.Struct({
+const StripePaymentIntent = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
   amount: Schema.Number,
   currency: Schema.String,
-  status: Enumeration.fromWire(PaymentIntentNS.KnownPaymentStatus),
-  customer: Maybe(Ref),
-  payment_method: Maybe(Ref),
-  client_secret: Maybe(Secret),
-  description: Maybe(Schema.String),
+  status: /* @__PURE__ */ Enumeration.fromWire(PaymentIntentNS.KnownPaymentStatus),
+  customer: /* @__PURE__ */ Maybe(Ref),
+  payment_method: /* @__PURE__ */ Maybe(Ref),
+  client_secret: /* @__PURE__ */ Maybe(Secret),
+  description: /* @__PURE__ */ Maybe(Schema.String),
   metadata: Metadata,
   created: Schema.Number,
 });
@@ -148,36 +156,36 @@ const StripePaymentIntent = Schema.Struct({
  * item's period is preferred, so the mapping holds on either side of that
  * version.
  */
-const StripeSubscription = Schema.Struct({
+const StripeSubscription = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
   customer: Ref,
-  status: Enumeration.fromWire(SubscriptionNS.KnownSubscriptionStatus),
-  items: Schema.Struct({
-    data: Schema.Array(
-      Schema.Struct({
+  status: /* @__PURE__ */ Enumeration.fromWire(SubscriptionNS.KnownSubscriptionStatus),
+  items: /* @__PURE__ */ Schema.Struct({
+    data: /* @__PURE__ */ Schema.Array(
+      /* @__PURE__ */ Schema.Struct({
         id: Schema.String,
-        price: Schema.Struct({ id: Schema.String }),
-        quantity: Maybe(Schema.Number),
-        current_period_start: Maybe(Schema.Number),
-        current_period_end: Maybe(Schema.Number),
+        price: /* @__PURE__ */ Schema.Struct({ id: Schema.String }),
+        quantity: /* @__PURE__ */ Maybe(Schema.Number),
+        current_period_start: /* @__PURE__ */ Maybe(Schema.Number),
+        current_period_end: /* @__PURE__ */ Maybe(Schema.Number),
       }),
     ),
   }),
-  current_period_start: Maybe(Schema.Number),
-  current_period_end: Maybe(Schema.Number),
+  current_period_start: /* @__PURE__ */ Maybe(Schema.Number),
+  current_period_end: /* @__PURE__ */ Maybe(Schema.Number),
   cancel_at_period_end: Schema.Boolean,
   metadata: Metadata,
   created: Schema.Number,
 });
 
-const StripeRefund = Schema.Struct({
+const StripeRefund = /* @__PURE__ */ Schema.Struct({
   id: Schema.String,
   amount: Schema.Number,
   currency: Schema.String,
-  status: Maybe(Enumeration.fromWire(RefundNS.KnownRefundStatus)),
-  payment_intent: Maybe(Ref),
-  charge: Maybe(Ref),
-  reason: Maybe(Schema.String),
+  status: /* @__PURE__ */ Maybe(/* @__PURE__ */ Enumeration.fromWire(RefundNS.KnownRefundStatus)),
+  payment_intent: /* @__PURE__ */ Maybe(Ref),
+  charge: /* @__PURE__ */ Maybe(Ref),
+  reason: /* @__PURE__ */ Maybe(Schema.String),
   metadata: Metadata,
   created: Schema.Number,
 });
@@ -189,7 +197,10 @@ const StripeRefund = Schema.Struct({
  * only mode the neutral capability creates), so a missing or `null` one fails
  * the decode rather than pushing that branch into every call site.
  */
-const StripeHostedSession = Schema.Struct({ id: Schema.String, url: Schema.NonEmptyString });
+const StripeHostedSession = /* @__PURE__ */ Schema.Struct({
+  id: Schema.String,
+  url: Schema.NonEmptyString,
+});
 
 /** A list page: `{ object: "list", data, has_more }`. */
 const StripeList = <S extends Schema.Top>(item: S) =>
@@ -390,50 +401,66 @@ const pageDecoder = <S extends Schema.Codec<unknown, unknown>, A>(
   });
 
 /** A customer (or the deleted stub, read back). */
-export const decodeCustomer = decoder("customer", StripeCustomerOrDeleted, toCustomer);
+export const decodeCustomer = /* @__PURE__ */ decoder(
+  "customer",
+  StripeCustomerOrDeleted,
+  toCustomer,
+);
 /** A page of customers. */
-export const decodeCustomerPage = pageDecoder("customer", StripeCustomer, toCustomer);
+export const decodeCustomerPage = /* @__PURE__ */ pageDecoder(
+  "customer",
+  StripeCustomer,
+  toCustomer,
+);
 /** The `{ id, deleted: true }` answer to a delete. */
-export const decodeDeleted = decoder("deletion", StripeDeleted, (deleted) => ({
+export const decodeDeleted = /* @__PURE__ */ decoder("deletion", StripeDeleted, (deleted) => ({
   id: deleted.id,
   deleted: true as const,
 }));
 /** A product. */
-export const decodeProduct = decoder("product", StripeProduct, toProduct);
+export const decodeProduct = /* @__PURE__ */ decoder("product", StripeProduct, toProduct);
 /** A page of products. */
-export const decodeProductPage = pageDecoder("product", StripeProduct, toProduct);
+export const decodeProductPage = /* @__PURE__ */ pageDecoder("product", StripeProduct, toProduct);
 /** A price. */
-export const decodePrice = decoder("price", StripePrice, toPrice);
+export const decodePrice = /* @__PURE__ */ decoder("price", StripePrice, toPrice);
 /** A page of prices. */
-export const decodePricePage = pageDecoder("price", StripePrice, toPrice);
+export const decodePricePage = /* @__PURE__ */ pageDecoder("price", StripePrice, toPrice);
 /** A payment intent. */
-export const decodePaymentIntent = decoder("payment intent", StripePaymentIntent, toPaymentIntent);
+export const decodePaymentIntent = /* @__PURE__ */ decoder(
+  "payment intent",
+  StripePaymentIntent,
+  toPaymentIntent,
+);
 /** A page of payment intents. */
-export const decodePaymentIntentPage = pageDecoder(
+export const decodePaymentIntentPage = /* @__PURE__ */ pageDecoder(
   "payment intent",
   StripePaymentIntent,
   toPaymentIntent,
 );
 /** A subscription. */
-export const decodeSubscription = decoder("subscription", StripeSubscription, toSubscription);
+export const decodeSubscription = /* @__PURE__ */ decoder(
+  "subscription",
+  StripeSubscription,
+  toSubscription,
+);
 /** A page of subscriptions. */
-export const decodeSubscriptionPage = pageDecoder(
+export const decodeSubscriptionPage = /* @__PURE__ */ pageDecoder(
   "subscription",
   StripeSubscription,
   toSubscription,
 );
 /** A refund. */
-export const decodeRefund = decoder("refund", StripeRefund, toRefund);
+export const decodeRefund = /* @__PURE__ */ decoder("refund", StripeRefund, toRefund);
 /** A page of refunds. */
-export const decodeRefundPage = pageDecoder("refund", StripeRefund, toRefund);
+export const decodeRefundPage = /* @__PURE__ */ pageDecoder("refund", StripeRefund, toRefund);
 /** A checkout session. */
-export const decodeCheckoutSession = decoder(
+export const decodeCheckoutSession = /* @__PURE__ */ decoder(
   "checkout session",
   StripeHostedSession,
   toCheckoutSession,
 );
 /** A billing portal session. */
-export const decodeBillingPortalSession = decoder(
+export const decodeBillingPortalSession = /* @__PURE__ */ decoder(
   "billing portal session",
   StripeHostedSession,
   toBillingPortalSession,
